@@ -60,7 +60,8 @@ export async function POST(request: NextRequest) {
     }
   } catch (error) {
     console.error('Game error:', error)
-    return NextResponse.json({ error: 'Game error' }, { status: 500 })
+    const errorMessage = error instanceof Error ? error.message : 'Game error'
+    return NextResponse.json({ error: errorMessage }, { status: 500 })
   }
 }
 
