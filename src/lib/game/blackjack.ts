@@ -1,0 +1,557 @@
+import type {
+  BlackjackGameState,
+  BlackjackAction,
+  Hand,
+  Card,
+  GamePhase,
+  PayoutResult
+} from '@/types'
+import {
+  createShoe,
+  shuffleDeck,
+  calculateHandValue,
+  isBlackjack,
+  isBusted,
+  canSplit,
+  canDouble,
+  getPerfectPairsOutcome
+} from './deck'
+
+// Game constants - Vegas Strip Rules
+export const BLACKJACK_PAYOUT = 1.5  // 3:2 for blackjack
+export const INSURANCE_PAYOUT = 2    // 2:1 for insurance
+export const DEALER_STANDS_ON = 17   // Dealer stands on S17
+export const NUM_DECKS = 6
+export const MIN_BET = 0.01          // 0.01 ZEC
+export const MAX_BET = 1             // 1 ZEC
+
+/**
+ * Create initial game state
+ */
+export function createInitialState(balance: number): BlackjackGameState {
+  return {
+    phase: 'betting',
+    playerHands: [],
+    dealerHand: {
+      cards: [],
+      bet: 0,
+      isDoubled: false,
+      isSplit: false,
+      isStood: false,
+      isBusted: false,
+      isBlackjack: false
+    },
+    currentHandIndex: 0,
+    deck: [],
+    balance,
+    currentBet: 0,
+    perfectPairsBet: 0,
+    insuranceBet: 0,
+    serverSeedHash: '',
+    clientSeed: '',
+    nonce: 0,
+    lastPayout: 0,
+    message: 'Place your bet to begin'
+  }
+}
+
+/**
+ * Start a new round with bets placed
+ */
+export function startRound(
+  state: BlackjackGameState,
+  mainBet: number,
+  perfectPairsBet: number,
+  serverSeed: string,
+  serverSeedHash: string,
+  clientSeed: string,
+  nonce: number
+): BlackjackGameState {
+  // Validate bets
+  if (mainBet < MIN_BET || mainBet > MAX_BET) {
+    return {
+      ...state,
+      message: `Bet must be between ${MIN_BET} and ${MAX_BET} ZEC`
+    }
+  }
+
+  const totalBet = mainBet + perfectPairsBet
+  if (totalBet > state.balance) {
+    return {
+      ...state,
+      message: 'Insufficient balance'
+    }
+  }
+
+  // Create and shuffle deck using combined seed
+  const combinedSeed = `${serverSeed}:${clientSeed}:${nonce}`
+  const shoe = createShoe(NUM_DECKS)
+  const shuffledDeck = shuffleDeck(shoe, combinedSeed)
+
+  // Deal initial cards
+  const playerCards: Card[] = [shuffledDeck[0], shuffledDeck[2]]
+  const dealerCards: Card[] = [
+    { ...shuffledDeck[1], faceUp: true },
+    { ...shuffledDeck[3], faceUp: false }  // Hole card face down
+  ]
+
+  const playerHand: Hand = {
+    cards: playerCards,
+    bet: mainBet,
+    isDoubled: false,
+    isSplit: false,
+    isStood: false,
+    isBusted: false,
+    isBlackjack: isBlackjack(playerCards)
+  }
+
+  const dealerHand: Hand = {
+    cards: dealerCards,
+    bet: 0,
+    isDoubled: false,
+    isSplit: false,
+    isStood: false,
+    isBusted: false,
+    isBlackjack: isBlackjack(dealerCards)
+  }
+
+  // Remove dealt cards from deck
+  const remainingDeck = shuffledDeck.slice(4)
+
+  // Calculate perfect pairs result immediately
+  let perfectPairsPayout = 0
+  if (perfectPairsBet > 0) {
+    const ppResult = getPerfectPairsOutcome(playerCards)
+    perfectPairsPayout = perfectPairsBet * ppResult.multiplier
+  }
+
+  // Determine initial phase
+  let phase: GamePhase = 'playerTurn'
+  let message = 'Your turn - hit, stand, double, or split'
+
+  // Check for immediate blackjack scenarios
+  if (playerHand.isBlackjack && dealerHand.isBlackjack) {
+    phase = 'payout'
+    message = 'Both have Blackjack - Push!'
+  } else if (playerHand.isBlackjack) {
+    phase = 'payout'
+    message = 'Blackjack! You win 3:2'
+  } else if (dealerCards[0].rank === 'A') {
+    // Dealer showing Ace - offer insurance
+    message = 'Dealer showing Ace. Insurance?'
+  }
+
+  const newState: BlackjackGameState = {
+    ...state,
+    phase,
+    playerHands: [playerHand],
+    dealerHand,
+    currentHandIndex: 0,
+    deck: remainingDeck,
+    balance: state.balance - totalBet + perfectPairsPayout,
+    currentBet: mainBet,
+    perfectPairsBet,
+    insuranceBet: 0,
+    serverSeedHash,
+    clientSeed,
+    nonce,
+    lastPayout: perfectPairsPayout,
+    message
+  }
+
+  // If immediate blackjack, resolve the round to calculate payout
+  if (phase === 'payout') {
+    // Reveal dealer's hole card for display
+    const revealedDealerHand: Hand = {
+      ...dealerHand,
+      cards: dealerHand.cards.map(c => ({ ...c, faceUp: true }))
+    }
+    return resolveRound({
+      ...newState,
+      dealerHand: revealedDealerHand
+    })
+  }
+
+  return newState
+}
+
+/**
+ * Player takes insurance bet
+ */
+export function takeInsurance(
+  state: BlackjackGameState,
+  amount: number
+): BlackjackGameState {
+  if (state.phase !== 'playerTurn') {
+    return { ...state, message: 'Cannot take insurance now' }
+  }
+
+  const maxInsurance = state.currentBet / 2
+  if (amount > maxInsurance || amount > state.balance) {
+    return { ...state, message: 'Invalid insurance amount' }
+  }
+
+  return {
+    ...state,
+    balance: state.balance - amount,
+    insuranceBet: amount,
+    message: 'Insurance taken. Your turn.'
+  }
+}
+
+/**
+ * Execute player action
+ */
+export function executeAction(
+  state: BlackjackGameState,
+  action: BlackjackAction
+): BlackjackGameState {
+  if (state.phase !== 'playerTurn') {
+    return { ...state, message: 'Not your turn' }
+  }
+
+  const currentHand = state.playerHands[state.currentHandIndex]
+  if (!currentHand || currentHand.isStood || currentHand.isBusted) {
+    return advanceToNextHand(state)
+  }
+
+  switch (action) {
+    case 'hit':
+      return executeHit(state)
+    case 'stand':
+      return executeStand(state)
+    case 'double':
+      return executeDouble(state)
+    case 'split':
+      return executeSplit(state)
+    default:
+      return { ...state, message: 'Invalid action' }
+  }
+}
+
+/**
+ * Player hits (takes another card)
+ */
+function executeHit(state: BlackjackGameState): BlackjackGameState {
+  const currentHand = state.playerHands[state.currentHandIndex]
+  const newCard = state.deck[0]
+  const remainingDeck = state.deck.slice(1)
+
+  const newCards = [...currentHand.cards, newCard]
+  const handValue = calculateHandValue(newCards)
+  const busted = handValue > 21
+
+  const updatedHand: Hand = {
+    ...currentHand,
+    cards: newCards,
+    isBusted: busted,
+    isStood: busted  // Auto-stand if busted
+  }
+
+  const updatedHands = [...state.playerHands]
+  updatedHands[state.currentHandIndex] = updatedHand
+
+  let newState: BlackjackGameState = {
+    ...state,
+    playerHands: updatedHands,
+    deck: remainingDeck,
+    message: busted
+      ? `Bust! Hand value: ${handValue}`
+      : `Hand value: ${handValue}. Hit or stand?`
+  }
+
+  // If busted, move to next hand or dealer turn
+  if (busted) {
+    newState = advanceToNextHand(newState)
+  }
+
+  return newState
+}
+
+/**
+ * Player stands (keeps current hand)
+ */
+function executeStand(state: BlackjackGameState): BlackjackGameState {
+  const updatedHands = [...state.playerHands]
+  updatedHands[state.currentHandIndex] = {
+    ...updatedHands[state.currentHandIndex],
+    isStood: true
+  }
+
+  return advanceToNextHand({
+    ...state,
+    playerHands: updatedHands
+  })
+}
+
+/**
+ * Player doubles down
+ */
+function executeDouble(state: BlackjackGameState): BlackjackGameState {
+  const currentHand = state.playerHands[state.currentHandIndex]
+
+  if (!canDouble(currentHand.cards)) {
+    return { ...state, message: 'Cannot double on this hand' }
+  }
+
+  if (currentHand.bet > state.balance) {
+    return { ...state, message: 'Insufficient balance to double' }
+  }
+
+  // Take one more card
+  const newCard = state.deck[0]
+  const remainingDeck = state.deck.slice(1)
+  const newCards = [...currentHand.cards, newCard]
+  const handValue = calculateHandValue(newCards)
+  const busted = handValue > 21
+
+  const updatedHand: Hand = {
+    ...currentHand,
+    cards: newCards,
+    bet: currentHand.bet * 2,
+    isDoubled: true,
+    isBusted: busted,
+    isStood: true  // Auto-stand after double
+  }
+
+  const updatedHands = [...state.playerHands]
+  updatedHands[state.currentHandIndex] = updatedHand
+
+  return advanceToNextHand({
+    ...state,
+    playerHands: updatedHands,
+    deck: remainingDeck,
+    balance: state.balance - currentHand.bet,
+    message: busted
+      ? `Doubled and busted with ${handValue}`
+      : `Doubled down. Hand value: ${handValue}`
+  })
+}
+
+/**
+ * Player splits pair
+ */
+function executeSplit(state: BlackjackGameState): BlackjackGameState {
+  const currentHand = state.playerHands[state.currentHandIndex]
+
+  if (!canSplit(currentHand.cards)) {
+    return { ...state, message: 'Cannot split - need a pair' }
+  }
+
+  if (currentHand.bet > state.balance) {
+    return { ...state, message: 'Insufficient balance to split' }
+  }
+
+  // Deal one card to each split hand
+  const card1 = state.deck[0]
+  const card2 = state.deck[1]
+  const remainingDeck = state.deck.slice(2)
+
+  const hand1: Hand = {
+    cards: [currentHand.cards[0], card1],
+    bet: currentHand.bet,
+    isDoubled: false,
+    isSplit: true,
+    isStood: false,
+    isBusted: false,
+    isBlackjack: false  // Split hands can't be blackjack
+  }
+
+  const hand2: Hand = {
+    cards: [currentHand.cards[1], card2],
+    bet: currentHand.bet,
+    isDoubled: false,
+    isSplit: true,
+    isStood: false,
+    isBusted: false,
+    isBlackjack: false
+  }
+
+  // Replace current hand with two split hands
+  const updatedHands = [...state.playerHands]
+  updatedHands.splice(state.currentHandIndex, 1, hand1, hand2)
+
+  return {
+    ...state,
+    playerHands: updatedHands,
+    deck: remainingDeck,
+    balance: state.balance - currentHand.bet,
+    message: `Split! Playing hand 1 of ${updatedHands.length}`
+  }
+}
+
+/**
+ * Move to next hand or dealer turn
+ */
+function advanceToNextHand(state: BlackjackGameState): BlackjackGameState {
+  const nextIndex = state.currentHandIndex + 1
+
+  // Check if there are more player hands to play
+  if (nextIndex < state.playerHands.length) {
+    const nextHand = state.playerHands[nextIndex]
+    if (!nextHand.isStood && !nextHand.isBusted) {
+      return {
+        ...state,
+        currentHandIndex: nextIndex,
+        message: `Playing hand ${nextIndex + 1} of ${state.playerHands.length}`
+      }
+    }
+  }
+
+  // All player hands complete - move to dealer turn
+  return playDealerHand(state)
+}
+
+/**
+ * Play out dealer's hand according to rules
+ */
+function playDealerHand(state: BlackjackGameState): BlackjackGameState {
+  // Check if all player hands busted
+  const allBusted = state.playerHands.every(h => h.isBusted)
+  if (allBusted) {
+    return resolveRound({
+      ...state,
+      phase: 'payout',
+      dealerHand: {
+        ...state.dealerHand,
+        cards: state.dealerHand.cards.map(c => ({ ...c, faceUp: true }))
+      }
+    })
+  }
+
+  // Reveal dealer's hole card
+  let dealerCards = state.dealerHand.cards.map(c => ({ ...c, faceUp: true }))
+  let deck = [...state.deck]
+
+  // Dealer hits until 17 or higher (stands on S17)
+  while (calculateHandValue(dealerCards) < DEALER_STANDS_ON) {
+    dealerCards = [...dealerCards, deck[0]]
+    deck = deck.slice(1)
+  }
+
+  const dealerValue = calculateHandValue(dealerCards)
+  const dealerBusted = dealerValue > 21
+
+  const updatedDealerHand: Hand = {
+    ...state.dealerHand,
+    cards: dealerCards,
+    isStood: true,
+    isBusted: dealerBusted,
+    isBlackjack: isBlackjack(state.dealerHand.cards)
+  }
+
+  return resolveRound({
+    ...state,
+    phase: 'payout',
+    dealerHand: updatedDealerHand,
+    deck
+  })
+}
+
+/**
+ * Resolve round and calculate payouts
+ */
+function resolveRound(state: BlackjackGameState): BlackjackGameState {
+  const dealerValue = calculateHandValue(state.dealerHand.cards)
+  const dealerBlackjack = state.dealerHand.isBlackjack
+  const dealerBusted = state.dealerHand.isBusted
+
+  let totalPayout = 0
+  const results: PayoutResult[] = []
+
+  // Process insurance bet
+  if (state.insuranceBet > 0 && dealerBlackjack) {
+    const insurancePayout = state.insuranceBet * (1 + INSURANCE_PAYOUT)
+    totalPayout += insurancePayout
+  }
+
+  // Process each player hand
+  for (let i = 0; i < state.playerHands.length; i++) {
+    const hand = state.playerHands[i]
+    const playerValue = calculateHandValue(hand.cards)
+
+    let outcome: PayoutResult['outcome']
+    let payout = 0
+    let reason = ''
+
+    if (hand.isBusted) {
+      outcome = 'lose'
+      reason = 'Player busted'
+    } else if (hand.isBlackjack && !hand.isSplit) {
+      if (dealerBlackjack) {
+        outcome = 'push'
+        payout = hand.bet
+        reason = 'Both blackjack - push'
+      } else {
+        outcome = 'blackjack'
+        payout = hand.bet * (1 + BLACKJACK_PAYOUT)
+        reason = 'Blackjack pays 3:2'
+      }
+    } else if (dealerBusted) {
+      outcome = 'win'
+      payout = hand.bet * 2
+      reason = 'Dealer busted'
+    } else if (playerValue > dealerValue) {
+      outcome = 'win'
+      payout = hand.bet * 2
+      reason = `Player ${playerValue} beats dealer ${dealerValue}`
+    } else if (playerValue < dealerValue) {
+      outcome = 'lose'
+      reason = `Dealer ${dealerValue} beats player ${playerValue}`
+    } else {
+      outcome = 'push'
+      payout = hand.bet
+      reason = 'Push - tie'
+    }
+
+    totalPayout += payout
+    results.push({
+      handIndex: i,
+      outcome,
+      payout,
+      reason
+    })
+  }
+
+  // Build result message
+  const winningHands = results.filter(r => r.outcome === 'win' || r.outcome === 'blackjack')
+  const message = winningHands.length > 0
+    ? `You won ${totalPayout.toFixed(4)} ZEC!`
+    : results.every(r => r.outcome === 'push')
+      ? 'Push - bet returned'
+      : 'Dealer wins'
+
+  return {
+    ...state,
+    phase: 'complete',
+    balance: state.balance + totalPayout,
+    lastPayout: totalPayout,
+    message
+  }
+}
+
+/**
+ * Get available actions for current hand
+ */
+export function getAvailableActions(state: BlackjackGameState): BlackjackAction[] {
+  if (state.phase !== 'playerTurn') {
+    return []
+  }
+
+  const currentHand = state.playerHands[state.currentHandIndex]
+  if (!currentHand || currentHand.isStood || currentHand.isBusted) {
+    return []
+  }
+
+  const actions: BlackjackAction[] = ['hit', 'stand']
+
+  if (canDouble(currentHand.cards) && currentHand.bet <= state.balance) {
+    actions.push('double')
+  }
+
+  if (canSplit(currentHand.cards) && currentHand.bet <= state.balance && state.playerHands.length < 4) {
+    actions.push('split')
+  }
+
+  return actions
+}

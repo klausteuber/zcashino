@@ -1,0 +1,191 @@
+// Zcashino Database Schema
+// Using SQLite for MVP, can migrate to PostgreSQL for production
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// Player session - identified by wallet address
+model Session {
+  id            String   @id @default(cuid())
+  walletAddress String   @unique
+
+  // Balance tracking
+  balance       Float    @default(0)
+  totalDeposited Float   @default(0)
+  totalWithdrawn Float   @default(0)
+  totalWagered  Float    @default(0)
+  totalWon      Float    @default(0)
+
+  // Responsible gambling limits
+  depositLimit  Float?   // Daily deposit limit
+  lossLimit     Float?   // Daily loss limit
+  sessionLimit  Int?     // Session time limit in minutes
+
+  // Self-exclusion
+  excludedUntil DateTime?
+
+  // Timestamps
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  lastActiveAt  DateTime @default(now())
+
+  // Relations
+  games         BlackjackGame[]
+  transactions  Transaction[]
+  wallet        DepositWallet?
+
+  @@index([walletAddress])
+}
+
+// Deposit wallet - generated addresses for receiving ZEC
+model DepositWallet {
+  id              String   @id @default(cuid())
+  sessionId       String   @unique
+  session         Session  @relation(fields: [sessionId], references: [id])
+
+  // Generated addresses for deposits
+  transparentAddr String   @unique  // t-address
+  saplingAddr     String?  @unique  // z-address (sapling)
+  unifiedAddr     String?  @unique  // u-address
+
+  // Network configuration
+  network         String   @default("testnet") // mainnet, testnet
+
+  // Derivation info (for HD wallet reconstruction)
+  accountIndex    Int      @default(0)
+  addressIndex    Int      @default(0)
+
+  // Timestamps
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([transparentAddr])
+  @@index([saplingAddr])
+  @@index([unifiedAddr])
+}
+
+// Individual blackjack game/hand
+model BlackjackGame {
+  id              String   @id @default(cuid())
+  sessionId       String
+  session         Session  @relation(fields: [sessionId], references: [id])
+
+  // Bet amounts
+  mainBet         Float
+  perfectPairsBet Float    @default(0)
+  insuranceBet    Float    @default(0)
+
+  // Game state (JSON for flexibility)
+  initialState    String   // JSON: deck order, initial cards
+  finalState      String?  // JSON: final hands, outcomes
+  actionHistory   String   @default("[]") // JSON array of actions taken (hit, stand, double, split)
+
+  // Provably fair data
+  serverSeed      String
+  serverSeedHash  String
+  clientSeed      String
+  nonce           Int
+
+  // Blockchain commitment (provably fair on-chain)
+  commitmentTxHash    String?   // Zcash tx hash of commitment
+  commitmentBlock     Int?      // Block height when commitment was made
+  commitmentTimestamp DateTime? // Block timestamp of commitment
+
+  // Verification tracking
+  verifiedOnChain     Boolean   @default(false)
+  verificationTxHash  String?   // Optional: tx proving game result
+
+  // Outcome
+  status          String   @default("active") // active, completed, abandoned
+  outcome         String?  // win, lose, push, blackjack
+  payout          Float?
+
+  // Timestamps
+  createdAt       DateTime @default(now())
+  completedAt     DateTime?
+
+  @@index([sessionId])
+  @@index([serverSeedHash])
+  @@index([status])
+  @@index([commitmentTxHash])
+}
+
+// Pre-generated seed commitments for provably fair games
+// Commitments are created in advance so games don't wait for blockchain confirmation
+model SeedCommitment {
+  id              String   @id @default(cuid())
+  serverSeed      String   @unique
+  serverSeedHash  String   @unique
+
+  // Blockchain proof
+  txHash          String   @unique
+  blockHeight     Int
+  blockTimestamp  DateTime
+
+  // Pool management
+  status          String   @default("available") // available, used, expired
+  usedByGameId    String?  // Reference to game that consumed this commitment
+  usedAt          DateTime?
+
+  // Lifecycle
+  createdAt       DateTime @default(now())
+  expiresAt       DateTime // Commitments expire after 24h if unused
+
+  @@index([status])
+  @@index([txHash])
+  @@index([expiresAt])
+}
+
+// Deposit and withdrawal transactions
+model Transaction {
+  id            String   @id @default(cuid())
+  sessionId     String
+  session       Session  @relation(fields: [sessionId], references: [id])
+
+  type          String   // deposit, withdrawal
+  amount        Float
+  fee           Float    @default(0)
+
+  // Zcash transaction details
+  txHash        String?  // Zcash transaction hash
+  address       String?  // Deposit address or withdrawal destination
+  confirmations Int      @default(0)
+
+  // Shielded transaction support
+  isShielded    Boolean  @default(false)
+  memo          String?  // Encrypted memo for z-transactions
+  operationId   String?  // z_sendmany operation ID (for tracking)
+
+  // Status
+  status        String   @default("pending") // pending, confirmed, failed
+  failReason    String?  // Reason if failed
+
+  // Timestamps
+  createdAt     DateTime @default(now())
+  confirmedAt   DateTime?
+
+  @@index([sessionId])
+  @@index([txHash])
+  @@index([status])
+  @@index([operationId])
+}
+
+// Geo-blocking log (30-day retention)
+model GeoCheck {
+  id          String   @id @default(cuid())
+  ipAddress   String
+  country     String?
+  region      String?
+  allowed     Boolean
+  reason      String?  // Why blocked, if applicable
+
+  createdAt   DateTime @default(now())
+
+  @@index([ipAddress])
+  @@index([createdAt])
+}

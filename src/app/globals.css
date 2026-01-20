@@ -1,0 +1,296 @@
+@import "tailwindcss";
+
+:root {
+  --foreground-rgb: 250, 247, 240;
+  --background-start-rgb: 42, 89, 64;
+  --background-end-rgb: 61, 122, 90;
+
+  /* Classy Pepe Color System */
+  --pepe-green: #3D7A5A;
+  --pepe-green-dark: #2A5940;
+  --pepe-green-light: #5A9E78;
+  --monaco-gold: #C9A227;
+  --champagne-gold: #E8D5A3;
+  --rich-black: #0D0D0D;
+  --ivory-white: #FAF7F0;
+  --velvet-purple: #4A2C5A;
+  --burgundy: #722F37;
+
+  /* Legacy aliases for gradual migration */
+  --zec-yellow: var(--monaco-gold);
+  --zec-black: var(--rich-black);
+  --casino-green: var(--pepe-green-dark);
+  --casino-gold: var(--monaco-gold);
+  --casino-red: var(--burgundy);
+  --felt-green: var(--pepe-green);
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  background: linear-gradient(
+      to bottom,
+      rgb(var(--background-start-rgb)),
+      rgb(var(--background-end-rgb))
+    );
+  min-height: 100vh;
+}
+
+/* Card styling */
+.playing-card {
+  background-color: var(--ivory-white);
+  border-radius: 0.5rem;
+  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.2), inset 0 1px 2px rgb(255 255 255 / 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  aspect-ratio: 2.5 / 3.5;
+  border: 1px solid var(--champagne-gold);
+}
+
+.playing-card.red {
+  color: var(--burgundy);
+}
+
+.playing-card.black {
+  color: var(--rich-black);
+}
+
+/* Felt table texture - Diamond tufted luxury pattern */
+.felt-texture {
+  background-color: var(--pepe-green);
+  background-image: url("data:image/svg+xml,%3Csvg width='80' height='80' viewBox='0 0 80 80' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' stroke='%232A5940' stroke-width='1'%3E%3Cpath d='M0 40 L40 0 L80 40 L40 80 Z' stroke-opacity='0.2'/%3E%3Ccircle cx='40' cy='40' r='2' fill='%23C9A227' fill-opacity='0.1'/%3E%3C/g%3E%3C/svg%3E");
+}
+
+/* Chip styling */
+.chip {
+  border-radius: 9999px;
+  border-width: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+  width: 48px;
+  height: 48px;
+}
+
+/* Custom color utilities for Tailwind v4 */
+@theme {
+  /* Classy Pepe Color System */
+  --color-pepe-green: #3D7A5A;
+  --color-pepe-green-dark: #2A5940;
+  --color-pepe-green-light: #5A9E78;
+  --color-monaco-gold: #C9A227;
+  --color-champagne-gold: #E8D5A3;
+  --color-rich-black: #0D0D0D;
+  --color-ivory-white: #FAF7F0;
+  --color-velvet-purple: #4A2C5A;
+  --color-burgundy: #722F37;
+
+  /* Legacy aliases */
+  --color-zec-yellow: #C9A227;
+  --color-zec-black: #0D0D0D;
+  --color-casino-green: #2A5940;
+  --color-casino-gold: #C9A227;
+  --color-casino-red: #722F37;
+  --color-felt-green: #3D7A5A;
+}
+
+/* Typography utilities */
+.font-display {
+  font-family: var(--font-playfair), Georgia, serif;
+}
+
+.font-body {
+  font-family: var(--font-dm-sans), system-ui, sans-serif;
+}
+
+/* Gold gradient text effect */
+.text-gold-gradient {
+  background: linear-gradient(135deg, #C9A227 0%, #E8D5A3 50%, #C9A227 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Button hover animations */
+.btn-gold-shimmer {
+  background: linear-gradient(135deg, #C9A227 0%, #E8D5A3 50%, #C9A227 100%);
+  background-size: 200% 200%;
+  transition: all 0.3s ease;
+}
+
+.btn-gold-shimmer:hover {
+  background-position: 100% 0;
+  box-shadow: 0 4px 20px rgba(201, 162, 39, 0.4);
+  transform: translateY(-1px);
+}
+
+/* Card animations */
+@keyframes cardDeal {
+  0% {
+    transform: translateX(50px) translateY(-30px) rotate(5deg);
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(0) translateY(0) rotate(0);
+    opacity: 1;
+  }
+}
+
+.card-deal {
+  animation: cardDeal 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Card flip animation */
+@keyframes cardFlip {
+  0% {
+    transform: rotateY(0deg);
+  }
+  50% {
+    transform: rotateY(90deg);
+  }
+  100% {
+    transform: rotateY(0deg);
+  }
+}
+
+.card-flip {
+  animation: cardFlip 0.3s ease-in-out;
+}
+
+/* Win celebration */
+@keyframes goldPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(201, 162, 39, 0.4); }
+  50% { box-shadow: 0 0 20px 10px rgba(201, 162, 39, 0.2); }
+}
+
+.win-glow {
+  animation: goldPulse 1.5s ease-in-out infinite;
+}
+
+/* Balance change animations */
+@keyframes balanceIncrease {
+  0% { transform: scale(1); color: var(--monaco-gold); }
+  50% { transform: scale(1.15); color: #4ade80; }
+  100% { transform: scale(1); color: var(--monaco-gold); }
+}
+
+@keyframes balanceDecrease {
+  0% { transform: scale(1); color: var(--monaco-gold); }
+  50% { transform: scale(0.95); color: var(--burgundy); }
+  100% { transform: scale(1); color: var(--monaco-gold); }
+}
+
+.balance-increase {
+  animation: balanceIncrease 0.5s ease-out;
+}
+
+.balance-decrease {
+  animation: balanceDecrease 0.5s ease-out;
+}
+
+/* Floating payout animation */
+@keyframes floatUp {
+  0% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-30px) scale(1.2);
+  }
+}
+
+.float-up {
+  animation: floatUp 1.5s ease-out forwards;
+}
+
+/* Result message animations */
+@keyframes resultPop {
+  0% {
+    transform: scale(0.8);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.result-pop {
+  animation: resultPop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Loss shake animation */
+@keyframes lossShake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-5px); }
+  40% { transform: translateX(5px); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(3px); }
+}
+
+.loss-shake {
+  animation: lossShake 0.4s ease-out;
+}
+
+/* Blackjack celebration */
+@keyframes blackjackGlow {
+  0%, 100% {
+    box-shadow: 0 0 10px rgba(201, 162, 39, 0.5), 0 0 20px rgba(201, 162, 39, 0.3);
+    text-shadow: 0 0 10px rgba(201, 162, 39, 0.8);
+  }
+  50% {
+    box-shadow: 0 0 25px rgba(201, 162, 39, 0.8), 0 0 40px rgba(201, 162, 39, 0.5);
+    text-shadow: 0 0 20px rgba(201, 162, 39, 1);
+  }
+}
+
+.blackjack-glow {
+  animation: blackjackGlow 1s ease-in-out infinite;
+}
+
+/* Tooltip styles */
+.tooltip {
+  position: relative;
+}
+
+.tooltip::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0.5rem 0.75rem;
+  background: var(--rich-black);
+  color: var(--ivory-white);
+  font-size: 0.75rem;
+  white-space: nowrap;
+  border-radius: 0.375rem;
+  border: 1px solid var(--monaco-gold);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+  z-index: 50;
+  margin-bottom: 0.5rem;
+}
+
+.tooltip:hover::after {
+  opacity: 1;
+}
+
+/* Button press animation */
+@keyframes buttonPress {
+  0% { transform: scale(1); }
+  50% { transform: scale(0.95); }
+  100% { transform: scale(1); }
+}
+
+.btn-press:active {
+  animation: buttonPress 0.15s ease-out;
+}

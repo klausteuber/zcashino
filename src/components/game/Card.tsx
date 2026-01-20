@@ -1,0 +1,213 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import type { Card as CardType, Suit } from '@/types'
+
+interface CardProps {
+  card: CardType
+  size?: 'sm' | 'md' | 'lg'
+  className?: string
+  dealDelay?: number // Delay in ms before card deals in
+  isNew?: boolean // Whether this card was just dealt
+}
+
+const suitSymbols: Record<Suit, string> = {
+  hearts: '♥',
+  diamonds: '♦',
+  clubs: '♣',
+  spades: '♠'
+}
+
+const suitColors: Record<Suit, string> = {
+  hearts: 'text-burgundy',
+  diamonds: 'text-burgundy',
+  clubs: 'text-rich-black',
+  spades: 'text-rich-black'
+}
+
+const sizeClasses = {
+  sm: 'w-12 h-[4.2rem] text-sm',
+  md: 'w-16 h-[5.6rem] text-base',
+  lg: 'w-20 h-[7rem] text-lg'
+}
+
+export default function Card({ card, size = 'md', className = '', dealDelay = 0, isNew = false }: CardProps) {
+  const [isDealt, setIsDealt] = useState(!isNew)
+  const [isFlipping, setIsFlipping] = useState(false)
+  const [showFace, setShowFace] = useState(card.faceUp)
+
+  // Handle deal animation
+  useEffect(() => {
+    if (isNew && !isDealt) {
+      const timer = setTimeout(() => {
+        setIsDealt(true)
+      }, dealDelay)
+      return () => clearTimeout(timer)
+    }
+  }, [isNew, isDealt, dealDelay])
+
+  // Handle flip animation when card changes from face-down to face-up
+  useEffect(() => {
+    if (card.faceUp && !showFace) {
+      setIsFlipping(true)
+      // At halfway through flip, show the face
+      const flipTimer = setTimeout(() => {
+        setShowFace(true)
+      }, 150)
+      // End flip animation
+      const endTimer = setTimeout(() => {
+        setIsFlipping(false)
+      }, 300)
+      return () => {
+        clearTimeout(flipTimer)
+        clearTimeout(endTimer)
+      }
+    } else if (!card.faceUp && showFace) {
+      setShowFace(false)
+    }
+  }, [card.faceUp, showFace])
+
+  // Animation classes
+  const dealAnimationClass = isNew && !isDealt ? 'opacity-0 translate-y-[-30px] translate-x-[50px] rotate-[5deg]' : 'opacity-100 translate-y-0 translate-x-0 rotate-0'
+  const flipAnimationClass = isFlipping ? 'card-flip' : ''
+  const transitionClass = 'transition-all duration-300 ease-out'
+
+  // Render face-down card back
+  const renderCardBack = () => (
+    <div className="w-3/4 h-3/4 border border-monaco-gold/30 rounded-md bg-pepe-green-dark/60 flex items-center justify-center relative overflow-hidden">
+      {/* Diamond tufted pattern overlay */}
+      <div
+        className="absolute inset-0 opacity-20"
+        style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 20 L20 0 L40 20 L20 40 Z' fill='none' stroke='%23C9A227' stroke-width='0.5' stroke-opacity='0.5'/%3E%3C/svg%3E")`,
+          backgroundSize: '20px 20px'
+        }}
+      />
+      {/* Crown icon */}
+      <svg className="w-6 h-6 text-monaco-gold/50" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" />
+      </svg>
+    </div>
+  )
+
+  // Render card face
+  const symbol = suitSymbols[card.suit]
+  const colorClass = suitColors[card.suit]
+
+  const renderCardFace = () => (
+    <>
+      {/* Top left */}
+      <div className={`flex flex-col items-start leading-none ${colorClass}`}>
+        <span className="font-bold">{card.rank}</span>
+        <span className="text-lg -mt-1">{symbol}</span>
+      </div>
+
+      {/* Center */}
+      <div className={`flex items-center justify-center ${colorClass}`}>
+        <span className="text-3xl">{symbol}</span>
+      </div>
+
+      {/* Bottom right (rotated) */}
+      <div className={`flex flex-col items-end leading-none rotate-180 ${colorClass}`}>
+        <span className="font-bold">{card.rank}</span>
+        <span className="text-lg -mt-1">{symbol}</span>
+      </div>
+    </>
+  )
+
+  // Card is face down (and not flipping to face up)
+  if (!showFace) {
+    return (
+      <div
+        className={`${sizeClasses[size]} bg-gradient-to-br from-pepe-green-dark via-pepe-green to-pepe-green-dark rounded-lg shadow-lg flex items-center justify-center border-2 border-monaco-gold/40 ${transitionClass} ${dealAnimationClass} ${flipAnimationClass} ${className}`}
+        style={{ transformStyle: 'preserve-3d' }}
+      >
+        {renderCardBack()}
+      </div>
+    )
+  }
+
+  // Card is face up
+  return (
+    <div
+      className={`${sizeClasses[size]} bg-ivory-white rounded-lg shadow-lg flex flex-col justify-between p-1.5 border border-champagne-gold/50 ${transitionClass} ${dealAnimationClass} ${flipAnimationClass} ${className}`}
+      style={{ transformStyle: 'preserve-3d' }}
+    >
+      {renderCardFace()}
+    </div>
+  )
+}
+
+interface HandProps {
+  cards: CardType[]
+  size?: 'sm' | 'md' | 'lg'
+  label?: string
+  value?: number
+  showValue?: boolean
+  className?: string
+  animateDealing?: boolean // Whether to animate cards dealing in
+  previousCardCount?: number // How many cards were in the hand before
+  isBust?: boolean
+  isBlackjack?: boolean
+}
+
+export function Hand({
+  cards,
+  size = 'md',
+  label,
+  value,
+  showValue = true,
+  className = '',
+  animateDealing = false,
+  previousCardCount = 0,
+  isBust = false,
+  isBlackjack = false
+}: HandProps) {
+  // Determine which cards are "new" (for deal animation)
+  const getIsNew = (index: number) => {
+    if (!animateDealing) return false
+    return index >= previousCardCount
+  }
+
+  // Calculate deal delay for staggered animation
+  const getDealDelay = (index: number) => {
+    if (!animateDealing || index < previousCardCount) return 0
+    // Stagger each new card by 150ms
+    return (index - previousCardCount) * 150
+  }
+
+  return (
+    <div className={`flex flex-col items-center gap-2 ${className}`}>
+      {label && (
+        <div className="text-sm font-semibold text-gray-300">{label}</div>
+      )}
+
+      <div className="flex gap-[-1rem]">
+        {cards.map((card, index) => (
+          <Card
+            key={`${card.rank}-${card.suit}-${index}`}
+            card={card}
+            size={size}
+            className={index > 0 ? '-ml-8' : ''}
+            isNew={getIsNew(index)}
+            dealDelay={getDealDelay(index)}
+          />
+        ))}
+      </div>
+
+      {showValue && value !== undefined && (
+        <div className={`text-lg font-bold px-3 py-1 rounded-full border transition-all duration-300
+          ${isBust
+            ? 'text-burgundy bg-burgundy/20 border-burgundy/50 animate-pulse'
+            : isBlackjack
+              ? 'text-monaco-gold bg-monaco-gold/20 border-monaco-gold win-glow'
+              : 'text-monaco-gold bg-rich-black/40 border-monaco-gold/30'
+          }`}>
+          {isBust && '💥 '}
+          {value}
+          {isBlackjack && ' 🎰'}
+        </div>
+      )}
+    </div>
+  )
+}
