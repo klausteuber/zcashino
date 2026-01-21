@@ -9,10 +9,16 @@ datasource db {
   provider = "sqlite"
 }
 
-// Player session - identified by wallet address
+// Player session - authenticated by ZEC deposit
 model Session {
   id            String   @id @default(cuid())
-  walletAddress String   @unique
+  walletAddress String   @unique  // Internal identifier (can be demo_ prefix)
+
+  // Authentication via deposit
+  withdrawalAddress  String?           // User's verified withdrawal address (t or z)
+  isAuthenticated    Boolean @default(false)
+  authTxHash         String?           // Transaction hash that authenticated the session
+  authConfirmedAt    DateTime?         // When authentication was confirmed
 
   // Balance tracking
   balance       Float    @default(0)
@@ -40,18 +46,17 @@ model Session {
   wallet        DepositWallet?
 
   @@index([walletAddress])
+  @@index([withdrawalAddress])
 }
 
-// Deposit wallet - generated addresses for receiving ZEC
+// Deposit wallet - transparent addresses for proof of reserves
 model DepositWallet {
   id              String   @id @default(cuid())
   sessionId       String   @unique
   session         Session  @relation(fields: [sessionId], references: [id])
 
-  // Generated addresses for deposits
-  transparentAddr String   @unique  // t-address
-  saplingAddr     String?  @unique  // z-address (sapling)
-  unifiedAddr     String?  @unique  // u-address
+  // Transparent address only (for proof of reserves)
+  transparentAddr String   @unique  // t-address - publicly verifiable
 
   // Network configuration
   network         String   @default("testnet") // mainnet, testnet
@@ -60,13 +65,15 @@ model DepositWallet {
   accountIndex    Int      @default(0)
   addressIndex    Int      @default(0)
 
+  // Cached balance (updated periodically)
+  cachedBalance   Float    @default(0)
+  balanceUpdatedAt DateTime?
+
   // Timestamps
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
   @@index([transparentAddr])
-  @@index([saplingAddr])
-  @@index([unifiedAddr])
 }
 
 // Individual blackjack game/hand

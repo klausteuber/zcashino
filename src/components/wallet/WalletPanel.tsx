@@ -6,13 +6,20 @@ import type { DepositInfo, WalletBalance } from '@/types'
 interface WalletPanelProps {
   sessionId: string
   onBalanceUpdate?: (balance: number) => void
+  onAuthUpdate?: (isAuthenticated: boolean) => void
+}
+
+interface AuthStatus {
+  isAuthenticated: boolean
+  withdrawalAddress: string | null
+  authTxHash: string | null
+  authConfirmedAt: string | null
 }
 
 interface WalletData {
   wallet: {
     id: string
     depositAddress: string
-    saplingAddress?: string
     network: string
   }
   depositInfo: DepositInfo
@@ -21,17 +28,22 @@ interface WalletData {
     synced: boolean
   }
   balance: WalletBalance
+  auth: AuthStatus
 }
 
-export function WalletPanel({ sessionId, onBalanceUpdate }: WalletPanelProps) {
+export function WalletPanel({ sessionId, onBalanceUpdate, onAuthUpdate }: WalletPanelProps) {
   const [walletData, setWalletData] = useState<WalletData | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showDeposit, setShowDeposit] = useState(false)
   const [showWithdraw, setShowWithdraw] = useState(false)
-  const [withdrawAddress, setWithdrawAddress] = useState('')
+  const [showSetAddress, setShowSetAddress] = useState(false)
+
+  // Form states
+  const [withdrawalAddressInput, setWithdrawalAddressInput] = useState('')
   const [withdrawAmount, setWithdrawAmount] = useState('')
   const [withdrawing, setWithdrawing] = useState(false)
+  const [settingAddress, setSettingAddress] = useState(false)
 
   const fetchWalletData = useCallback(async () => {
     try {
@@ -44,12 +56,15 @@ export function WalletPanel({ sessionId, onBalanceUpdate }: WalletPanelProps) {
       if (onBalanceUpdate) {
         onBalanceUpdate(data.balance.confirmed)
       }
+      if (onAuthUpdate) {
+        onAuthUpdate(data.auth.isAuthenticated)
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load wallet')
     } finally {
       setIsLoading(false)
     }
-  }, [sessionId, onBalanceUpdate])
+  }, [sessionId, onBalanceUpdate, onAuthUpdate])
 
   useEffect(() => {
     fetchWalletData()
@@ -66,7 +81,7 @@ export function WalletPanel({ sessionId, onBalanceUpdate }: WalletPanelProps) {
         }),
       })
       const data = await res.json()
-      if (data.deposits?.length > 0) {
+      if (data.deposits?.length > 0 || data.auth?.justAuthenticated) {
         await fetchWalletData()
       }
     } catch (err) {
@@ -74,8 +89,41 @@ export function WalletPanel({ sessionId, onBalanceUpdate }: WalletPanelProps) {
     }
   }
 
+  const handleSetWithdrawalAddress = async () => {
+    if (!withdrawalAddressInput) return
+
+    setSettingAddress(true)
+    setError(null)
+
+    try {
+      const res = await fetch('/api/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'set-withdrawal-address',
+          sessionId,
+          withdrawalAddress: withdrawalAddressInput,
+        }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to set withdrawal address')
+      }
+
+      setShowSetAddress(false)
+      setShowDeposit(true)
+      await fetchWalletData()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to set address')
+    } finally {
+      setSettingAddress(false)
+    }
+  }
+
   const handleWithdraw = async () => {
-    if (!withdrawAddress || !withdrawAmount) return
+    if (!withdrawAmount) return
 
     setWithdrawing(true)
     setError(null)
@@ -87,7 +135,6 @@ export function WalletPanel({ sessionId, onBalanceUpdate }: WalletPanelProps) {
         body: JSON.stringify({
           action: 'withdraw',
           sessionId,
-          destinationAddress: withdrawAddress,
           amount: parseFloat(withdrawAmount),
         }),
       })
@@ -98,7 +145,6 @@ export function WalletPanel({ sessionId, onBalanceUpdate }: WalletPanelProps) {
         throw new Error(data.error || 'Withdrawal failed')
       }
 
-      setWithdrawAddress('')
       setWithdrawAmount('')
       setShowWithdraw(false)
       await fetchWalletData()
@@ -129,12 +175,25 @@ export function WalletPanel({ sessionId, onBalanceUpdate }: WalletPanelProps) {
     )
   }
 
+  const isAuthenticated = walletData?.auth.isAuthenticated ?? false
+  const hasWithdrawalAddress = !!walletData?.auth.withdrawalAddress
+
   return (
     <div className="bg-rich-black/40 rounded-lg p-4 border border-monaco-gold/20">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-semibold text-ivory-white">Wallet</h3>
         <div className="flex items-center gap-2">
+          {/* Auth Status Badge */}
+          <span
+            className={`px-2 py-0.5 rounded text-xs font-medium ${
+              isAuthenticated
+                ? 'bg-pepe-green/20 text-pepe-green'
+                : 'bg-monaco-gold/20 text-monaco-gold'
+            }`}
+          >
+            {isAuthenticated ? '✓ Verified' : 'Not Verified'}
+          </span>
           <span
             className={`w-2 h-2 rounded-full ${
               walletData?.nodeStatus.connected
@@ -163,20 +222,66 @@ export function WalletPanel({ sessionId, onBalanceUpdate }: WalletPanelProps) {
         )}
       </div>
 
+      {/* Withdrawal Address */}
+      {hasWithdrawalAddress && (
+        <div className="mb-4 p-3 bg-rich-black/60 rounded-lg border border-monaco-gold/10">
+          <div className="text-xs text-champagne-gold/60 mb-1">Withdrawal Address</div>
+          <div className="font-mono text-xs text-ivory-white break-all">
+            {walletData?.auth.withdrawalAddress}
+          </div>
+        </div>
+      )}
+
+      {/* Authentication Required Message */}
+      {!isAuthenticated && !hasWithdrawalAddress && (
+        <div className="mb-4 p-3 bg-monaco-gold/10 rounded-lg border border-monaco-gold/30">
+          <div className="text-sm text-monaco-gold font-medium mb-1">
+            Authentication Required
+          </div>
+          <div className="text-xs text-champagne-gold/70">
+            Set your withdrawal address and make a deposit to start playing.
+          </div>
+        </div>
+      )}
+
+      {!isAuthenticated && hasWithdrawalAddress && (
+        <div className="mb-4 p-3 bg-monaco-gold/10 rounded-lg border border-monaco-gold/30">
+          <div className="text-sm text-monaco-gold font-medium mb-1">
+            Deposit Required
+          </div>
+          <div className="text-xs text-champagne-gold/70">
+            Send ZEC to your deposit address to verify your account.
+          </div>
+        </div>
+      )}
+
       {/* Action Buttons */}
       <div className="flex gap-2 mb-4">
-        <button
-          onClick={() => setShowDeposit(!showDeposit)}
-          className="flex-1 bg-monaco-gold/20 hover:bg-monaco-gold/30 text-monaco-gold px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-        >
-          Deposit
-        </button>
-        <button
-          onClick={() => setShowWithdraw(!showWithdraw)}
-          className="flex-1 bg-ivory-white/10 hover:bg-ivory-white/20 text-ivory-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-        >
-          Withdraw
-        </button>
+        {!hasWithdrawalAddress ? (
+          <button
+            onClick={() => setShowSetAddress(!showSetAddress)}
+            className="flex-1 bg-monaco-gold hover:bg-monaco-gold/80 text-rich-black px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+          >
+            Set Withdrawal Address
+          </button>
+        ) : (
+          <>
+            <button
+              onClick={() => setShowDeposit(!showDeposit)}
+              className="flex-1 bg-monaco-gold/20 hover:bg-monaco-gold/30 text-monaco-gold px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+            >
+              Deposit
+            </button>
+            <button
+              onClick={() => setShowWithdraw(!showWithdraw)}
+              disabled={!isAuthenticated}
+              className="flex-1 bg-ivory-white/10 hover:bg-ivory-white/20 text-ivory-white px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              title={!isAuthenticated ? 'Deposit first to enable withdrawals' : undefined}
+            >
+              Withdraw
+            </button>
+          </>
+        )}
         <button
           onClick={checkDeposits}
           className="bg-ivory-white/10 hover:bg-ivory-white/20 text-ivory-white px-3 py-2 rounded-lg text-sm transition-colors"
@@ -185,6 +290,39 @@ export function WalletPanel({ sessionId, onBalanceUpdate }: WalletPanelProps) {
           ↻
         </button>
       </div>
+
+      {/* Set Withdrawal Address Panel */}
+      {showSetAddress && (
+        <div className="bg-rich-black/60 rounded-lg p-4 mb-4 border border-monaco-gold/10">
+          <div className="text-sm text-champagne-gold/60 mb-2">
+            Enter your Zcash address for withdrawals:
+          </div>
+          <div className="space-y-3">
+            <input
+              type="text"
+              value={withdrawalAddressInput}
+              onChange={(e) => setWithdrawalAddressInput(e.target.value)}
+              placeholder="t1... or zs... or u1..."
+              className="w-full bg-rich-black/80 border border-monaco-gold/20 rounded px-3 py-2 text-ivory-white text-sm placeholder:text-champagne-gold/30"
+            />
+            <div className="text-xs text-champagne-gold/50">
+              • This address will receive all your withdrawals
+              <br />
+              • You can use transparent (t), shielded (z), or unified (u) addresses
+            </div>
+            {error && (
+              <div className="text-sm text-burgundy">{error}</div>
+            )}
+            <button
+              onClick={handleSetWithdrawalAddress}
+              disabled={settingAddress || !withdrawalAddressInput}
+              className="w-full bg-monaco-gold text-rich-black px-4 py-2 rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {settingAddress ? 'Setting...' : 'Set Address & Continue'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Deposit Panel */}
       {showDeposit && walletData && (
@@ -207,25 +345,23 @@ export function WalletPanel({ sessionId, onBalanceUpdate }: WalletPanelProps) {
             <p>• Minimum deposit: {walletData.depositInfo.minimumDeposit} ZEC</p>
             <p>• {walletData.depositInfo.confirmationsRequired} confirmations required</p>
             <p>• Network: {walletData.wallet.network}</p>
+            {!isAuthenticated && (
+              <p className="text-monaco-gold">
+                • First deposit will verify your account
+              </p>
+            )}
           </div>
         </div>
       )}
 
       {/* Withdraw Panel */}
-      {showWithdraw && (
+      {showWithdraw && isAuthenticated && (
         <div className="bg-rich-black/60 rounded-lg p-4 border border-monaco-gold/10">
           <div className="space-y-3">
-            <div>
-              <label className="text-sm text-champagne-gold/60 block mb-1">
-                Destination Address
-              </label>
-              <input
-                type="text"
-                value={withdrawAddress}
-                onChange={(e) => setWithdrawAddress(e.target.value)}
-                placeholder="t1... or zs... or u1..."
-                className="w-full bg-rich-black/80 border border-monaco-gold/20 rounded px-3 py-2 text-ivory-white text-sm placeholder:text-champagne-gold/30"
-              />
+            <div className="text-sm text-champagne-gold/60">
+              Withdrawing to: <span className="text-ivory-white font-mono text-xs">
+                {walletData?.auth.withdrawalAddress?.substring(0, 12)}...
+              </span>
             </div>
             <div>
               <label className="text-sm text-champagne-gold/60 block mb-1">
@@ -248,7 +384,7 @@ export function WalletPanel({ sessionId, onBalanceUpdate }: WalletPanelProps) {
             )}
             <button
               onClick={handleWithdraw}
-              disabled={withdrawing || !withdrawAddress || !withdrawAmount}
+              disabled={withdrawing || !withdrawAmount}
               className="w-full bg-monaco-gold text-rich-black px-4 py-2 rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {withdrawing ? 'Processing...' : 'Withdraw'}
@@ -256,6 +392,16 @@ export function WalletPanel({ sessionId, onBalanceUpdate }: WalletPanelProps) {
           </div>
         </div>
       )}
+
+      {/* Proof of Reserves Link */}
+      <div className="mt-4 pt-3 border-t border-monaco-gold/10">
+        <a
+          href="/reserves"
+          className="text-xs text-champagne-gold/50 hover:text-monaco-gold transition-colors"
+        >
+          View Proof of Reserves →
+        </a>
+      </div>
     </div>
   )
 }

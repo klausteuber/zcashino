@@ -18,6 +18,11 @@ import {
 import { getExplorerUrl } from '@/lib/provably-fair/blockchain'
 import type { BlackjackAction, BlackjackGameState, BlockchainCommitment } from '@/types'
 
+// Check if this is a demo session
+function isDemoSession(walletAddress: string): boolean {
+  return walletAddress.startsWith('demo_')
+}
+
 // POST /api/game - Start new game or execute action
 export async function POST(request: NextRequest) {
   try {
@@ -42,6 +47,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         error: 'Self-excluded',
         excludedUntil: session.excludedUntil
+      }, { status: 403 })
+    }
+
+    // Check authentication (demo sessions are auto-authenticated)
+    const isDemo = isDemoSession(session.walletAddress)
+    if (!isDemo && !session.isAuthenticated) {
+      return NextResponse.json({
+        error: 'Authentication required',
+        message: 'Please deposit ZEC to authenticate your session before playing.',
+        requiresAuth: true,
       }, { status: 403 })
     }
 
@@ -167,10 +182,17 @@ async function handleStartGame(
     explorerUrl: getExplorerUrl(txHash)
   }
 
+  // Get updated session to include stats
+  const updatedSession = await prisma.session.findUnique({
+    where: { id: session.id }
+  })
+
   return NextResponse.json({
     gameId: game.id,
     gameState: sanitizeGameState(gameState),
-    balance: newBalance + (gameState.lastPayout || 0),
+    balance: updatedSession?.balance ?? (newBalance + (gameState.lastPayout || 0)),
+    totalWagered: updatedSession?.totalWagered ?? totalBet,
+    totalWon: updatedSession?.totalWon ?? 0,
     commitment: blockchainCommitment
   })
 }
@@ -282,7 +304,9 @@ async function handleGameAction(
   return NextResponse.json({
     gameId,
     gameState: sanitizeGameState(gameState),
-    balance: updatedSession?.balance || 0
+    balance: updatedSession?.balance ?? 0,
+    totalWagered: updatedSession?.totalWagered ?? 0,
+    totalWon: updatedSession?.totalWon ?? 0
   })
 }
 
@@ -326,7 +350,8 @@ function sanitizeGameState(state: BlackjackGameState): Partial<BlackjackGameStat
     clientSeed: state.clientSeed,
     nonce: state.nonce,
     lastPayout: state.lastPayout,
-    message: state.message
+    message: state.message,
+    perfectPairsResult: state.perfectPairsResult
     // Note: deck and serverSeed are NOT sent to client
   }
 }
