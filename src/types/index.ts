@@ -43,6 +43,11 @@ export interface BlackjackGameState {
   nonce: number
   lastPayout: number
   message: string
+  // Perfect Pairs result (evaluated immediately on deal)
+  perfectPairsResult?: {
+    outcome: PerfectPairsOutcome
+    payout: number
+  }
 }
 
 // Action types

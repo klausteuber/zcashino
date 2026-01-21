@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
-import { validateAddress, DEFAULT_NETWORK } from '@/lib/wallet'
+import { validateAddress, DEFAULT_NETWORK, generateTransparentAddress, checkNodeStatus } from '@/lib/wallet'
 
 // Demo mode: Generate a fake wallet address for testing
 function generateDemoWallet(): string {
@@ -15,6 +15,47 @@ function generateDemoWallet(): string {
 // Check if this is a demo session
 function isDemoSession(walletAddress: string): boolean {
   return walletAddress.startsWith('demo_')
+}
+
+// Create a deposit wallet for a session
+async function createDepositWalletForSession(sessionId: string) {
+  const network = DEFAULT_NETWORK
+
+  // Generate transparent address
+  let transparentAddr: string
+
+  // Check if we have RPC connection
+  const nodeStatus = await checkNodeStatus(network)
+
+  if (nodeStatus.connected) {
+    // Generate real address via RPC
+    transparentAddr = await generateTransparentAddress(network)
+  } else {
+    // Generate demo placeholder address
+    const timestamp = Date.now().toString(36)
+    const random = Math.random().toString(36).substring(2, 10)
+    transparentAddr = network === 'testnet'
+      ? `tmDemo${timestamp}${random}`.substring(0, 35)
+      : `t1Demo${timestamp}${random}`.substring(0, 35)
+  }
+
+  // Get next address index
+  const lastWallet = await prisma.depositWallet.findFirst({
+    orderBy: { addressIndex: 'desc' },
+  })
+  const addressIndex = (lastWallet?.addressIndex ?? -1) + 1
+
+  // Create wallet record
+  const wallet = await prisma.depositWallet.create({
+    data: {
+      sessionId,
+      transparentAddr,
+      network,
+      addressIndex,
+    },
+  })
+
+  return wallet
 }
 
 // GET /api/session - Get or create session
@@ -166,9 +207,10 @@ export async function POST(request: NextRequest) {
 /**
  * Set withdrawal address for a new session
  * This is the first step in authentication - user provides their withdrawal address
+ * Also creates a deposit wallet if one doesn't exist
  */
 async function handleSetWithdrawalAddress(
-  session: { id: string; withdrawalAddress: string | null; isAuthenticated: boolean; walletAddress: string },
+  session: { id: string; withdrawalAddress: string | null; isAuthenticated: boolean; walletAddress: string; wallet: unknown | null },
   withdrawalAddress: string
 ) {
   // Don't allow changing if already authenticated (use change-withdrawal-address instead)
@@ -186,6 +228,12 @@ async function handleSetWithdrawalAddress(
     }, { status: 400 })
   }
 
+  // Create deposit wallet if one doesn't exist
+  let wallet = session.wallet as { transparentAddr: string } | null
+  if (!wallet) {
+    wallet = await createDepositWalletForSession(session.id)
+  }
+
   // Update session with withdrawal address
   const updatedSession = await prisma.session.update({
     where: { id: session.id },
@@ -197,7 +245,7 @@ async function handleSetWithdrawalAddress(
     success: true,
     id: updatedSession.id,
     withdrawalAddress: updatedSession.withdrawalAddress,
-    depositAddress: updatedSession.wallet?.transparentAddr,
+    depositAddress: wallet.transparentAddr,
     isAuthenticated: updatedSession.isAuthenticated,
     message: 'Withdrawal address set. Send ZEC to your deposit address to authenticate.',
   })

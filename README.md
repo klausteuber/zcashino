@@ -31,7 +31,12 @@ A provably fair, privacy-focused online casino powered by Zcash (ZEC).
 - ✅ **Address validation** (t-addr, z-addr, u-addr support)
 
 ### UI/UX Features
-- ✅ **Card Animations** - Smooth deal and flip animations with staggered timing
+- ✅ **Card Deal Animation** - Cards fly in from dealer shoe position with rotation and arc trajectory
+- ✅ **3D Card Flip** - Enhanced perspective-based flip animation when dealer reveals hole card
+- ✅ **Active Hand Highlight** - Gold pulsing glow indicates current player hand during turn
+- ✅ **Winner/Loser Effects** - Green glow for winning hands, grayscale fade for losing hands
+- ✅ **Dealer Turn Indicator** - Visual pulse effect while dealer is drawing cards
+- ✅ **Insurance Prompt** - Interactive Yes/No buttons when dealer shows Ace (pays 2:1)
 - ✅ **Balance Feedback** - Visual animations for wins (green pulse) and losses (red pulse)
 - ✅ **Floating Payouts** - "+X.XXXX" floats up from balance on wins
 - ✅ **Result Animations** - Blackjack glow, win celebration, loss shake, push effects

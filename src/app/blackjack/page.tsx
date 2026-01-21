@@ -8,6 +8,8 @@ import { calculateHandValue } from '@/lib/game/deck'
 import { MIN_BET, MAX_BET, getAvailableActions } from '@/lib/game/blackjack'
 import PepeLogo from '@/components/ui/PepeLogo'
 import { useGameSounds } from '@/hooks/useGameSounds'
+import { OnboardingModal } from '@/components/onboarding/OnboardingModal'
+import { DepositWidget } from '@/components/wallet/DepositWidget'
 
 const CHIP_VALUES = [0.01, 0.05, 0.1, 0.25, 0.5, 1]
 
@@ -24,6 +26,9 @@ interface SessionData {
   balance: number
   totalWagered: number
   totalWon: number
+  isDemo?: boolean
+  isAuthenticated?: boolean
+  depositAddress?: string
 }
 
 export default function BlackjackPage() {
@@ -36,6 +41,11 @@ export default function BlackjackPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  // Onboarding state
+  const [showOnboarding, setShowOnboarding] = useState(false)
+  const [hasSeenOnboarding, setHasSeenOnboarding] = useState(false)
+  const [depositAddress, setDepositAddress] = useState<string | null>(null)
+
   // Animation state
   const [balanceAnimation, setBalanceAnimation] = useState<'increase' | 'decrease' | null>(null)
   const [showFloatingPayout, setShowFloatingPayout] = useState(false)
@@ -44,6 +54,7 @@ export default function BlackjackPage() {
   const [previousCardCounts, setPreviousCardCounts] = useState<{ player: number[]; dealer: number }>({ player: [0], dealer: 0 })
   const [showPerfectPairsTooltip, setShowPerfectPairsTooltip] = useState(false)
   const [copiedField, setCopiedField] = useState<string | null>(null)
+  const [insuranceDeclined, setInsuranceDeclined] = useState(false)
 
   // Track previous balance and game state for animations
   const prevBalanceRef = useRef<number | null>(null)
@@ -52,10 +63,28 @@ export default function BlackjackPage() {
   // Sound effects
   const { playSound, isMuted, toggleMute } = useGameSounds(true)
 
+  // Check localStorage for onboarding status
+  useEffect(() => {
+    const seen = localStorage.getItem('zcashino_onboarding_seen')
+    if (seen) {
+      setHasSeenOnboarding(true)
+    }
+  }, [])
+
   // Initialize session on mount
   useEffect(() => {
-    initSession()
-  }, [])
+    // Check if returning user with existing session
+    const existingSessionId = localStorage.getItem('zcashino_session_id')
+    if (existingSessionId) {
+      initSession(existingSessionId)
+    } else if (!hasSeenOnboarding) {
+      // First time visitor - show onboarding
+      setShowOnboarding(true)
+      setIsLoading(false)
+    } else {
+      initSession()
+    }
+  }, [hasSeenOnboarding])
 
   // Balance animation effect
   useEffect(() => {
@@ -145,20 +174,105 @@ export default function BlackjackPage() {
     }
   }
 
-  const initSession = async () => {
+  const initSession = async (existingSessionId?: string) => {
     try {
       setIsLoading(true)
-      const res = await fetch('/api/session')
+      const url = existingSessionId
+        ? `/api/session?sessionId=${existingSessionId}`
+        : '/api/session'
+      const res = await fetch(url)
       if (!res.ok) throw new Error('Failed to get session')
       const data = await res.json()
       setSession(data)
+      setDepositAddress(data.depositAddress || null)
+
+      // Store session ID for persistence
+      if (data.id) {
+        localStorage.setItem('zcashino_session_id', data.id)
+      }
     } catch (err) {
       setError('Failed to initialize session')
       console.error(err)
+      // Clear invalid session
+      localStorage.removeItem('zcashino_session_id')
     } finally {
       setIsLoading(false)
     }
   }
+
+  // Handle demo mode selection from onboarding
+  const handleDemoSelect = useCallback(async () => {
+    try {
+      setIsLoading(true)
+      const res = await fetch('/api/session')
+      if (!res.ok) throw new Error('Failed to create demo session')
+      const data = await res.json()
+      setSession(data)
+      localStorage.setItem('zcashino_session_id', data.id)
+      localStorage.setItem('zcashino_onboarding_seen', 'true')
+      setHasSeenOnboarding(true)
+    } catch (err) {
+      setError('Failed to create demo session')
+      console.error(err)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [])
+
+  // Create real session (non-demo)
+  const handleCreateRealSession = useCallback(async () => {
+    try {
+      // Generate a unique wallet identifier
+      const walletId = `real_${Date.now()}_${Math.random().toString(36).slice(2)}`
+      const res = await fetch(`/api/session?wallet=${walletId}`)
+      if (!res.ok) throw new Error('Failed to create session')
+      const data = await res.json()
+      setSession(data)
+      localStorage.setItem('zcashino_session_id', data.id)
+      return { sessionId: data.id, depositAddress: data.depositAddress || '' }
+    } catch (err) {
+      console.error('Failed to create real session:', err)
+      return null
+    }
+  }, [])
+
+  // Set withdrawal address
+  const handleSetWithdrawalAddress = useCallback(async (address: string) => {
+    if (!session) return false
+    try {
+      const res = await fetch('/api/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'set-withdrawal-address',
+          sessionId: session.id,
+          withdrawalAddress: address
+        })
+      })
+      if (!res.ok) return false
+      const data = await res.json()
+      if (data.depositAddress) {
+        setDepositAddress(data.depositAddress)
+      }
+      return true
+    } catch (err) {
+      console.error('Failed to set withdrawal address:', err)
+      return false
+    }
+  }, [session])
+
+  // Handle deposit completion
+  const handleDepositComplete = useCallback((balance: number) => {
+    setSession(prev => prev ? { ...prev, balance, isAuthenticated: true } : null)
+    setShowOnboarding(false)
+    localStorage.setItem('zcashino_onboarding_seen', 'true')
+    setHasSeenOnboarding(true)
+  }, [])
+
+  // Switch from demo to real ZEC
+  const handleSwitchToReal = useCallback(() => {
+    setShowOnboarding(true)
+  }, [])
 
   const handlePlaceBet = useCallback(async () => {
     if (!session || isLoading) return
@@ -189,7 +303,12 @@ export default function BlackjackPage() {
       setGameId(data.gameId)
       setGameState(data.gameState)
       setCommitment(data.commitment || null)
-      setSession(prev => prev ? { ...prev, balance: data.balance } : null)
+      setSession(prev => prev ? {
+        ...prev,
+        balance: data.balance,
+        totalWagered: data.totalWagered ?? prev.totalWagered,
+        totalWon: data.totalWon ?? prev.totalWon
+      } : null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to start game')
     } finally {
@@ -221,7 +340,12 @@ export default function BlackjackPage() {
 
       const data = await res.json()
       setGameState(data.gameState)
-      setSession(prev => prev ? { ...prev, balance: data.balance } : null)
+      setSession(prev => prev ? {
+        ...prev,
+        balance: data.balance,
+        totalWagered: data.totalWagered ?? prev.totalWagered,
+        totalWon: data.totalWon ?? prev.totalWon
+      } : null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Game error')
     } finally {
@@ -236,7 +360,51 @@ export default function BlackjackPage() {
     setError(null)
     setResultAnimation(null)
     setPreviousCardCounts({ player: [0], dealer: 0 })
+    setInsuranceDeclined(false)
   }, [])
+
+  const handleInsurance = useCallback(async (takeInsurance: boolean) => {
+    if (!session || !gameId || isLoading) return
+
+    if (!takeInsurance) {
+      setInsuranceDeclined(true)
+      return
+    }
+
+    setIsLoading(true)
+    setError(null)
+
+    try {
+      const res = await fetch('/api/game', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'insurance',
+          sessionId: session.id,
+          gameId
+        })
+      })
+
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Failed to take insurance')
+      }
+
+      const data = await res.json()
+      setGameState(data.gameState)
+      setInsuranceDeclined(true) // Hide insurance prompt after taking
+      setSession(prev => prev ? {
+        ...prev,
+        balance: data.balance,
+        totalWagered: data.totalWagered ?? prev.totalWagered,
+        totalWon: data.totalWon ?? prev.totalWon
+      } : null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Insurance error')
+    } finally {
+      setIsLoading(false)
+    }
+  }, [session, gameId, isLoading])
 
   // Calculate available actions
   const availableActions = gameState ? getAvailableActions(gameState as BlackjackGameState) : []
@@ -248,6 +416,56 @@ export default function BlackjackPage() {
   const dealerValue = gameState?.dealerHand?.cards?.length
     ? calculateHandValue(gameState.dealerHand.cards.filter(c => c.faceUp))
     : 0
+  const fullDealerValue = gameState?.dealerHand?.cards?.length
+    ? calculateHandValue(gameState.dealerHand.cards)
+    : 0
+
+  // Determine hand results for animations
+  const getHandResult = (handIndex: number): 'win' | 'lose' | 'push' | 'blackjack' | null => {
+    if (gameState?.phase !== 'complete') return null
+    const hand = gameState?.playerHands?.[handIndex]
+    if (!hand) return null
+
+    const handValue = calculateHandValue(hand.cards)
+    const isBlackjack = handValue === 21 && hand.cards.length === 2
+    const isBust = handValue > 21
+    const dealerBust = fullDealerValue > 21
+
+    if (isBust) return 'lose'
+    if (isBlackjack && !(fullDealerValue === 21 && gameState.dealerHand?.cards?.length === 2)) return 'blackjack'
+    if (dealerBust) return 'win'
+    if (handValue > fullDealerValue) return 'win'
+    if (handValue === fullDealerValue) return 'push'
+    return 'lose'
+  }
+
+  // Determine dealer result for animation
+  const getDealerResult = (): 'win' | 'lose' | 'push' | null => {
+    if (gameState?.phase !== 'complete') return null
+    const playerResults = gameState?.playerHands?.map((_, i) => getHandResult(i)) ?? []
+
+    // If all player hands lost, dealer wins
+    if (playerResults.every(r => r === 'lose')) return 'win'
+    // If all player hands won/blackjack, dealer loses
+    if (playerResults.every(r => r === 'win' || r === 'blackjack')) return 'lose'
+    // If all pushes, it's a push
+    if (playerResults.every(r => r === 'push')) return 'push'
+    // Mixed results
+    return null
+  }
+
+  // Is it the dealer's turn?
+  const isDealerTurn = gameState?.phase === 'dealerTurn'
+
+  // Should we show insurance offer?
+  const showInsuranceOffer = gameState?.phase === 'playerTurn' &&
+    !insuranceDeclined &&
+    (gameState?.insuranceBet ?? 0) === 0 &&
+    gameState?.dealerHand?.cards?.[0]?.rank === 'A' &&
+    gameState?.playerHands?.[0]?.cards?.length === 2  // Only on initial deal
+
+  // Calculate insurance amount (half of main bet)
+  const insuranceAmount = (gameState?.currentBet ?? 0) / 2
 
   if (isLoading && !session) {
     return (
@@ -291,20 +509,19 @@ export default function BlackjackPage() {
                 </svg>
               )}
             </button>
-            <div className="text-sm text-champagne-gold/60">
-              {session?.walletAddress?.startsWith('demo_') ? 'Demo Mode' : 'Connected'}
-            </div>
-            <div className="bg-rich-black/40 px-4 py-2 rounded-lg border border-monaco-gold/20 relative">
-              <span className="text-champagne-gold/60 text-sm">Balance: </span>
-              <span className={`text-monaco-gold font-bold transition-all duration-300 ${
-                balanceAnimation === 'increase' ? 'balance-increase' :
-                balanceAnimation === 'decrease' ? 'balance-decrease' : ''
-              }`}>
-                {session?.balance?.toFixed(4) || '0.0000'} ZEC
-              </span>
+
+            {/* Balance & Deposit Widget */}
+            <div className="relative">
+              <DepositWidget
+                balance={session?.balance ?? 0}
+                isDemo={session?.isDemo ?? session?.walletAddress?.startsWith('demo_') ?? true}
+                isAuthenticated={session?.isAuthenticated ?? false}
+                onDepositClick={() => setShowOnboarding(true)}
+                onSwitchToReal={session?.isDemo || session?.walletAddress?.startsWith('demo_') ? handleSwitchToReal : undefined}
+              />
               {/* Floating payout indicator */}
               {showFloatingPayout && floatingPayoutAmount > 0 && (
-                <span className="absolute -top-2 -right-2 text-green-400 font-bold text-sm float-up">
+                <span className="absolute -top-2 -right-2 text-green-400 font-bold text-sm float-up z-10">
                   +{floatingPayoutAmount.toFixed(4)}
                 </span>
               )}
@@ -330,11 +547,14 @@ export default function BlackjackPage() {
           {gameState?.dealerHand?.cards?.length ? (
             <Hand
               cards={gameState.dealerHand.cards}
-              value={dealerValue}
+              value={gameState.phase === 'complete' ? fullDealerValue : dealerValue}
               showValue={gameState.phase !== 'playerTurn'}
               size="lg"
               animateDealing={true}
               previousCardCount={previousCardCounts.dealer}
+              isDealerTurn={isDealerTurn}
+              result={getDealerResult()}
+              isBust={fullDealerValue > 21 && gameState.phase === 'complete'}
             />
           ) : (
             <div className="h-28 flex items-center justify-center text-gray-500">
@@ -344,7 +564,7 @@ export default function BlackjackPage() {
         </div>
 
         {/* Game Message */}
-        <div className="text-center mb-8">
+        <div className="text-center mb-4">
           <div className={`bg-rich-black/40 inline-block px-6 py-3 rounded-lg border transition-all duration-300 ${
             resultAnimation === 'blackjack' ? 'border-monaco-gold blackjack-glow result-pop' :
             resultAnimation === 'win' ? 'border-green-500 win-glow result-pop' :
@@ -366,6 +586,34 @@ export default function BlackjackPage() {
           </div>
         </div>
 
+        {/* Perfect Pairs Result */}
+        {gameState?.perfectPairsBet && gameState.perfectPairsBet > 0 && gameState.perfectPairsResult && (
+          <div className="text-center mb-4">
+            <div className={`inline-block px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 ${
+              gameState.perfectPairsResult.outcome === 'perfect'
+                ? 'bg-monaco-gold/20 border border-monaco-gold text-monaco-gold animate-pulse'
+                : gameState.perfectPairsResult.outcome === 'colored'
+                ? 'bg-velvet-purple/20 border border-velvet-purple text-velvet-purple'
+                : gameState.perfectPairsResult.outcome === 'mixed'
+                ? 'bg-pepe-green/20 border border-pepe-green text-pepe-green'
+                : 'bg-burgundy/10 border border-burgundy/30 text-champagne-gold/60'
+            }`}>
+              {gameState.perfectPairsResult.outcome === 'perfect' && (
+                <span>✨ Perfect Pair! +{gameState.perfectPairsResult.payout.toFixed(2)} ZEC (25:1) ✨</span>
+              )}
+              {gameState.perfectPairsResult.outcome === 'colored' && (
+                <span>🎨 Colored Pair! +{gameState.perfectPairsResult.payout.toFixed(2)} ZEC (12:1)</span>
+              )}
+              {gameState.perfectPairsResult.outcome === 'mixed' && (
+                <span>🃏 Mixed Pair! +{gameState.perfectPairsResult.payout.toFixed(2)} ZEC (6:1)</span>
+              )}
+              {gameState.perfectPairsResult.outcome === 'none' && (
+                <span>No Pair - Side bet lost</span>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Player Area */}
         <div className="flex flex-col items-center mb-8">
           {gameState?.playerHands?.length ? (
@@ -374,15 +622,12 @@ export default function BlackjackPage() {
                 const handValue = calculateHandValue(hand.cards)
                 const isBust = handValue > 21
                 const isBlackjack = handValue === 21 && hand.cards.length === 2
+                const isCurrentHand = index === gameState.currentHandIndex && gameState.phase === 'playerTurn'
 
                 return (
                   <div
                     key={index}
-                    className={`transition-all duration-300 ${
-                      index === gameState.currentHandIndex && gameState.phase === 'playerTurn'
-                        ? 'ring-2 ring-monaco-gold rounded-lg p-2'
-                        : ''
-                    }`}
+                    className="transition-all duration-300"
                   >
                     <Hand
                       cards={hand.cards}
@@ -393,6 +638,8 @@ export default function BlackjackPage() {
                       previousCardCount={previousCardCounts.player[index] ?? 0}
                       isBust={isBust}
                       isBlackjack={isBlackjack}
+                      isActive={isCurrentHand}
+                      result={getHandResult(index)}
                     />
                     {hand.bet > 0 && (
                       <div className="text-center mt-2 text-sm text-champagne-gold/60">
@@ -427,9 +674,18 @@ export default function BlackjackPage() {
               </div>
 
               {/* Current Bet Display */}
-              <div className="text-center">
-                <span className="text-champagne-gold/60">Main Bet: </span>
-                <span className="text-monaco-gold font-bold">{selectedBet} ZEC</span>
+              <div className="text-center space-y-1">
+                <div>
+                  <span className="text-champagne-gold/60">Main Bet: </span>
+                  <span className="text-monaco-gold font-bold">{selectedBet} ZEC</span>
+                </div>
+                {perfectPairsBet > 0 && (
+                  <div className="text-sm">
+                    <span className="text-champagne-gold/60">Total Bet: </span>
+                    <span className="text-monaco-gold font-bold">{(selectedBet + perfectPairsBet).toFixed(3)} ZEC</span>
+                    <span className="text-champagne-gold/40 text-xs ml-1">({selectedBet} + {perfectPairsBet.toFixed(3)} PP)</span>
+                  </div>
+                )}
               </div>
 
               {/* Perfect Pairs Toggle with Tooltip */}
@@ -490,6 +746,39 @@ export default function BlackjackPage() {
                 {isLoading ? 'Dealing...' : 'DEAL'}
               </button>
             </>
+          )}
+
+          {/* Insurance Offer */}
+          {showInsuranceOffer && (
+            <div className="flex flex-col items-center gap-3 mb-4">
+              <div className="bg-rich-black/60 px-4 py-2 rounded-lg border border-monaco-gold/40">
+                <span className="text-champagne-gold text-sm">
+                  Insurance? ({insuranceAmount.toFixed(4)} ZEC - pays 2:1 if dealer has Blackjack)
+                </span>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    playSound('buttonClick')
+                    handleInsurance(true)
+                  }}
+                  disabled={isLoading || insuranceAmount > (session?.balance ?? 0)}
+                  className="bg-monaco-gold text-rich-black px-6 py-2 rounded-lg font-bold hover:bg-champagne-gold hover:scale-105 active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:hover:scale-100 shadow-lg"
+                >
+                  YES ({insuranceAmount.toFixed(2)} ZEC)
+                </button>
+                <button
+                  onClick={() => {
+                    playSound('buttonClick')
+                    handleInsurance(false)
+                  }}
+                  disabled={isLoading}
+                  className="bg-burgundy/80 text-ivory-white px-6 py-2 rounded-lg font-bold hover:bg-burgundy hover:scale-105 active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:hover:scale-100 shadow-lg"
+                >
+                  NO THANKS
+                </button>
+              </div>
+            </div>
           )}
 
           {gameState?.phase === 'playerTurn' && (
@@ -590,7 +879,7 @@ export default function BlackjackPage() {
 
               {/* Quick bet adjustment */}
               <div className="text-xs text-champagne-gold/50 mt-1">
-                Same bet: {selectedBet} ZEC {perfectPairsBet > 0 && `+ ${perfectPairsBet.toFixed(3)} ZEC Perfect Pairs`}
+                Same bet: {selectedBet} ZEC {perfectPairsBet > 0 && `+ ${(selectedBet * 0.1).toFixed(3)} ZEC Perfect Pairs`}
               </div>
             </div>
           )}
@@ -763,6 +1052,18 @@ export default function BlackjackPage() {
           </div>
         )}
       </div>
+
+      {/* Onboarding Modal */}
+      <OnboardingModal
+        isOpen={showOnboarding}
+        onClose={() => setShowOnboarding(false)}
+        onDemoSelect={handleDemoSelect}
+        onDepositComplete={handleDepositComplete}
+        sessionId={session?.id || null}
+        depositAddress={depositAddress}
+        onCreateRealSession={handleCreateRealSession}
+        onSetWithdrawalAddress={handleSetWithdrawalAddress}
+      />
     </main>
   )
 }

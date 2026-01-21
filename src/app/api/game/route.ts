@@ -4,6 +4,7 @@ import {
   createInitialState,
   startRound,
   executeAction,
+  takeInsurance,
   MIN_BET,
   MAX_BET
 } from '@/lib/game/blackjack'
@@ -69,6 +70,9 @@ export async function POST(request: NextRequest) {
       case 'double':
       case 'split':
         return handleGameAction(session, gameId, action as BlackjackAction)
+
+      case 'insurance':
+        return handleInsuranceAction(session, gameId)
 
       default:
         return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
@@ -240,6 +244,11 @@ async function handleGameAction(
     game.nonce
   )
 
+  // Restore insurance bet if it was taken (insurance is not in actionHistory)
+  if (game.insuranceBet > 0) {
+    gameState = takeInsurance(gameState, game.insuranceBet)
+  }
+
   // CRITICAL FIX: Replay all previous actions to restore correct deck position
   // This ensures cards dealt in previous actions aren't lost
   for (const previousAction of actionHistory) {
@@ -304,6 +313,102 @@ async function handleGameAction(
   return NextResponse.json({
     gameId,
     gameState: sanitizeGameState(gameState),
+    balance: updatedSession?.balance ?? 0,
+    totalWagered: updatedSession?.totalWagered ?? 0,
+    totalWon: updatedSession?.totalWon ?? 0
+  })
+}
+
+async function handleInsuranceAction(
+  session: { id: string; balance: number },
+  gameId: string
+) {
+  if (!gameId) {
+    return NextResponse.json({ error: 'Game ID required' }, { status: 400 })
+  }
+
+  // Get the game
+  const game = await prisma.blackjackGame.findUnique({
+    where: { id: gameId }
+  })
+
+  if (!game) {
+    return NextResponse.json({ error: 'Game not found' }, { status: 404 })
+  }
+
+  if (game.sessionId !== session.id) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+  }
+
+  if (game.status !== 'active') {
+    return NextResponse.json({ error: 'Game already completed' }, { status: 400 })
+  }
+
+  // Calculate insurance amount (half of main bet)
+  const insuranceAmount = game.mainBet / 2
+
+  if (insuranceAmount > session.balance) {
+    return NextResponse.json({ error: 'Insufficient balance for insurance' }, { status: 400 })
+  }
+
+  // Reconstruct game state from initial deal
+  const initialState = createInitialState(session.balance + game.mainBet + game.perfectPairsBet)
+
+  // Start round to get initial dealt cards
+  let gameState = startRound(
+    initialState,
+    game.mainBet,
+    game.perfectPairsBet,
+    game.serverSeed,
+    game.serverSeedHash,
+    game.clientSeed,
+    game.nonce
+  )
+
+  // Check if insurance can be taken (dealer showing Ace, no insurance yet)
+  if (gameState.dealerHand.cards[0]?.rank !== 'A') {
+    return NextResponse.json({ error: 'Insurance not available' }, { status: 400 })
+  }
+
+  if (gameState.insuranceBet > 0) {
+    return NextResponse.json({ error: 'Insurance already taken' }, { status: 400 })
+  }
+
+  // Apply insurance
+  gameState = takeInsurance(gameState, insuranceAmount)
+
+  // Deduct insurance bet from session
+  await prisma.session.update({
+    where: { id: session.id },
+    data: {
+      balance: { decrement: insuranceAmount },
+      totalWagered: { increment: insuranceAmount }
+    }
+  })
+
+  // Update game with insurance bet
+  await prisma.blackjackGame.update({
+    where: { id: gameId },
+    data: {
+      insuranceBet: insuranceAmount,
+      finalState: JSON.stringify({
+        playerHands: gameState.playerHands,
+        dealerHand: gameState.dealerHand,
+        phase: gameState.phase,
+        message: gameState.message,
+        insuranceBet: insuranceAmount
+      })
+    }
+  })
+
+  // Get updated balance
+  const updatedSession = await prisma.session.findUnique({
+    where: { id: session.id }
+  })
+
+  return NextResponse.json({
+    gameId,
+    gameState: sanitizeGameState({ ...gameState, insuranceBet: insuranceAmount }),
     balance: updatedSession?.balance ?? 0,
     totalWagered: updatedSession?.totalWagered ?? 0,
     totalWon: updatedSession?.totalWon ?? 0

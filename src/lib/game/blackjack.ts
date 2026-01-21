@@ -120,9 +120,14 @@ export function startRound(
 
   // Calculate perfect pairs result immediately
   let perfectPairsPayout = 0
+  let perfectPairsResult: BlackjackGameState['perfectPairsResult'] = undefined
   if (perfectPairsBet > 0) {
     const ppResult = getPerfectPairsOutcome(playerCards)
     perfectPairsPayout = perfectPairsBet * ppResult.multiplier
+    perfectPairsResult = {
+      outcome: ppResult.outcome,
+      payout: perfectPairsPayout
+    }
   }
 
   // Determine initial phase
@@ -133,11 +138,15 @@ export function startRound(
   if (playerHand.isBlackjack && dealerHand.isBlackjack) {
     phase = 'payout'
     message = 'Both have Blackjack - Push!'
+  } else if (dealerHand.isBlackjack) {
+    // Dealer has blackjack, player doesn't - dealer wins immediately
+    phase = 'payout'
+    message = 'Dealer has Blackjack!'
   } else if (playerHand.isBlackjack) {
     phase = 'payout'
     message = 'Blackjack! You win 3:2'
   } else if (dealerCards[0].rank === 'A') {
-    // Dealer showing Ace - offer insurance
+    // Dealer showing Ace - offer insurance (dealer doesn't have blackjack at this point)
     message = 'Dealer showing Ace. Insurance?'
   }
 
@@ -156,7 +165,8 @@ export function startRound(
     clientSeed,
     nonce,
     lastPayout: perfectPairsPayout,
-    message
+    message,
+    perfectPairsResult
   }
 
   // If immediate blackjack, resolve the round to calculate payout

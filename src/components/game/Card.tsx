@@ -9,6 +9,7 @@ interface CardProps {
   className?: string
   dealDelay?: number // Delay in ms before card deals in
   isNew?: boolean // Whether this card was just dealt
+  dealFromShoe?: boolean // Whether to use the shoe-dealing animation
 }
 
 const suitSymbols: Record<Suit, string> = {
@@ -31,16 +32,22 @@ const sizeClasses = {
   lg: 'w-20 h-[7rem] text-lg'
 }
 
-export default function Card({ card, size = 'md', className = '', dealDelay = 0, isNew = false }: CardProps) {
+export default function Card({ card, size = 'md', className = '', dealDelay = 0, isNew = false, dealFromShoe = true }: CardProps) {
   const [isDealt, setIsDealt] = useState(!isNew)
   const [isFlipping, setIsFlipping] = useState(false)
   const [showFace, setShowFace] = useState(card.faceUp)
+  const [animationComplete, setAnimationComplete] = useState(!isNew)
 
   // Handle deal animation
   useEffect(() => {
     if (isNew && !isDealt) {
       const timer = setTimeout(() => {
         setIsDealt(true)
+        // Mark animation complete after the animation duration
+        const animTimer = setTimeout(() => {
+          setAnimationComplete(true)
+        }, 400) // Match animation duration
+        return () => clearTimeout(animTimer)
       }, dealDelay)
       return () => clearTimeout(timer)
     }
@@ -67,10 +74,15 @@ export default function Card({ card, size = 'md', className = '', dealDelay = 0,
     }
   }, [card.faceUp, showFace])
 
-  // Animation classes
-  const dealAnimationClass = isNew && !isDealt ? 'opacity-0 translate-y-[-30px] translate-x-[50px] rotate-[5deg]' : 'opacity-100 translate-y-0 translate-x-0 rotate-0'
-  const flipAnimationClass = isFlipping ? 'card-flip' : ''
-  const transitionClass = 'transition-all duration-300 ease-out'
+  // Animation classes - use shoe dealing animation for new cards
+  const shouldAnimateFromShoe = isNew && isDealt && !animationComplete && dealFromShoe
+  const dealAnimationClass = isNew && !isDealt
+    ? 'opacity-0 translate-x-[300px] translate-y-[-200px] rotate-[15deg] scale-[0.8]'
+    : shouldAnimateFromShoe
+      ? 'deal-from-shoe'
+      : ''
+  const flipAnimationClass = isFlipping ? 'card-flip-3d' : ''
+  const transitionClass = animationComplete ? 'transition-all duration-300 ease-out' : ''
 
   // Render face-down card back
   const renderCardBack = () => (
@@ -138,6 +150,8 @@ export default function Card({ card, size = 'md', className = '', dealDelay = 0,
   )
 }
 
+type HandResult = 'win' | 'lose' | 'push' | 'blackjack' | null
+
 interface HandProps {
   cards: CardType[]
   size?: 'sm' | 'md' | 'lg'
@@ -149,6 +163,9 @@ interface HandProps {
   previousCardCount?: number // How many cards were in the hand before
   isBust?: boolean
   isBlackjack?: boolean
+  isActive?: boolean // Whether this hand is currently active (player's turn)
+  isDealerTurn?: boolean // Whether the dealer is currently drawing
+  result?: HandResult // The result of this hand after game ends
 }
 
 export function Hand({
@@ -161,8 +178,20 @@ export function Hand({
   animateDealing = false,
   previousCardCount = 0,
   isBust = false,
-  isBlackjack = false
+  isBlackjack = false,
+  isActive = false,
+  isDealerTurn = false,
+  result = null
 }: HandProps) {
+  // Determine the hand highlight class based on state
+  const getHandHighlightClass = () => {
+    if (result === 'win' || result === 'blackjack') return 'winner-hand'
+    if (result === 'lose') return 'loser-hand'
+    if (result === 'push') return 'push-hand'
+    if (isDealerTurn) return 'dealer-turn'
+    if (isActive) return 'active-hand'
+    return ''
+  }
   // Determine which cards are "new" (for deal animation)
   const getIsNew = (index: number) => {
     if (!animateDealing) return false
@@ -176,13 +205,15 @@ export function Hand({
     return (index - previousCardCount) * 150
   }
 
+  const highlightClass = getHandHighlightClass()
+
   return (
     <div className={`flex flex-col items-center gap-2 ${className}`}>
       {label && (
         <div className="text-sm font-semibold text-gray-300">{label}</div>
       )}
 
-      <div className="flex gap-[-1rem]">
+      <div className={`flex gap-[-1rem] ${highlightClass}`}>
         {cards.map((card, index) => (
           <Card
             key={`${card.rank}-${card.suit}-${index}`}
@@ -191,6 +222,7 @@ export function Hand({
             className={index > 0 ? '-ml-8' : ''}
             isNew={getIsNew(index)}
             dealDelay={getDealDelay(index)}
+            dealFromShoe={true}
           />
         ))}
       </div>

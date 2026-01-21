@@ -294,3 +294,243 @@ body {
 .btn-press:active {
   animation: buttonPress 0.15s ease-out;
 }
+
+/* Card dealing from shoe animation */
+@keyframes dealFromShoe {
+  0% {
+    transform: translate(300px, -200px) rotate(15deg) scale(0.8);
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  80% {
+    transform: translate(10px, -10px) rotate(2deg) scale(1.02);
+  }
+  100% {
+    transform: translate(0, 0) rotate(0) scale(1);
+  }
+}
+
+.deal-from-shoe {
+  animation: dealFromShoe 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+/* Enhanced 3D card flip */
+@keyframes cardFlip3D {
+  0% {
+    transform: perspective(1000px) rotateY(0deg);
+  }
+  50% {
+    transform: perspective(1000px) rotateY(90deg);
+  }
+  100% {
+    transform: perspective(1000px) rotateY(0deg);
+  }
+}
+
+.card-flip-3d {
+  animation: cardFlip3D 0.5s ease-in-out;
+}
+
+/* Active hand pulse - gold glow for player's turn */
+@keyframes activeHandPulse {
+  0%, 100% {
+    box-shadow: 0 0 10px rgba(201, 162, 39, 0.3), inset 0 0 5px rgba(201, 162, 39, 0.1);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(201, 162, 39, 0.6), 0 0 30px rgba(201, 162, 39, 0.3), inset 0 0 10px rgba(201, 162, 39, 0.2);
+  }
+}
+
+.active-hand {
+  animation: activeHandPulse 1.5s ease-in-out infinite;
+  border-radius: 12px;
+  padding: 8px;
+  margin: -8px;
+}
+
+/* Winner celebration - green glow */
+@keyframes winnerCelebrate {
+  0%, 100% {
+    box-shadow: 0 0 15px rgba(74, 222, 128, 0.5);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(74, 222, 128, 0.8), 0 0 50px rgba(74, 222, 128, 0.4);
+    transform: scale(1.02);
+  }
+}
+
+.winner-hand {
+  animation: winnerCelebrate 1s ease-in-out infinite;
+  border-radius: 12px;
+  padding: 8px;
+  margin: -8px;
+}
+
+/* Loser hand - subtle fade */
+.loser-hand {
+  opacity: 0.7;
+  filter: grayscale(30%);
+  transition: all 0.3s ease;
+}
+
+/* Dealer turn indicator */
+@keyframes dealerDrawing {
+  0%, 100% {
+    opacity: 1;
+    box-shadow: 0 0 10px rgba(201, 162, 39, 0.3);
+  }
+  50% {
+    opacity: 0.8;
+    box-shadow: 0 0 20px rgba(201, 162, 39, 0.5);
+  }
+}
+
+.dealer-turn {
+  animation: dealerDrawing 0.8s ease-in-out infinite;
+  border-radius: 12px;
+  padding: 8px;
+  margin: -8px;
+}
+
+/* Push/tie hand styling */
+.push-hand {
+  box-shadow: 0 0 15px rgba(201, 162, 39, 0.4);
+  border-radius: 12px;
+  padding: 8px;
+  margin: -8px;
+}
+
+/* ================================
+   ONBOARDING MODAL ANIMATIONS
+   ================================ */
+
+/* Modal enter animation */
+@keyframes modal-enter {
+  0% {
+    opacity: 0;
+    transform: scale(0.95) translateY(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.animate-modal-enter {
+  animation: modal-enter 0.3s ease-out forwards;
+}
+
+/* Success bounce animation */
+@keyframes success-bounce {
+  0% {
+    transform: scale(0.8);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.animate-success-bounce {
+  animation: success-bounce 0.5s ease-out forwards;
+}
+
+/* Pulse animation for pending states */
+@keyframes gentle-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+.animate-gentle-pulse {
+  animation: gentle-pulse 2s ease-in-out infinite;
+}
+
+/* Confirmation progress dot animation */
+@keyframes confirmation-fill {
+  0% {
+    background-color: rgb(63, 63, 70);
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.2);
+  }
+  100% {
+    background-color: rgb(34, 197, 94);
+    transform: scale(1);
+  }
+}
+
+.confirmation-dot-filling {
+  animation: confirmation-fill 0.5s ease-out forwards;
+}
+
+/* Shimmer effect for loading states */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.animate-shimmer {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.1) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+/* QR code fade in */
+@keyframes qr-fade-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-qr-enter {
+  animation: qr-fade-in 0.4s ease-out forwards;
+}
+
+/* Deposit detected celebration */
+@keyframes deposit-celebrate {
+  0% {
+    transform: scale(1);
+  }
+  25% {
+    transform: scale(1.02);
+  }
+  50% {
+    transform: scale(0.98);
+  }
+  75% {
+    transform: scale(1.01);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.animate-deposit-celebrate {
+  animation: deposit-celebrate 0.6s ease-out;
+}
