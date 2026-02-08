@@ -1085,6 +1085,43 @@ export default function BlackjackPage() {
             </div>
           )}
 
+          {/* Compact next-bet adjuster during active play */}
+          {gameState && gameState.phase !== 'complete' && (
+            <div className="mt-4 bg-rich-black/40 rounded-lg border border-monaco-gold/10 px-4 py-2.5 w-full max-w-md">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-xs text-champagne-gold/40 uppercase tracking-wide whitespace-nowrap">Next hand</span>
+                <div className="flex items-center gap-1.5">
+                  {CHIP_VALUES.map(value => (
+                    <button
+                      key={value}
+                      onClick={() => {
+                        setSelectedBet(value)
+                        if (perfectPairsBet > 0) setPerfectPairsBet(value * 0.1)
+                        playSound('chipPlace')
+                      }}
+                      className={`w-7 h-7 rounded-full text-[10px] font-bold transition-all border ${
+                        selectedBet === value
+                          ? 'border-monaco-gold bg-monaco-gold/30 text-monaco-gold'
+                          : 'border-champagne-gold/20 text-champagne-gold/50 hover:border-monaco-gold/40'
+                      }`}
+                    >
+                      {value}
+                    </button>
+                  ))}
+                </div>
+                <label className="flex items-center gap-1.5 cursor-pointer whitespace-nowrap">
+                  <input
+                    type="checkbox"
+                    checked={perfectPairsBet > 0}
+                    onChange={(e) => setPerfectPairsBet(e.target.checked ? selectedBet * 0.1 : 0)}
+                    className="w-3 h-3 accent-monaco-gold"
+                  />
+                  <span className="text-[10px] text-champagne-gold/60">PP</span>
+                </label>
+              </div>
+            </div>
+          )}
+
           {gameState?.phase === 'complete' && (
             <div className="flex flex-col items-center gap-4">
               {/* Payout display */}
@@ -1156,15 +1193,54 @@ export default function BlackjackPage() {
                 </button>
               )}
 
-              {/* Quick bet info - show auto-bet status */}
-              <div className="text-xs text-champagne-gold/50 mt-1 flex items-center gap-2">
-                <span>
-                  {isAutoBetEnabled ? 'Auto-bet: ' : 'Next bet: '}
-                  {selectedBet} ZEC {perfectPairsBet > 0 && `+ ${(selectedBet * 0.1).toFixed(3)} ZEC Perfect Pairs`}
-                </span>
-                {isAutoBetEnabled && !isAutoBetting && (
-                  <span className="text-pepe-green-light text-xs">(auto)</span>
-                )}
+              {/* Adjust next bet panel */}
+              <div className="bg-rich-black/50 rounded-lg border border-monaco-gold/20 p-4 w-full max-w-md">
+                <div className="text-xs text-champagne-gold/50 uppercase tracking-wide mb-3 text-center">
+                  {isAutoBetEnabled ? 'Next Auto-Bet' : 'Next Bet'}
+                  {isAutoBetEnabled && <span className="text-pepe-green-light ml-1">(auto)</span>}
+                </div>
+                {/* Chip selector row */}
+                <div className="flex justify-center gap-1.5 mb-3">
+                  {CHIP_VALUES.map(value => (
+                    <button
+                      key={value}
+                      onClick={() => {
+                        setSelectedBet(value)
+                        // Update perfect pairs proportionally if enabled
+                        if (perfectPairsBet > 0) setPerfectPairsBet(value * 0.1)
+                        playSound('chipPlace')
+                      }}
+                      className={`w-10 h-10 rounded-full text-xs font-bold transition-all duration-150 border-2 ${
+                        selectedBet === value
+                          ? 'border-monaco-gold bg-monaco-gold/30 text-monaco-gold scale-110 shadow-lg shadow-monaco-gold/20'
+                          : 'border-champagne-gold/30 bg-rich-black/60 text-champagne-gold/70 hover:border-monaco-gold/50 hover:scale-105'
+                      }`}
+                    >
+                      {value}
+                    </button>
+                  ))}
+                </div>
+                {/* Side bet toggle + summary */}
+                <div className="flex items-center justify-between">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={perfectPairsBet > 0}
+                      onChange={(e) => setPerfectPairsBet(e.target.checked ? selectedBet * 0.1 : 0)}
+                      className="w-3.5 h-3.5 accent-monaco-gold"
+                    />
+                    <span className="text-xs text-champagne-gold/70">
+                      Perfect Pairs
+                    </span>
+                  </label>
+                  <div className="text-xs text-right">
+                    <span className="text-monaco-gold font-bold">{selectedBet}</span>
+                    {perfectPairsBet > 0 && (
+                      <span className="text-champagne-gold/50"> + {perfectPairsBet.toFixed(3)} PP</span>
+                    )}
+                    <span className="text-champagne-gold/40"> ZEC</span>
+                  </div>
+                </div>
               </div>
             </div>
           )}
