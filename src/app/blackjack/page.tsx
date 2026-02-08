@@ -217,6 +217,7 @@ export default function BlackjackPage() {
       const res = await fetch(url)
       if (!res.ok) throw new Error('Failed to get session')
       const data = await res.json()
+      if (data.error) throw new Error(data.error)
       setSession(data)
       setDepositAddress(data.depositAddress || null)
 
@@ -225,10 +226,14 @@ export default function BlackjackPage() {
         localStorage.setItem('zcashino_session_id', data.id)
       }
     } catch (err) {
-      setError('Failed to initialize session')
-      console.error(err)
-      // Clear invalid session
+      console.error('Session init failed:', err)
+      // Clear invalid session and retry with fresh session
       localStorage.removeItem('zcashino_session_id')
+      if (existingSessionId) {
+        // Retry without stale session ID
+        return initSession()
+      }
+      setError('Failed to initialize session')
     } finally {
       setIsLoading(false)
     }
