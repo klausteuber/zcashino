@@ -175,11 +175,14 @@ export function parseAdminSessionToken(token?: string): AdminSessionPayload | nu
 }
 
 export function setAdminSessionCookie(response: NextResponse, token: string): void {
+  // Only set Secure flag when HTTPS is actually available.
+  // Using secure cookies over plain HTTP causes browsers to silently reject the cookie.
+  const useSecure = process.env.FORCE_HTTPS === 'true'
   response.cookies.set({
     name: ADMIN_SESSION_COOKIE,
     value: token,
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: useSecure,
     sameSite: 'strict',
     maxAge: ADMIN_SESSION_TTL_MS / 1000,
     path: '/',
