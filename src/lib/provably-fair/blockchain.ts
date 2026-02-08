@@ -67,11 +67,16 @@ export async function commitServerSeedHash(
     }
 
     const houseAddress = HOUSE_ADDRESSES[network]
-    if (!houseAddress) {
-      return {
-        success: false,
-        error: `House address not configured for ${network}`
-      }
+    if (!houseAddress || houseAddress === 'ztestsapling1...') {
+      // House address not configured yet - use mock commitment
+      console.log('[Blockchain] House address not configured, using mock commitment')
+      return createMockCommitment(serverSeedHash)
+    }
+
+    // If node is connected but not synced, use mock commitments
+    if (!nodeStatus.synced) {
+      console.log(`[Blockchain] Node syncing (block ${nodeStatus.blockHeight}), using mock commitment`)
+      return createMockCommitment(serverSeedHash)
     }
 
     // Create memo with commitment
