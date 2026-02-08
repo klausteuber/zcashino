@@ -838,7 +838,7 @@ export default function BlackjackPage() {
         </div>
 
         {/* Perfect Pairs Result */}
-        {gameState && gameState.perfectPairsBet > 0 && gameState.perfectPairsResult && (
+        {gameState && (gameState.perfectPairsBet ?? 0) > 0 && gameState.perfectPairsResult && (
           <div className="text-center mb-4">
             <div className={`inline-block px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 ${
               gameState.perfectPairsResult.outcome === 'perfect'
