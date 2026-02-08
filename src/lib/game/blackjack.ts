@@ -381,29 +381,32 @@ function executeSplit(state: BlackjackGameState): BlackjackGameState {
   const updatedHands = [...state.playerHands]
   updatedHands.splice(state.currentHandIndex, 1, hand1, hand2)
 
+  // Start from rightmost hand (play right-to-left, standard casino order)
+  const lastHandIndex = updatedHands.length - 1
+
   return {
     ...state,
     playerHands: updatedHands,
+    currentHandIndex: lastHandIndex,
     deck: remainingDeck,
     balance: state.balance - currentHand.bet,
-    message: `Split! Playing hand 1 of ${updatedHands.length}`
+    message: `Split! Playing hand ${lastHandIndex + 1} of ${updatedHands.length}`
   }
 }
 
 /**
  * Move to next hand or dealer turn
+ * After split, hands are played right-to-left (decrementing index)
  */
 function advanceToNextHand(state: BlackjackGameState): BlackjackGameState {
-  const nextIndex = state.currentHandIndex + 1
-
-  // Check if there are more player hands to play
-  if (nextIndex < state.playerHands.length) {
-    const nextHand = state.playerHands[nextIndex]
+  // Search for next unplayed hand moving right-to-left
+  for (let i = state.currentHandIndex - 1; i >= 0; i--) {
+    const nextHand = state.playerHands[i]
     if (!nextHand.isStood && !nextHand.isBusted) {
       return {
         ...state,
-        currentHandIndex: nextIndex,
-        message: `Playing hand ${nextIndex + 1} of ${state.playerHands.length}`
+        currentHandIndex: i,
+        message: `Playing hand ${i + 1} of ${state.playerHands.length}`
       }
     }
   }
