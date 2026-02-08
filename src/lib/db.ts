@@ -25,8 +25,11 @@ function getDatabaseUrl(): string {
 }
 
 // Prisma 7 requires adapter-based connection with config
+// Supports both local SQLite (file:) and Turso (libsql://) URLs
+const dbUrl = getDatabaseUrl()
 const adapter = new PrismaLibSql({
-  url: getDatabaseUrl()
+  url: dbUrl,
+  ...(process.env.TURSO_AUTH_TOKEN && { authToken: process.env.TURSO_AUTH_TOKEN }),
 })
 
 export const prisma = globalForPrisma.prisma ?? new PrismaClient({ adapter })

@@ -29,6 +29,9 @@ export default function Home() {
             <a href="/responsible-gambling" className="hover:text-monaco-gold transition-colors">
               Responsible Gambling
             </a>
+            <a href="/admin" className="hover:text-monaco-gold transition-colors">
+              Admin
+            </a>
           </nav>
           <button
             onClick={() => setWalletConnected(!walletConnected)}
@@ -186,6 +189,7 @@ export default function Home() {
                 <li><a href="/provably-fair" className="hover:text-monaco-gold transition-colors">Provably Fair</a></li>
                 <li><a href="/responsible-gambling" className="hover:text-monaco-gold transition-colors">Responsible Gambling</a></li>
                 <li><a href="/terms" className="hover:text-monaco-gold transition-colors">Terms of Service</a></li>
+                <li><a href="/privacy" className="hover:text-monaco-gold transition-colors">Privacy Policy</a></li>
               </ul>
             </div>
             <div>

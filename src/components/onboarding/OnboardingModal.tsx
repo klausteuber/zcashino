@@ -128,7 +128,7 @@ export function OnboardingModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
-      <div className="bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden animate-modal-enter">
+      <div className="bg-rich-black border border-monaco-gold/30 rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden animate-modal-enter">
         {/* Welcome Step */}
         {step === 'welcome' && (
           <WelcomeScreen
@@ -186,45 +186,45 @@ function WelcomeScreen({
 }) {
   return (
     <div className="p-8 text-center">
-      <h1 className="text-3xl font-bold text-white mb-2">Welcome to Zcashino</h1>
-      <p className="text-zinc-400 mb-8">Provably Fair ZEC Blackjack</p>
+      <h1 className="text-3xl font-display font-bold text-ivory-white mb-2">Welcome to Zcashino</h1>
+      <p className="text-champagne-gold/50 mb-8">Provably Fair ZEC Blackjack</p>
 
       <div className="grid grid-cols-2 gap-4 mb-6">
         {/* Demo Mode Card */}
         <button
           onClick={onDemoSelect}
-          className="group p-6 bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 hover:border-amber-500/50 rounded-xl transition-all text-left"
+          className="group p-6 bg-rich-black/60 hover:bg-pepe-green-dark/30 border border-monaco-gold/20 hover:border-monaco-gold/50 rounded-xl transition-all text-left"
         >
           <div className="text-3xl mb-2">🎮</div>
-          <div className="text-lg font-semibold text-white mb-1">Try Demo</div>
-          <div className="text-2xl font-bold text-amber-400 mb-1">10 ZEC</div>
-          <div className="text-sm text-zinc-400">Play Money</div>
+          <div className="text-lg font-semibold text-ivory-white mb-1">Try Demo</div>
+          <div className="text-2xl font-bold text-monaco-gold mb-1">10 ZEC</div>
+          <div className="text-sm text-champagne-gold/50">Play Money</div>
         </button>
 
         {/* Real ZEC Card */}
         <button
           onClick={onRealSelect}
           disabled={isLoading}
-          className="group p-6 bg-gradient-to-br from-amber-900/30 to-amber-800/20 hover:from-amber-800/40 hover:to-amber-700/30 border border-amber-500/30 hover:border-amber-400/50 rounded-xl transition-all text-left disabled:opacity-50"
+          className="group p-6 bg-gradient-to-br from-pepe-green-dark/40 to-pepe-green/20 hover:from-pepe-green-dark/50 hover:to-pepe-green/30 border border-monaco-gold/30 hover:border-monaco-gold/50 rounded-xl transition-all text-left disabled:opacity-50"
         >
           {isLoading ? (
             <div className="flex items-center justify-center h-full">
-              <div className="w-8 h-8 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
+              <div className="w-8 h-8 border-2 border-monaco-gold border-t-transparent rounded-full animate-spin" />
             </div>
           ) : (
             <>
               <div className="text-3xl mb-2">💰</div>
-              <div className="text-lg font-semibold text-white mb-1">Deposit</div>
-              <div className="text-2xl font-bold text-amber-400 mb-1">Real ZEC</div>
-              <div className="text-sm text-zinc-400">Start Now</div>
+              <div className="text-lg font-semibold text-ivory-white mb-1">Deposit</div>
+              <div className="text-2xl font-bold text-monaco-gold mb-1">Real ZEC</div>
+              <div className="text-sm text-champagne-gold/50">Start Now</div>
             </>
           )}
         </button>
       </div>
 
-      <p className="text-xs text-zinc-500">
+      <p className="text-xs text-champagne-gold/50">
         Already have a session?{' '}
-        <button className="text-amber-400 hover:text-amber-300 underline">
+        <button className="text-monaco-gold hover:text-champagne-gold underline">
           Restore
         </button>
       </p>
@@ -252,19 +252,19 @@ function SetupScreen({
     <div className="p-6">
       <button
         onClick={onBack}
-        className="flex items-center gap-2 text-zinc-400 hover:text-white mb-4 transition-colors"
+        className="flex items-center gap-2 text-champagne-gold/50 hover:text-ivory-white mb-4 transition-colors"
       >
         <span>←</span>
         <span>Back</span>
       </button>
 
-      <h2 className="text-xl font-bold text-white mb-2">Set Withdrawal Address</h2>
-      <p className="text-sm text-zinc-400 mb-6">
+      <h2 className="text-xl font-display font-bold text-ivory-white mb-2">Set Withdrawal Address</h2>
+      <p className="text-sm text-champagne-gold/50 mb-6">
         Enter your Zcash address where winnings will be sent
       </p>
 
       <div className="mb-4">
-        <label className="block text-sm font-medium text-zinc-300 mb-2">
+        <label className="block text-sm font-medium text-champagne-gold mb-2">
           Your Zcash Address
         </label>
         <input
@@ -272,14 +272,14 @@ function SetupScreen({
           value={withdrawalAddress}
           onChange={(e) => onAddressChange(e.target.value)}
           placeholder="zs1... or t1... or tm..."
-          className={`w-full px-4 py-3 bg-zinc-800 border rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:ring-2 transition-all ${
+          className={`w-full px-4 py-3 bg-rich-black/60 border rounded-lg text-ivory-white placeholder-champagne-gold/30 focus:outline-none focus:ring-2 transition-all ${
             error
-              ? 'border-red-500 focus:ring-red-500/50'
-              : 'border-zinc-600 focus:ring-amber-500/50 focus:border-amber-500'
+              ? 'border-burgundy focus:ring-burgundy/50'
+              : 'border-monaco-gold/20 focus:ring-monaco-gold/50 focus:border-monaco-gold'
           }`}
         />
-        {error && <p className="mt-2 text-sm text-red-400">{error}</p>}
-        <p className="mt-2 text-xs text-zinc-500">
+        {error && <p className="mt-2 text-sm text-burgundy">{error}</p>}
+        <p className="mt-2 text-xs text-champagne-gold/50">
           Supports transparent (t1/tm), shielded (zs), and unified (u1) addresses
         </p>
       </div>
@@ -287,11 +287,11 @@ function SetupScreen({
       <button
         onClick={onSubmit}
         disabled={isLoading || !withdrawalAddress.trim()}
-        className="w-full py-3 bg-amber-500 hover:bg-amber-400 disabled:bg-zinc-600 disabled:cursor-not-allowed text-black font-semibold rounded-lg transition-colors flex items-center justify-center gap-2"
+        className="w-full py-3 btn-gold-shimmer disabled:bg-rich-black/40 disabled:cursor-not-allowed text-rich-black font-semibold rounded-lg transition-colors flex items-center justify-center gap-2"
       >
         {isLoading ? (
           <>
-            <div className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin" />
+            <div className="w-5 h-5 border-2 border-rich-black border-t-transparent rounded-full animate-spin" />
             <span>Setting up...</span>
           </>
         ) : (
@@ -322,33 +322,33 @@ function DepositScreen({
     <div className="p-6">
       <button
         onClick={onBack}
-        className="flex items-center gap-2 text-zinc-400 hover:text-white mb-4 transition-colors"
+        className="flex items-center gap-2 text-champagne-gold/50 hover:text-ivory-white mb-4 transition-colors"
       >
         <span>←</span>
         <span>Back</span>
       </button>
 
-      <h2 className="text-xl font-bold text-white mb-1">Deposit ZEC</h2>
-      <p className="text-sm text-zinc-400 mb-4">
+      <h2 className="text-xl font-display font-bold text-ivory-white mb-1">Deposit ZEC</h2>
+      <p className="text-sm text-champagne-gold/50 mb-4">
         Send ZEC to start playing
       </p>
 
       {/* Withdrawal address confirmation */}
-      <div className="mb-4 p-3 bg-zinc-800/50 rounded-lg border border-zinc-700">
-        <div className="text-xs text-zinc-400 mb-1">Withdrawals will go to:</div>
-        <div className="text-sm text-amber-400 font-mono">{truncatedAddress}</div>
+      <div className="mb-4 p-3 bg-rich-black/60 rounded-lg border border-monaco-gold/20">
+        <div className="text-xs text-champagne-gold/50 mb-1">Withdrawals will go to:</div>
+        <div className="text-sm text-monaco-gold font-mono">{truncatedAddress}</div>
       </div>
 
       {/* QR Code */}
       <div className="flex flex-col items-center mb-4">
-        <div className="bg-white p-3 rounded-xl mb-3">
+        <div className="bg-ivory-white p-3 rounded-xl mb-3">
           <QRCode value={`zcash:${depositAddress}`} size={160} />
         </div>
 
         {/* Deposit address */}
         <div className="w-full">
-          <div className="flex items-center gap-2 p-3 bg-zinc-800 rounded-lg border border-zinc-600">
-            <code className="flex-1 text-sm text-zinc-300 font-mono break-all">
+          <div className="flex items-center gap-2 p-3 bg-rich-black/60 rounded-lg border border-monaco-gold/20">
+            <code className="flex-1 text-sm text-champagne-gold font-mono break-all">
               {depositAddress}
             </code>
             <CopyButton text={depositAddress} />
@@ -357,25 +357,25 @@ function DepositScreen({
       </div>
 
       {/* Info */}
-      <div className="space-y-2 text-sm text-zinc-400 mb-4">
+      <div className="space-y-2 text-sm text-champagne-gold/50 mb-4">
         <div className="flex items-center gap-2">
-          <span className="text-amber-400">•</span>
+          <span className="text-monaco-gold">•</span>
           <span>Minimum: 0.001 ZEC</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-amber-400">•</span>
+          <span className="text-monaco-gold">•</span>
           <span>3 confirmations required (~10-20 min)</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-amber-400">•</span>
+          <span className="text-monaco-gold">•</span>
           <span>Network: testnet</span>
         </div>
       </div>
 
       {/* Polling status */}
-      <div className="flex items-center justify-center gap-2 py-3 px-4 bg-zinc-800/50 rounded-lg border border-zinc-700">
-        <div className="w-2 h-2 bg-amber-400 rounded-full animate-pulse" />
-        <span className="text-sm text-zinc-300">
+      <div className="flex items-center justify-center gap-2 py-3 px-4 bg-rich-black/60 rounded-lg border border-monaco-gold/20">
+        <div className="w-2 h-2 bg-monaco-gold rounded-full animate-pulse" />
+        <span className="text-sm text-champagne-gold">
           {depositStatus.status === 'waiting'
             ? 'Checking for deposits...'
             : depositStatus.status === 'error'
@@ -394,8 +394,8 @@ function ConfirmingScreen({ depositStatus }: { depositStatus: DepositStatus }) {
   return (
     <div className="p-8 text-center">
       <div className="text-5xl mb-4">🎉</div>
-      <h2 className="text-2xl font-bold text-white mb-2">Deposit Detected!</h2>
-      <p className="text-3xl font-bold text-amber-400 mb-6">
+      <h2 className="text-2xl font-display font-bold text-ivory-white mb-2">Deposit Detected!</h2>
+      <p className="text-3xl font-bold text-monaco-gold mb-6">
         {amount?.toFixed(4)} ZEC
       </p>
 
@@ -407,31 +407,31 @@ function ConfirmingScreen({ depositStatus }: { depositStatus: DepositStatus }) {
               key={i}
               className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all ${
                 i < confirmations
-                  ? 'bg-green-500 text-white'
-                  : 'bg-zinc-700 text-zinc-400'
+                  ? 'bg-pepe-green text-ivory-white'
+                  : 'bg-rich-black/60 text-champagne-gold/50'
               }`}
             >
               {i < confirmations ? '✓' : i + 1}
             </div>
           ))}
         </div>
-        <p className="text-sm text-zinc-400">
+        <p className="text-sm text-champagne-gold/50">
           {confirmations}/{requiredConfirmations} confirmations
         </p>
       </div>
 
       {/* Estimated time */}
-      <div className="mb-6 p-4 bg-zinc-800/50 rounded-lg">
-        <p className="text-sm text-zinc-400 mb-1">Estimated time remaining</p>
-        <p className="text-lg font-semibold text-white">
+      <div className="mb-6 p-4 bg-rich-black/60 rounded-lg">
+        <p className="text-sm text-champagne-gold/50 mb-1">Estimated time remaining</p>
+        <p className="text-lg font-semibold text-ivory-white">
           ~{Math.max(0, (requiredConfirmations - confirmations) * 5)} minutes
         </p>
       </div>
 
       {/* While you wait */}
-      <div className="text-left p-4 bg-zinc-800/30 rounded-lg border border-zinc-700 mb-4">
-        <p className="text-sm font-medium text-zinc-300 mb-2">While you wait...</p>
-        <ul className="text-sm text-zinc-400 space-y-1">
+      <div className="text-left p-4 bg-pepe-green-dark/20 rounded-lg border border-monaco-gold/20 mb-4">
+        <p className="text-sm font-medium text-champagne-gold mb-2">While you wait...</p>
+        <ul className="text-sm text-champagne-gold/50 space-y-1">
           <li>• Our games are provably fair</li>
           <li>• View proof of reserves at /reserves</li>
           <li>• House edge: only 0.5%</li>
@@ -444,7 +444,7 @@ function ConfirmingScreen({ depositStatus }: { depositStatus: DepositStatus }) {
           href={`https://explorer.zcha.in/transactions/${txHash}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-sm text-amber-400 hover:text-amber-300 underline"
+          className="text-sm text-monaco-gold hover:text-champagne-gold underline"
         >
           View on Block Explorer →
         </a>
@@ -458,12 +458,12 @@ function ReadyScreen({ amount }: { amount: number }) {
   return (
     <div className="p-8 text-center animate-success-bounce">
       <div className="text-6xl mb-4">🎰</div>
-      <h2 className="text-2xl font-bold text-white mb-2">You're Ready!</h2>
-      <p className="text-lg text-zinc-400 mb-2">Your balance has been credited</p>
-      <p className="text-4xl font-bold text-green-400 mb-6">
+      <h2 className="text-2xl font-display font-bold text-ivory-white mb-2">You're Ready!</h2>
+      <p className="text-lg text-champagne-gold/50 mb-2">Your balance has been credited</p>
+      <p className="text-4xl font-bold text-pepe-green-light mb-6">
         +{amount.toFixed(4)} ZEC
       </p>
-      <p className="text-sm text-zinc-500">Starting game in a moment...</p>
+      <p className="text-sm text-champagne-gold/50">Starting game in a moment...</p>
     </div>
   )
 }

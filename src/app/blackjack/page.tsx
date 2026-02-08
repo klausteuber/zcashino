@@ -60,6 +60,19 @@ export default function BlackjackPage() {
   const prevBalanceRef = useRef<number | null>(null)
   const prevGamePhaseRef = useRef<string | null>(null)
 
+  // Auto-bet state
+  const [isAutoBetEnabled, setIsAutoBetEnabled] = useState<boolean>(true)
+  const [isAutoBetting, setIsAutoBetting] = useState<boolean>(false)
+  const [autoBetCountdown, setAutoBetCountdown] = useState<number | null>(null)
+  const autoBetTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  // Use ref to track auto-betting state without triggering effect re-runs
+  const isAutoBettingRef = useRef<boolean>(false)
+  // Refs to capture values for auto-bet timer closure
+  const sessionRef = useRef<SessionData | null>(null)
+  const selectedBetRef = useRef<number>(0.1)
+  const perfectPairsBetRef = useRef<number>(0)
+
   // Sound effects
   const { playSound, isMuted, toggleMute } = useGameSounds(true)
 
@@ -70,6 +83,27 @@ export default function BlackjackPage() {
       setHasSeenOnboarding(true)
     }
   }, [])
+
+  // Load auto-bet preference from localStorage
+  useEffect(() => {
+    const savedAutoBet = localStorage.getItem('zcashino_auto_bet')
+    if (savedAutoBet !== null) {
+      setIsAutoBetEnabled(savedAutoBet === 'true')
+    }
+  }, [])
+
+  // Keep auto-bet refs in sync with state
+  useEffect(() => {
+    sessionRef.current = session
+  }, [session])
+
+  useEffect(() => {
+    selectedBetRef.current = selectedBet
+  }, [selectedBet])
+
+  useEffect(() => {
+    perfectPairsBetRef.current = perfectPairsBet
+  }, [perfectPairsBet])
 
   // Initialize session on mount
   useEffect(() => {
@@ -354,6 +388,19 @@ export default function BlackjackPage() {
   }, [session, gameId, isLoading])
 
   const handleNewRound = useCallback(() => {
+    // Cancel any pending auto-bet
+    if (autoBetTimerRef.current) {
+      clearTimeout(autoBetTimerRef.current)
+      autoBetTimerRef.current = null
+    }
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current)
+      countdownIntervalRef.current = null
+    }
+    isAutoBettingRef.current = false
+    setIsAutoBetting(false)
+    setAutoBetCountdown(null)
+
     setGameId(null)
     setGameState(null)
     setCommitment(null)
@@ -362,6 +409,46 @@ export default function BlackjackPage() {
     setPreviousCardCounts({ player: [0], dealer: 0 })
     setInsuranceDeclined(false)
   }, [])
+
+  // Toggle auto-bet and persist to localStorage
+  const toggleAutoBet = useCallback(() => {
+    setIsAutoBetEnabled(prev => {
+      const newValue = !prev
+      localStorage.setItem('zcashino_auto_bet', String(newValue))
+      if (!isMuted) playSound('buttonClick')
+      // If disabling while countdown is active, cancel it
+      if (!newValue && isAutoBettingRef.current) {
+        if (autoBetTimerRef.current) {
+          clearTimeout(autoBetTimerRef.current)
+          autoBetTimerRef.current = null
+        }
+        if (countdownIntervalRef.current) {
+          clearInterval(countdownIntervalRef.current)
+          countdownIntervalRef.current = null
+        }
+        isAutoBettingRef.current = false
+        setIsAutoBetting(false)
+        setAutoBetCountdown(null)
+      }
+      return newValue
+    })
+  }, [isMuted, playSound])
+
+  // Cancel auto-bet countdown
+  const cancelAutoBet = useCallback(() => {
+    if (autoBetTimerRef.current) {
+      clearTimeout(autoBetTimerRef.current)
+      autoBetTimerRef.current = null
+    }
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current)
+      countdownIntervalRef.current = null
+    }
+    isAutoBettingRef.current = false
+    setIsAutoBetting(false)
+    setAutoBetCountdown(null)
+    if (!isMuted) playSound('buttonClick')
+  }, [isMuted, playSound])
 
   const handleInsurance = useCallback(async (takeInsurance: boolean) => {
     if (!session || !gameId || isLoading) return
@@ -405,6 +492,141 @@ export default function BlackjackPage() {
       setIsLoading(false)
     }
   }, [session, gameId, isLoading])
+
+  // Auto-bet effect: automatically place bet and deal when game completes
+  useEffect(() => {
+    // Only trigger when:
+    // 1. Auto-bet is enabled
+    // 2. Game phase is 'complete'
+    // 3. Not currently loading
+    // 4. Not already in auto-betting state (use ref to avoid re-triggering)
+    // 5. Session exists with sufficient balance
+    const currentSession = sessionRef.current
+    const currentBet = selectedBetRef.current
+    const currentPerfectPairs = perfectPairsBetRef.current
+    const totalBetNeeded = currentBet + currentPerfectPairs
+    const canAutoBet =
+      isAutoBetEnabled &&
+      gameState?.phase === 'complete' &&
+      !isLoading &&
+      !isAutoBettingRef.current &&
+      currentSession &&
+      totalBetNeeded <= currentSession.balance
+
+    if (canAutoBet) {
+      // Mark as auto-betting immediately using ref (won't trigger re-render)
+      isAutoBettingRef.current = true
+      setIsAutoBetting(true)
+
+      // Clear any existing timers first to prevent pileup
+      if (autoBetTimerRef.current) {
+        clearTimeout(autoBetTimerRef.current)
+        autoBetTimerRef.current = null
+      }
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current)
+        countdownIntervalRef.current = null
+      }
+
+      // 2-second delay to view results
+      const autoBetDelay = 2000
+      setAutoBetCountdown(2)
+
+      // Countdown interval - use functional state update to avoid stale closure
+      const intervalId = setInterval(() => {
+        setAutoBetCountdown(prev => {
+          if (prev === null || prev <= 1) {
+            clearInterval(intervalId)
+            return null
+          }
+          return prev - 1
+        })
+      }, 1000)
+      countdownIntervalRef.current = intervalId
+
+      // Auto-deal timer - capture values at creation time
+      const capturedSession = currentSession
+      const capturedBet = currentBet
+      const capturedPerfectPairs = currentPerfectPairs
+
+      const timerId = setTimeout(async () => {
+        // Clear the countdown interval
+        if (countdownIntervalRef.current) {
+          clearInterval(countdownIntervalRef.current)
+          countdownIntervalRef.current = null
+        }
+        setAutoBetCountdown(null)
+
+        // Reset game state first
+        setGameId(null)
+        setGameState(null)
+        setCommitment(null)
+        setError(null)
+        setResultAnimation(null)
+        setPreviousCardCounts({ player: [0], dealer: 0 })
+        setInsuranceDeclined(false)
+
+        // Small delay before placing bet
+        await new Promise(resolve => setTimeout(resolve, 300))
+
+        // Place bet automatically using captured values
+        try {
+          const res = await fetch('/api/game', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'start',
+              sessionId: capturedSession.id,
+              bet: capturedBet,
+              perfectPairsBet: capturedPerfectPairs
+            })
+          })
+          const data = await res.json()
+          if (res.ok) {
+            setGameId(data.gameId)
+            setGameState(data.gameState)
+            setCommitment(data.commitment || null)
+            setSession(prev => prev ? {
+              ...prev,
+              balance: data.balance,
+              totalWagered: data.totalWagered ?? prev.totalWagered,
+              totalWon: data.totalWon ?? prev.totalWon
+            } : null)
+          } else {
+            setError(data.error || 'Auto-bet failed')
+          }
+        } catch {
+          setError('Auto-bet failed. Please try manually.')
+        }
+
+        // Reset auto-betting state
+        isAutoBettingRef.current = false
+        setIsAutoBetting(false)
+      }, autoBetDelay)
+      autoBetTimerRef.current = timerId
+
+      // Proper cleanup function to prevent timer pileup on re-renders
+      return () => {
+        if (autoBetTimerRef.current) {
+          clearTimeout(autoBetTimerRef.current)
+          autoBetTimerRef.current = null
+        }
+        if (countdownIntervalRef.current) {
+          clearInterval(countdownIntervalRef.current)
+          countdownIntervalRef.current = null
+        }
+        // Reset state on cleanup
+        isAutoBettingRef.current = false
+        setIsAutoBetting(false)
+        setAutoBetCountdown(null)
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    isAutoBetEnabled,
+    gameState?.phase,
+    isLoading
+  ])
 
   // Calculate available actions
   const availableActions = gameState ? getAvailableActions(gameState as BlackjackGameState) : []
@@ -470,7 +692,10 @@ export default function BlackjackPage() {
   if (isLoading && !session) {
     return (
       <main className="min-h-screen felt-texture flex items-center justify-center">
-        <div className="text-xl">Loading...</div>
+        <div className="flex flex-col items-center gap-4">
+          <PepeLogo size="lg" className="text-pepe-green-light animate-pulse" />
+          <div className="text-champagne-gold/50 font-display">Shuffling the deck...</div>
+        </div>
       </main>
     )
   }
@@ -508,6 +733,22 @@ export default function BlackjackPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
                 </svg>
               )}
+            </button>
+
+            {/* Auto-bet toggle */}
+            <button
+              onClick={toggleAutoBet}
+              className={`transition-colors p-2 ${
+                isAutoBetEnabled
+                  ? 'text-monaco-gold'
+                  : 'text-champagne-gold/60 hover:text-monaco-gold'
+              }`}
+              title={isAutoBetEnabled ? 'Auto-bet enabled (click to disable)' : 'Auto-bet disabled (click to enable)'}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
             </button>
 
             {/* Balance & Deposit Widget */}
@@ -557,8 +798,13 @@ export default function BlackjackPage() {
               isBust={fullDealerValue > 21 && gameState.phase === 'complete'}
             />
           ) : (
-            <div className="h-28 flex items-center justify-center text-gray-500">
-              Waiting for bet...
+            <div className="h-28 flex flex-col items-center justify-center gap-2">
+              <div className="flex gap-1">
+                <div className="w-2 h-2 bg-monaco-gold/30 rounded-full animate-pulse" style={{ animationDelay: '0ms' }} />
+                <div className="w-2 h-2 bg-monaco-gold/30 rounded-full animate-pulse" style={{ animationDelay: '150ms' }} />
+                <div className="w-2 h-2 bg-monaco-gold/30 rounded-full animate-pulse" style={{ animationDelay: '300ms' }} />
+              </div>
+              <span className="text-champagne-gold/50 text-sm">Place your bet to deal</span>
             </div>
           )}
         </div>
@@ -750,22 +996,22 @@ export default function BlackjackPage() {
 
           {/* Insurance Offer */}
           {showInsuranceOffer && (
-            <div className="flex flex-col items-center gap-3 mb-4">
-              <div className="bg-rich-black/60 px-4 py-2 rounded-lg border border-monaco-gold/40">
-                <span className="text-champagne-gold text-sm">
+            <div className="flex flex-col items-center gap-4 mb-4">
+              <div className="bg-rich-black/60 px-4 py-2 rounded-lg border border-monaco-gold/20">
+                <span className="text-champagne-gold/50 text-sm">
                   Insurance? ({insuranceAmount.toFixed(4)} ZEC - pays 2:1 if dealer has Blackjack)
                 </span>
               </div>
-              <div className="flex gap-3">
+              <div className="flex gap-4">
                 <button
                   onClick={() => {
                     playSound('buttonClick')
                     handleInsurance(true)
                   }}
                   disabled={isLoading || insuranceAmount > (session?.balance ?? 0)}
-                  className="bg-monaco-gold text-rich-black px-6 py-2 rounded-lg font-bold hover:bg-champagne-gold hover:scale-105 active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:hover:scale-100 shadow-lg"
+                  className="bg-transparent border border-champagne-gold/50 text-champagne-gold px-6 py-2 rounded-lg font-medium hover:bg-champagne-gold/10 hover:scale-105 active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:hover:scale-100"
                 >
-                  YES ({insuranceAmount.toFixed(2)} ZEC)
+                  Yes ({insuranceAmount.toFixed(2)} ZEC)
                 </button>
                 <button
                   onClick={() => {
@@ -773,16 +1019,16 @@ export default function BlackjackPage() {
                     handleInsurance(false)
                   }}
                   disabled={isLoading}
-                  className="bg-burgundy/80 text-ivory-white px-6 py-2 rounded-lg font-bold hover:bg-burgundy hover:scale-105 active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:hover:scale-100 shadow-lg"
+                  className="bg-pepe-green text-ivory-white px-6 py-2 rounded-lg font-bold hover:bg-pepe-green-light hover:scale-105 active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:hover:scale-100 shadow-lg"
                 >
-                  NO THANKS
+                  No Thanks
                 </button>
               </div>
             </div>
           )}
 
           {gameState?.phase === 'playerTurn' && (
-            <div className="flex gap-3 flex-wrap justify-center">
+            <div className="flex gap-4 flex-wrap justify-center">
               {availableActions.includes('hit') && (
                 <button
                   onClick={() => {
@@ -790,7 +1036,7 @@ export default function BlackjackPage() {
                     handleAction('hit')
                   }}
                   disabled={isLoading}
-                  className="bg-pepe-green text-ivory-white px-6 py-3 rounded-lg font-bold hover:bg-pepe-green-light hover:scale-105 active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:hover:scale-100 shadow-lg hover:shadow-pepe-green/30"
+                  className="btn-gold-shimmer text-rich-black px-8 py-3 rounded-lg font-bold hover:scale-105 active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:hover:scale-100 shadow-lg"
                 >
                   HIT
                 </button>
@@ -802,7 +1048,7 @@ export default function BlackjackPage() {
                     handleAction('stand')
                   }}
                   disabled={isLoading}
-                  className="bg-burgundy text-ivory-white px-6 py-3 rounded-lg font-bold hover:bg-burgundy/80 hover:scale-105 active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:hover:scale-100 shadow-lg hover:shadow-burgundy/30"
+                  className="bg-pepe-green text-ivory-white px-8 py-3 rounded-lg font-bold hover:bg-pepe-green-light hover:scale-105 active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:hover:scale-100 shadow-lg hover:shadow-pepe-green/30"
                 >
                   STAND
                 </button>
@@ -814,7 +1060,7 @@ export default function BlackjackPage() {
                     handleAction('double')
                   }}
                   disabled={isLoading}
-                  className="bg-monaco-gold text-rich-black px-6 py-3 rounded-lg font-bold hover:bg-champagne-gold hover:scale-105 active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:hover:scale-100 shadow-lg hover:shadow-monaco-gold/30"
+                  className="bg-transparent border-2 border-monaco-gold text-monaco-gold px-8 py-3 rounded-lg font-bold hover:bg-monaco-gold/10 hover:scale-105 active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:hover:scale-100"
                 >
                   DOUBLE
                 </button>
@@ -826,7 +1072,7 @@ export default function BlackjackPage() {
                     handleAction('split')
                   }}
                   disabled={isLoading}
-                  className="bg-velvet-purple text-ivory-white px-6 py-3 rounded-lg font-bold hover:bg-velvet-purple/80 hover:scale-105 active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:hover:scale-100 shadow-lg hover:shadow-velvet-purple/30"
+                  className="bg-velvet-purple/50 text-ivory-white px-8 py-3 rounded-lg font-bold hover:bg-velvet-purple/70 hover:scale-105 active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:hover:scale-100 shadow-lg"
                 >
                   SPLIT
                 </button>
@@ -869,17 +1115,51 @@ export default function BlackjackPage() {
                 }
               })()}
 
-              {/* Play Again Button - More prominent */}
-              <button
-                onClick={handleNewRound}
-                className="btn-gold-shimmer text-rich-black px-10 py-4 rounded-lg font-bold text-xl hover:scale-105 active:scale-95 transition-all duration-150 shadow-lg hover:shadow-monaco-gold/40 mt-2"
-              >
-                PLAY AGAIN
-              </button>
+              {/* Auto-bet countdown indicator */}
+              {isAutoBetEnabled && isAutoBetting && autoBetCountdown !== null && (
+                <div className="flex flex-col items-center gap-2 animate-pulse">
+                  <div className="text-sm text-monaco-gold flex items-center gap-2">
+                    <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Auto-dealing in {autoBetCountdown}...
+                  </div>
+                  <button
+                    onClick={cancelAutoBet}
+                    className="text-xs text-champagne-gold/60 hover:text-burgundy transition-colors underline"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
 
-              {/* Quick bet adjustment */}
-              <div className="text-xs text-champagne-gold/50 mt-1">
-                Same bet: {selectedBet} ZEC {perfectPairsBet > 0 && `+ ${(selectedBet * 0.1).toFixed(3)} ZEC Perfect Pairs`}
+              {/* Insufficient balance warning */}
+              {isAutoBetEnabled && session && selectedBet + perfectPairsBet > session.balance && (
+                <div className="text-sm text-burgundy bg-burgundy/10 px-4 py-2 rounded-lg border border-burgundy/30">
+                  Auto-bet paused: Insufficient balance for {selectedBet} ZEC bet
+                </div>
+              )}
+
+              {/* Play Again Button - hide when auto-betting */}
+              {!isAutoBetting && (
+                <button
+                  onClick={handleNewRound}
+                  className="btn-gold-shimmer text-rich-black px-10 py-4 rounded-lg font-bold text-xl hover:scale-105 active:scale-95 transition-all duration-150 shadow-lg hover:shadow-monaco-gold/40 mt-2"
+                >
+                  PLAY AGAIN
+                </button>
+              )}
+
+              {/* Quick bet info - show auto-bet status */}
+              <div className="text-xs text-champagne-gold/50 mt-1 flex items-center gap-2">
+                <span>
+                  {isAutoBetEnabled ? 'Auto-bet: ' : 'Next bet: '}
+                  {selectedBet} ZEC {perfectPairsBet > 0 && `+ ${(selectedBet * 0.1).toFixed(3)} ZEC Perfect Pairs`}
+                </span>
+                {isAutoBetEnabled && !isAutoBetting && (
+                  <span className="text-pepe-green-light text-xs">(auto)</span>
+                )}
               </div>
             </div>
           )}

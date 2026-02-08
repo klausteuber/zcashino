@@ -12,8 +12,12 @@ import {
   checkNodeStatus,
   generateTransparentAddress,
   getAddressBalance,
+  sendZec,
+  getOperationStatus,
+  listAddressTransactions,
 } from '@/lib/wallet/rpc'
 import { getDepositInfo } from '@/lib/wallet/addresses'
+import { checkPublicRateLimit, createRateLimitResponse } from '@/lib/admin/rate-limit'
 
 /**
  * GET /api/wallet
@@ -91,6 +95,11 @@ export async function GET(request: NextRequest) {
  * Actions: create, check-deposits, withdraw
  */
 export async function POST(request: NextRequest) {
+  const rateLimit = checkPublicRateLimit(request, 'wallet-action')
+  if (!rateLimit.allowed) {
+    return createRateLimitResponse(rateLimit)
+  }
+
   try {
     const body = await request.json()
     const { action, sessionId } = body
@@ -122,14 +131,23 @@ export async function POST(request: NextRequest) {
           wallet: session.wallet,
         })
 
-      case 'withdraw':
+      case 'withdraw': {
+        const withdrawLimit = checkPublicRateLimit(request, 'wallet-withdraw')
+        if (!withdrawLimit.allowed) {
+          return createRateLimitResponse(withdrawLimit)
+        }
         return handleWithdraw({
           id: session.id,
           balance: session.balance,
           isAuthenticated: session.isAuthenticated,
           withdrawalAddress: session.withdrawalAddress,
           walletAddress: session.walletAddress,
+          wallet: session.wallet,
         }, body)
+      }
+
+      case 'withdrawal-status':
+        return handleWithdrawalStatus(session.id, body.transactionId)
 
       default:
         return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
@@ -276,9 +294,17 @@ async function handleCheckDeposits(session: {
     const newDepositAmount = totalConfirmed - previouslyDeposited
 
     if (newDepositAmount >= MIN_DEPOSIT) {
-      // Record the deposit transaction
-      // TODO: In production, get actual txHash from RPC
-      const txHash = `tx_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`
+      // Get real txHash from RPC if available, fall back to generated hash
+      let txHash: string
+      try {
+        const txs = await listAddressTransactions(session.wallet.transparentAddr, 10, network)
+        const receiveTx = txs.find(
+          (tx) => tx.category === 'receive' && tx.confirmations >= CONFIRMATIONS_REQUIRED
+        )
+        txHash = receiveTx?.txid || `tx_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`
+      } catch {
+        txHash = `tx_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`
+      }
 
       const transaction = await prisma.transaction.create({
         data: {
@@ -369,6 +395,7 @@ async function handleWithdraw(
     isAuthenticated: boolean
     withdrawalAddress: string | null
     walletAddress: string
+    wallet: { transparentAddr: string; network: string } | null
   },
   body: { amount: number; memo?: string }
 ) {
@@ -439,18 +466,223 @@ async function handleWithdraw(
     },
   })
 
-  // In production: Queue the withdrawal for processing
-  // TODO: Implement actual withdrawal via RPC
+  // Demo mode: instant confirmation
+  if (isDemo) {
+    const fakeTxHash = `demo_tx_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`
+    await prisma.transaction.update({
+      where: { id: transaction.id },
+      data: {
+        status: 'confirmed',
+        txHash: fakeTxHash,
+        confirmedAt: new Date(),
+      },
+    })
+    return NextResponse.json({
+      success: true,
+      transaction: {
+        id: transaction.id,
+        amount,
+        fee: WITHDRAWAL_FEE,
+        destinationAddress,
+        status: 'confirmed',
+        txHash: fakeTxHash,
+      },
+      message: 'Demo withdrawal processed.',
+    })
+  }
 
+  // Real mode: send ZEC via RPC
+  const network = (session.wallet?.network as 'mainnet' | 'testnet') || DEFAULT_NETWORK
+
+  // Check node connectivity
+  const nodeStatus = await checkNodeStatus(network)
+  if (!nodeStatus.connected) {
+    await refundWithdrawal(session.id, transaction.id, totalAmount, amount, 'Zcash node not connected')
+    return NextResponse.json({
+      error: 'Zcash node not connected. Balance has been refunded.',
+    }, { status: 503 })
+  }
+
+  // Resolve house z-address (source of funds)
+  const houseAddress = network === 'mainnet'
+    ? process.env.HOUSE_ZADDR_MAINNET
+    : process.env.HOUSE_ZADDR_TESTNET
+
+  if (!houseAddress) {
+    await refundWithdrawal(session.id, transaction.id, totalAmount, amount, 'House wallet not configured')
+    return NextResponse.json({
+      error: 'Withdrawal service unavailable. Balance has been refunded.',
+    }, { status: 503 })
+  }
+
+  try {
+    const { operationId } = await sendZec(
+      houseAddress,
+      destinationAddress,
+      amount,
+      memo,
+      network
+    )
+
+    await prisma.transaction.update({
+      where: { id: transaction.id },
+      data: { operationId },
+    })
+
+    return NextResponse.json({
+      success: true,
+      transaction: {
+        id: transaction.id,
+        amount,
+        fee: WITHDRAWAL_FEE,
+        destinationAddress,
+        status: 'pending',
+        operationId,
+      },
+      message: 'Withdrawal submitted. Track progress with the withdrawal-status action.',
+    })
+  } catch (rpcError) {
+    const reason = rpcError instanceof Error ? rpcError.message : 'RPC call failed'
+    await refundWithdrawal(session.id, transaction.id, totalAmount, amount, reason)
+    return NextResponse.json({
+      error: 'Withdrawal failed. Balance has been refunded.',
+    }, { status: 500 })
+  }
+}
+
+/**
+ * Refund a failed withdrawal: restore balance and mark transaction failed
+ */
+async function refundWithdrawal(
+  sessionId: string,
+  transactionId: string,
+  totalAmount: number,
+  withdrawnAmount: number,
+  reason: string
+) {
+  await prisma.session.update({
+    where: { id: sessionId },
+    data: {
+      balance: { increment: totalAmount },
+      totalWithdrawn: { decrement: withdrawnAmount },
+    },
+  })
+  await prisma.transaction.update({
+    where: { id: transactionId },
+    data: { status: 'failed', failReason: reason },
+  })
+}
+
+/**
+ * Check withdrawal status by polling the Zcash operation
+ */
+async function handleWithdrawalStatus(sessionId: string, transactionId: string) {
+  if (!transactionId) {
+    return NextResponse.json({ error: 'Transaction ID required' }, { status: 400 })
+  }
+
+  const transaction = await prisma.transaction.findFirst({
+    where: { id: transactionId, sessionId, type: 'withdrawal' },
+  })
+
+  if (!transaction) {
+    return NextResponse.json({ error: 'Transaction not found' }, { status: 404 })
+  }
+
+  // Already finalized
+  if (transaction.status === 'confirmed' || transaction.status === 'failed') {
+    return NextResponse.json({
+      success: true,
+      transaction: {
+        id: transaction.id,
+        status: transaction.status,
+        txHash: transaction.txHash,
+        failReason: transaction.failReason,
+        amount: transaction.amount,
+        fee: transaction.fee,
+        confirmedAt: transaction.confirmedAt,
+      },
+    })
+  }
+
+  // Pending with operation ID: poll RPC
+  if (transaction.operationId) {
+    const network = DEFAULT_NETWORK
+    try {
+      const opStatus = await getOperationStatus(transaction.operationId, network)
+
+      if (opStatus.status === 'success' && opStatus.txid) {
+        await prisma.transaction.update({
+          where: { id: transaction.id },
+          data: {
+            status: 'confirmed',
+            txHash: opStatus.txid,
+            confirmedAt: new Date(),
+          },
+        })
+        return NextResponse.json({
+          success: true,
+          transaction: {
+            id: transaction.id,
+            status: 'confirmed',
+            txHash: opStatus.txid,
+            amount: transaction.amount,
+            fee: transaction.fee,
+          },
+        })
+      }
+
+      if (opStatus.status === 'failed') {
+        const totalAmount = transaction.amount + transaction.fee
+        await refundWithdrawal(
+          sessionId,
+          transaction.id,
+          totalAmount,
+          transaction.amount,
+          opStatus.error || 'Operation failed'
+        )
+        return NextResponse.json({
+          success: true,
+          transaction: {
+            id: transaction.id,
+            status: 'failed',
+            failReason: opStatus.error || 'Operation failed',
+            amount: transaction.amount,
+          },
+        })
+      }
+
+      // Still queued or executing
+      return NextResponse.json({
+        success: true,
+        transaction: {
+          id: transaction.id,
+          status: 'pending',
+          operationStatus: opStatus.status,
+          amount: transaction.amount,
+        },
+      })
+    } catch {
+      // RPC unreachable — don't refund yet, just report pending
+      return NextResponse.json({
+        success: true,
+        transaction: {
+          id: transaction.id,
+          status: 'pending',
+          message: 'Unable to check status. Node may be temporarily unavailable.',
+          amount: transaction.amount,
+        },
+      })
+    }
+  }
+
+  // No operation ID (demo or pre-RPC state)
   return NextResponse.json({
     success: true,
     transaction: {
       id: transaction.id,
-      amount,
-      fee: WITHDRAWAL_FEE,
-      destinationAddress,
-      status: 'pending',
+      status: transaction.status,
+      amount: transaction.amount,
     },
-    message: 'Withdrawal queued for processing. Funds will be sent to your registered withdrawal address.',
   })
 }

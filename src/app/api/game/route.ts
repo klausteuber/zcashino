@@ -17,6 +17,7 @@ import {
   checkAndRefillPool
 } from '@/lib/provably-fair/commitment-pool'
 import { getExplorerUrl } from '@/lib/provably-fair/blockchain'
+import { checkPublicRateLimit, createRateLimitResponse } from '@/lib/admin/rate-limit'
 import type { BlackjackAction, BlackjackGameState, BlockchainCommitment } from '@/types'
 
 // Check if this is a demo session
@@ -26,6 +27,11 @@ function isDemoSession(walletAddress: string): boolean {
 
 // POST /api/game - Start new game or execute action
 export async function POST(request: NextRequest) {
+  const rateLimit = checkPublicRateLimit(request, 'game-action')
+  if (!rateLimit.allowed) {
+    return createRateLimitResponse(rateLimit)
+  }
+
   try {
     const body = await request.json()
     const { action, sessionId, gameId, bet, perfectPairsBet, clientSeed } = body

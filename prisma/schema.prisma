@@ -196,3 +196,23 @@ model GeoCheck {
   @@index([ipAddress])
   @@index([createdAt])
 }
+
+// Admin audit log for security and operations tracking
+model AdminAuditLog {
+  id         String   @id @default(cuid())
+  action     String
+  actor      String?
+  success    Boolean  @default(true)
+  route      String?
+  method     String?
+  ipAddress  String?
+  userAgent  String?
+  details    String?
+  metadata   String?
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([action])
+  @@index([success])
+  @@index([ipAddress])
+}

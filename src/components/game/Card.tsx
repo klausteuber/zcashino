@@ -152,6 +152,13 @@ export default function Card({ card, size = 'md', className = '', dealDelay = 0,
 
 type HandResult = 'win' | 'lose' | 'push' | 'blackjack' | null
 
+// Responsive card overlap based on size
+const overlapClasses = {
+  sm: '-ml-4',
+  md: '-ml-6',
+  lg: '-ml-8'
+}
+
 interface HandProps {
   cards: CardType[]
   size?: 'sm' | 'md' | 'lg'
@@ -206,20 +213,21 @@ export function Hand({
   }
 
   const highlightClass = getHandHighlightClass()
+  const overlap = overlapClasses[size]
 
   return (
     <div className={`flex flex-col items-center gap-2 ${className}`}>
       {label && (
-        <div className="text-sm font-semibold text-gray-300">{label}</div>
+        <div className="text-sm font-semibold text-champagne-gold/50">{label}</div>
       )}
 
-      <div className={`flex gap-[-1rem] ${highlightClass}`}>
+      <div className={`flex ${highlightClass}`}>
         {cards.map((card, index) => (
           <Card
             key={`${card.rank}-${card.suit}-${index}`}
             card={card}
             size={size}
-            className={index > 0 ? '-ml-8' : ''}
+            className={index > 0 ? overlap : ''}
             isNew={getIsNew(index)}
             dealDelay={getDealDelay(index)}
             dealFromShoe={true}

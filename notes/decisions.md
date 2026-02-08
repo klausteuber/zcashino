@@ -1,0 +1,264 @@
+# Architecture Decisions
+
+## Auto-Bet Feature (2025-02-04)
+
+### Decision
+Implemented auto-bet as a toggle (default ON) that automatically places the same bet and deals a new hand after a round completes.
+
+### Why
+- Improves UX for players who want continuous play
+- Reduces friction between hands
+- Common feature in online casinos
+
+### Implementation
+- **State:** `isAutoBetEnabled`, `isAutoBetting`, `autoBetCountdown`
+- **Persistence:** localStorage key `zcashino_auto_bet`
+- **UI:** Toggle button in header (refresh arrows icon), countdown indicator in complete phase
+- **Timing:** 2-second countdown to view results before auto-dealing
+- **Cancel:** Users can click "Cancel" or "PLAY AGAIN" to stop auto-bet
+
+### Key Technical Choices
+
+1. **useRef for re-entry guard:** Using `isAutoBettingRef.current` instead of just state because the effect shouldn't re-trigger during countdown.
+
+2. **Functional state updates for countdown:** Avoids stale closure bugs with setInterval.
+
+3. **Capture values in setTimeout closure:** Session, bet amounts captured at timer creation time to avoid stale values.
+
+4. **Cleanup function:** Proper cleanup prevents timer pileup during hot reloads and React strict mode.
+
+---
+
+## Sound Effects (Earlier)
+
+### Decision
+Use Web Audio API for synthesized sounds instead of audio files.
+
+### Why
+- No additional network requests
+- Smaller bundle size
+- More control over timing and parameters
+
+### Implementation
+- Custom `useGameSounds` hook
+- Sounds: card deal, chip click, win, loss, etc.
+- Mute toggle persisted in localStorage
+
+---
+
+## Provably Fair System
+
+### Decision
+On-chain commitment scheme using Zcash blockchain.
+
+### Why
+- Transparent verification
+- Can't cheat on outcomes
+- Aligns with "provably fair" casino industry standard
+
+### Implementation
+- Pre-generated commitment pool
+- SHA256 hash commitment before game
+- Reveal server seed after game
+- Verification page at `/verify`
+
+---
+
+## Design System
+
+### Decision
+Custom color palette with gold/green theme.
+
+### Why
+- Luxury casino aesthetic
+- Brand differentiation
+- Consistency across components
+
+### Colors
+- Monaco gold / champagne gold (primary accent)
+- Pepe green variants (brand identity)
+- Rich black / ivory white (text/backgrounds)
+- Velvet purple / burgundy (secondary accents)
+
+### Rules
+- Never use generic Tailwind colors (zinc, amber, blue, gray)
+- Three-tier text opacity: 100%, champagne-gold, champagne-gold/50
+
+---
+
+## Admin Hardening (2026-02-06)
+
+### Decision
+Add a secured admin control plane with authenticated sessions, per-IP rate limiting, and persistent audit logs.
+
+### Why
+- Admin endpoints control money movement and operational recovery.
+- Shared links or leaked session IDs should not grant admin access.
+- We need traceability for security incidents and operational actions.
+
+### Implementation
+- **Auth model:** HMAC-signed admin session cookie (`zcashino_admin_session`) from `/api/admin/auth`.
+- **Route protection:** Admin APIs require `requireAdmin(request)` guard.
+- **Rate limiting:** Separate buckets for login, read, and action endpoints.
+- **Audit logs:** `AdminAuditLog` table stores action, actor, IP, route, method, success, details, metadata.
+- **Dashboard telemetry:** `/admin` shows failed logins, rate-limit hits, and recent audit events.
+
+### Key Technical Choices
+1. **Signed cookie sessions over client tokens:** Keeps session validation server-side and uses HttpOnly cookie protection.
+2. **Bucketed rate limits:** Login is strict; read/action endpoints are less strict to preserve operability.
+3. **Log failures too:** Unauthorized and rate-limited attempts are logged, not just successful admin actions.
+4. **Production credential checks:** Enforce stronger password/secret lengths only in production.
+
+---
+
+## Security Headers & CSP Policy (2026-02-08)
+
+### Decision
+Add Content-Security-Policy, HSTS, X-Frame-Options, X-Content-Type-Options, and Permissions-Policy headers via `next.config.ts`.
+
+### Why
+- CSP blocks inline script injection and restricts resource origins, closing XSS vectors.
+- HSTS forces HTTPS and prevents downgrade attacks.
+- X-Frame-Options prevents clickjacking by disallowing iframe embedding.
+- Permissions-Policy disables browser features the app doesn't need (camera, microphone, geolocation).
+
+### Key Technical Choices
+1. **CSP is restrictive by default:** Only allows `self` and explicitly listed origins. Inline styles are allowed (`unsafe-inline`) because Tailwind generates them, but inline scripts are blocked.
+2. **Headers live in Next.js config, not middleware:** Keeps them declarative, applied to all routes, and avoids middleware overhead.
+
+---
+
+## Public API Rate Limiting (2026-02-08)
+
+### Decision
+Apply bucket-based rate limiting to all public API endpoints (`/api/game`, `/api/session`, `/api/wallet`), reusing the same rate-limit infrastructure built for admin routes.
+
+### Why
+- Without rate limits, a single client could flood the game engine, spam session creation, or attempt withdrawal abuse.
+- Different endpoints have different risk profiles and need different limits.
+
+### Implementation
+- **Shared store:** Same in-memory `RateLimitStore` from `src/lib/admin/rate-limit.ts` is used for both admin and public buckets.
+- **Bucket design:** Game actions (start/hit/stand) get stricter limits than session reads. Wallet operations (deposit/withdraw) have their own bucket to prevent financial abuse.
+- **Per-IP tracking:** Limits are enforced per client IP, extracted from request headers.
+
+### Key Technical Choices
+1. **In-memory store is acceptable for single-instance deploys.** For multi-instance, swap to Redis (documented as future work).
+2. **Reuse admin rate-limit module** rather than adding a new dependency. Same API surface, different bucket configs.
+
+---
+
+## Turso for Production Database (2026-02-08)
+
+### Decision
+Use Turso (distributed LibSQL) for production while keeping local SQLite for development.
+
+### Why
+- SQLite is great for dev (zero config, fast, file-based) but doesn't scale for multi-region or concurrent writes in production.
+- Turso provides a managed, distributed SQLite-compatible database with edge replicas.
+- Prisma 7's LibSQL adapter makes the switch transparent — same schema, same queries.
+
+### Key Technical Choices
+1. **LibSQL adapter in `src/lib/db.ts`:** The Prisma client is configured with `@prisma/adapter-libsql`, so switching between local SQLite and Turso is just an environment variable change (`DATABASE_URL`).
+2. **No migration pain:** Prisma's schema-push workflow works identically against both backends.
+
+---
+
+## Standalone Docker Output (2026-02-08)
+
+### Decision
+Set `output: 'standalone'` in `next.config.ts` and build a multi-stage Dockerfile targeting the standalone output.
+
+### Why
+- Default Next.js builds include the entire `node_modules` directory, producing images 500MB+.
+- Standalone output bundles only required dependencies into `.next/standalone`, producing images under 200MB.
+- Smaller images mean faster deploys, lower storage costs, and reduced attack surface.
+
+### Implementation
+- **Dockerfile:** Multi-stage build (deps → build → runtime). Final stage copies only `.next/standalone`, `.next/static`, and `public/`.
+- **docker-compose.yml:** Defines the app service with health check (`/api/health`), restart policy, and environment variables.
+- **CI:** `.github/workflows/ci.yml` runs lint, typecheck, tests, and a production build on every push/PR.
+
+### Key Technical Choices
+1. **Multi-stage build** keeps build tools out of the final image.
+2. **Health check endpoint** (`/api/health`) enables Docker and orchestrator liveness probes.
+3. **Non-root user** in the runtime stage for defense-in-depth.
+
+---
+
+## Sentry Configuration Approach (2026-02-08)
+
+### Decision
+Integrate Sentry for error tracking using four separate instrumentation entry points to cover all Next.js runtimes.
+
+### Why
+- Next.js App Router runs code in four distinct runtimes: Node.js server, Edge runtime, client browser, and instrumentation hooks.
+- Missing any one entry point creates blind spots where errors go unreported.
+- Sentry provides stack traces, breadcrumbs, and performance data that console logs cannot.
+
+### Implementation
+- `instrumentation.ts` — Next.js instrumentation hook, initializes Sentry server-side on app startup.
+- `instrumentation-client.ts` — Client-side Sentry initialization (browser runtime).
+- `sentry.server.config.ts` — Server-specific Sentry configuration (sampling rates, integrations).
+- `sentry.edge.config.ts` — Edge runtime Sentry configuration.
+
+### Key Technical Choices
+1. **DSN via environment variable** (`SENTRY_DSN`). No DSN = Sentry silently disabled (safe for local dev).
+2. **Sample rate tuned per environment:** Lower in production to control costs, higher in staging for visibility.
+3. **Source maps uploaded during build** for readable stack traces in production.
+
+---
+
+## Zcash Node: zcashd over Zebra + Zallet (2026-02-08)
+
+### Decision
+Use zcashd (deprecated but functional) for the Zcash node, not the new Zebra + Zallet stack.
+
+### Why
+We evaluated Zebra (v4.1.0, production-ready consensus node) + Zallet (v0.1.0-alpha.3, wallet) as the "future-proof" option. The conclusion: **Zallet is not ready for production, especially for a financial application.**
+
+**What Zallet is missing (Feb 2026):**
+- `z_getbalance` / `getbalance` — cannot check balances
+- `z_listreceivedbyaddress` — cannot detect deposits
+- `listtransactions` — cannot list transaction history
+- `getnewaddress` / `z_getnewaddress` — not ported (replaced by account model)
+- No Docker image, no security audit, no stable release timeline
+- `z_sendmany` exists but is being deprecated for an unimplemented replacement
+
+**What zcashd provides that we need:**
+- `z_sendmany` — send ZEC from house wallet to player
+- `z_getnewaddress` / `getnewaddress` — generate deposit addresses
+- `z_getoperationstatus` — track async withdrawal status
+- `listunspent` / `z_listreceivedbyaddress` — detect deposits
+- `getblockchaininfo` — health checks and sync status
+- Production-tested, Docker image available, well-documented
+
+### Migration Path
+1. RPC calls are isolated in `src/lib/wallet/rpc.ts` — swap implementation when ready.
+2. Monitor Zallet for beta release (when all intended RPCs exist and API is stable).
+3. The address model change (address-based → account-based) will require rethinking deposit address generation.
+
+### Risk
+zcashd is deprecated. The deprecation flag (`i-am-aware-zcashd-will-be-replaced-by-zebrad-and-zallet-in-2025=1`) is required in config. No announced end-of-life date — the binary continues to work on the current network.
+
+---
+
+## Crypto Vulnerability Fix: Math.random → node:crypto (2026-02-08)
+
+### Decision
+Replace all uses of `Math.random()` in the provably fair system with `node:crypto.randomBytes`.
+
+### Why
+- `Math.random()` uses a predictable PRNG (xorshift128+ in V8). An attacker observing enough outputs could predict future seeds.
+- For a gambling platform, seed predictability means outcome predictability — a critical vulnerability.
+- `node:crypto.randomBytes` uses the OS CSPRNG (`/dev/urandom` on Linux, CryptGenRandom on Windows), which is cryptographically secure.
+
+### Implementation
+- **File:** `src/lib/provably-fair/index.ts`
+- **Change:** `randomBytes(32).toString('hex')` replaces `Math.random().toString(36)` for all seed and nonce generation.
+- **Tests:** Existing provably fair tests continue to pass; randomness source is an implementation detail.
+
+### Key Technical Choices
+1. **32 bytes (256 bits) of entropy** — industry standard for cryptographic seeds.
+2. **Hex encoding** — consistent, URL-safe, and easy to hash with SHA-256.
+3. **No fallback to Math.random** — if `node:crypto` is unavailable, the app should fail loudly rather than silently degrade.

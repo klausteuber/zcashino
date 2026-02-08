@@ -1,37 +1,19 @@
 import type { ProvablyFairData, VerificationResult } from '@/types'
 import { generateShuffleOrder } from '@/lib/game/deck'
+import { randomBytes, createHash } from 'node:crypto'
 
 /**
- * Generate a cryptographically secure random server seed
- * In production, this would use Node.js crypto module
+ * Generate a cryptographically secure random server seed (32 bytes as hex)
  */
 export function generateServerSeed(): string {
-  // Generate 32 random bytes as hex
-  const array = new Uint8Array(32)
-  if (typeof crypto !== 'undefined') {
-    crypto.getRandomValues(array)
-  } else {
-    // Fallback for server-side (would use node:crypto in production)
-    for (let i = 0; i < array.length; i++) {
-      array[i] = Math.floor(Math.random() * 256)
-    }
-  }
-  return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('')
+  return randomBytes(32).toString('hex')
 }
 
 /**
  * Generate a default client seed (user can customize)
  */
 export function generateClientSeed(): string {
-  const array = new Uint8Array(16)
-  if (typeof crypto !== 'undefined') {
-    crypto.getRandomValues(array)
-  } else {
-    for (let i = 0; i < array.length; i++) {
-      array[i] = Math.floor(Math.random() * 256)
-    }
-  }
-  return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('')
+  return randomBytes(16).toString('hex')
 }
 
 /**
@@ -39,30 +21,7 @@ export function generateClientSeed(): string {
  * This hash is committed BEFORE the player places their bet
  */
 export async function hashServerSeed(serverSeed: string): Promise<string> {
-  if (typeof crypto !== 'undefined' && crypto.subtle) {
-    // Browser/modern runtime
-    const encoder = new TextEncoder()
-    const data = encoder.encode(serverSeed)
-    const hashBuffer = await crypto.subtle.digest('SHA-256', data)
-    const hashArray = Array.from(new Uint8Array(hashBuffer))
-    return hashArray.map(byte => byte.toString(16).padStart(2, '0')).join('')
-  } else {
-    // Fallback (would use node:crypto in production)
-    return simpleHash(serverSeed)
-  }
-}
-
-/**
- * Simple hash function for fallback (NOT cryptographically secure - use real crypto in production)
- */
-function simpleHash(str: string): string {
-  let hash = 0
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i)
-    hash = ((hash << 5) - hash) + char
-    hash = hash & hash
-  }
-  return Math.abs(hash).toString(16).padStart(64, '0')
+  return createHash('sha256').update(serverSeed).digest('hex')
 }
 
 /**

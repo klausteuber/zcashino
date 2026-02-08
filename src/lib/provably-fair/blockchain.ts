@@ -52,6 +52,12 @@ export async function commitServerSeedHash(
   network: ZcashNetwork = DEFAULT_NETWORK
 ): Promise<CommitmentResult> {
   try {
+    // In demo mode, skip RPC entirely and use mock commitments immediately
+    if (process.env.DEMO_MODE === 'true') {
+      console.log('[Blockchain] DEMO_MODE enabled, using mock commitment')
+      return createMockCommitment(serverSeedHash)
+    }
+
     // Check node status first
     const nodeStatus = await checkNodeStatus(network)
     if (!nodeStatus.connected) {

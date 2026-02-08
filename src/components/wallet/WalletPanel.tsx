@@ -44,6 +44,13 @@ export function WalletPanel({ sessionId, onBalanceUpdate, onAuthUpdate }: Wallet
   const [withdrawAmount, setWithdrawAmount] = useState('')
   const [withdrawing, setWithdrawing] = useState(false)
   const [settingAddress, setSettingAddress] = useState(false)
+  const [pendingWithdrawal, setPendingWithdrawal] = useState<{
+    id: string
+    status: string
+    txHash?: string
+    failReason?: string
+    operationStatus?: string
+  } | null>(null)
 
   const fetchWalletData = useCallback(async () => {
     try {
@@ -69,6 +76,37 @@ export function WalletPanel({ sessionId, onBalanceUpdate, onAuthUpdate }: Wallet
   useEffect(() => {
     fetchWalletData()
   }, [fetchWalletData])
+
+  // Poll withdrawal status when a withdrawal is pending
+  useEffect(() => {
+    if (!pendingWithdrawal || pendingWithdrawal.status !== 'pending') return
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const res = await fetch('/api/wallet', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'withdrawal-status',
+            sessionId,
+            transactionId: pendingWithdrawal.id,
+          }),
+        })
+        const data = await res.json()
+        if (data.transaction) {
+          setPendingWithdrawal(data.transaction)
+          if (data.transaction.status === 'confirmed' || data.transaction.status === 'failed') {
+            clearInterval(pollInterval)
+            await fetchWalletData()
+          }
+        }
+      } catch (err) {
+        console.error('Failed to check withdrawal status:', err)
+      }
+    }, 5000)
+
+    return () => clearInterval(pollInterval)
+  }, [pendingWithdrawal, sessionId, fetchWalletData])
 
   const checkDeposits = async () => {
     try {
@@ -146,7 +184,13 @@ export function WalletPanel({ sessionId, onBalanceUpdate, onAuthUpdate }: Wallet
       }
 
       setWithdrawAmount('')
-      setShowWithdraw(false)
+      if (data.transaction) {
+        setPendingWithdrawal({
+          id: data.transaction.id,
+          status: data.transaction.status,
+          txHash: data.transaction.txHash,
+        })
+      }
       await fetchWalletData()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Withdrawal failed')
@@ -390,6 +434,52 @@ export function WalletPanel({ sessionId, onBalanceUpdate, onAuthUpdate }: Wallet
               {withdrawing ? 'Processing...' : 'Withdraw'}
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Withdrawal Status */}
+      {pendingWithdrawal && (
+        <div className={`rounded-lg p-3 mb-4 border ${
+          pendingWithdrawal.status === 'confirmed'
+            ? 'bg-pepe-green/10 border-pepe-green/30'
+            : pendingWithdrawal.status === 'failed'
+            ? 'bg-burgundy/10 border-burgundy/30'
+            : 'bg-monaco-gold/10 border-monaco-gold/30'
+        }`}>
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-xs font-medium text-champagne-gold/60">Withdrawal</span>
+            <span className={`text-xs font-medium ${
+              pendingWithdrawal.status === 'confirmed'
+                ? 'text-pepe-green'
+                : pendingWithdrawal.status === 'failed'
+                ? 'text-burgundy'
+                : 'text-monaco-gold'
+            }`}>
+              {pendingWithdrawal.status === 'pending'
+                ? `Processing${pendingWithdrawal.operationStatus ? ` (${pendingWithdrawal.operationStatus})` : '...'}`
+                : pendingWithdrawal.status === 'confirmed'
+                ? 'Confirmed'
+                : 'Failed'}
+            </span>
+          </div>
+          {pendingWithdrawal.txHash && (
+            <div className="text-xs font-mono text-ivory-white/70 break-all">
+              TX: {pendingWithdrawal.txHash}
+            </div>
+          )}
+          {pendingWithdrawal.failReason && (
+            <div className="text-xs text-burgundy mt-1">
+              {pendingWithdrawal.failReason}. Balance has been refunded.
+            </div>
+          )}
+          {(pendingWithdrawal.status === 'confirmed' || pendingWithdrawal.status === 'failed') && (
+            <button
+              onClick={() => setPendingWithdrawal(null)}
+              className="text-xs text-champagne-gold/50 hover:text-champagne-gold mt-2"
+            >
+              Dismiss
+            </button>
+          )}
         </div>
       )}
 

@@ -63,6 +63,7 @@ async function rpcCall<T = unknown>(
         Authorization: `Basic ${auth}`,
       },
       body,
+      signal: AbortSignal.timeout(5000), // 5s timeout to fail fast when node is down
     })
 
     if (!response.ok) {

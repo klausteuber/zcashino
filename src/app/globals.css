@@ -534,3 +534,39 @@ body {
 .animate-deposit-celebrate {
   animation: deposit-celebrate 0.6s ease-out;
 }
+
+/* Chip selection bounce animation */
+@keyframes chipSelect {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.15) translateY(-2px); }
+  100% { transform: scale(1.1); }
+}
+
+.chip-select {
+  animation: chipSelect 0.2s ease-out forwards;
+}
+
+/* ================================
+   DESIGN SYSTEM VARIABLES
+   ================================ */
+
+/* Spacing scale */
+:root {
+  --space-tight: 0.5rem;    /* gap-2, 8px */
+  --space-standard: 1rem;   /* gap-4, 16px */
+  --space-loose: 2rem;      /* gap-8, 32px */
+  --space-section: 3rem;    /* gap-12, 48px */
+}
+
+/* Shadow system */
+:root {
+  --shadow-subtle: 0 2px 8px rgba(0, 0, 0, 0.15);
+  --shadow-card: 0 4px 16px rgba(0, 0, 0, 0.2);
+  --shadow-elevated: 0 8px 32px rgba(0, 0, 0, 0.3);
+  --shadow-gold-glow: 0 0 20px rgba(201, 162, 39, 0.3);
+}
+
+/* Default transitions for interactive elements */
+button, a, [role="button"] {
+  transition: all 0.15s ease-out;
+}

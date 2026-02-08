@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { validateAddress, DEFAULT_NETWORK, generateTransparentAddress, checkNodeStatus } from '@/lib/wallet'
+import { checkPublicRateLimit, createRateLimitResponse } from '@/lib/admin/rate-limit'
 
 // Demo mode: Generate a fake wallet address for testing
 function generateDemoWallet(): string {
@@ -138,6 +139,11 @@ export async function GET(request: NextRequest) {
  */
 
 export async function POST(request: NextRequest) {
+  const rateLimit = checkPublicRateLimit(request, 'session-create')
+  if (!rateLimit.allowed) {
+    return createRateLimitResponse(rateLimit)
+  }
+
   try {
     const body = await request.json()
     const {

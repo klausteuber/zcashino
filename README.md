@@ -12,7 +12,7 @@ A provably fair, privacy-focused online casino powered by Zcash (ZEC).
 
 ## Current Status
 
-**Demo Mode** - The blackjack game is fully playable with server-side game logic and database persistence. Blockchain provably fair system uses mock commitments when no Zcash node is connected.
+The blackjack game is fully playable with server-side game logic and database persistence. Supports both **demo mode** (mock commitments, instant withdrawals) and **real Zcash node connections** (on-chain commitments, async RPC withdrawals via `z_sendmany`). Configure via environment variables.
 
 ### Implemented
 - ✅ Single-player Blackjack (Vegas Strip rules)
@@ -22,6 +22,10 @@ A provably fair, privacy-focused online casino powered by Zcash (ZEC).
 - ✅ **Verification System** - Full verification UI at `/verify`
 - ✅ Hit, Stand, Double, Split actions
 - ✅ Server-side API routes (`/api/session`, `/api/game`, `/api/wallet`, `/api/verify`, `/api/admin/pool`)
+- ✅ **Admin Authentication API** (`/api/admin/auth`) with signed HttpOnly session cookies
+- ✅ **Admin Overview API** (`/api/admin/overview`) for operations + finance metrics
+- ✅ **Admin Dashboard UI** (`/admin`) for pool management and withdrawal recovery
+- ✅ **Admin Hardening** - per-IP rate limits and persistent admin audit logs
 - ✅ SQLite database with Prisma 7 (sessions, games, transactions, wallets, commitments)
 - ✅ Session management with balance tracking
 - ✅ Game history persistence with blockchain proof data
@@ -29,6 +33,19 @@ A provably fair, privacy-focused online casino powered by Zcash (ZEC).
 - ✅ **Zcash Wallet Integration** (deposit addresses, withdrawals, RPC client)
 - ✅ **WalletPanel UI component** (balance display, deposit/withdraw interface)
 - ✅ **Address validation** (t-addr, z-addr, u-addr support)
+- ✅ **Real Withdrawal Execution** - Async `z_sendmany` via RPC, deduct-first/refund-on-failure, demo instant-confirm
+- ✅ **Withdrawal Status Polling** - Frontend polls operation status; auto-refunds on failure
+- ✅ **Zcash Node Connection** - Full RPC integration (testnet/mainnet), env-configurable, graceful fallback to demo mode
+- ✅ **Admin Withdrawal Recovery** - `/api/admin/pool` `process-withdrawals` action for stuck pending withdrawals
+- ✅ **Proof of Reserves** - `/reserves` dashboard with on-chain balance verification
+- ✅ **Test Suite** - 255 tests across 10 files (game logic, wallet, provably fair, admin security, UI components)
+- ✅ **Cryptographically Secure RNG** - `node:crypto.randomBytes` for all seed/nonce generation (fixed from Math.random)
+- ✅ **Security Headers** - CSP, HSTS, X-Frame-Options, X-Content-Type-Options, Permissions-Policy
+- ✅ **Public API Rate Limiting** - Bucket-based per-IP rate limits on `/api/game`, `/api/session`, `/api/wallet`
+- ✅ **Health Check** - `/api/health` endpoint for liveness probes (DB connectivity + uptime)
+- ✅ **Sentry Error Tracking** - Full coverage across server, client, edge, and instrumentation runtimes
+- ✅ **Legal Pages** - `/terms`, `/privacy`, `/responsible-gambling` static routes
+- ✅ **Deployment Ready** - `Dockerfile`, `docker-compose.yml`, `.github/workflows/ci.yml`, `DEPLOYMENT.md`
 
 ### UI/UX Features
 - ✅ **Card Deal Animation** - Cards fly in from dealer shoe position with rotation and arc trajectory
@@ -42,15 +59,20 @@ A provably fair, privacy-focused online casino powered by Zcash (ZEC).
 - ✅ **Result Animations** - Blackjack glow, win celebration, loss shake, push effects
 - ✅ **Sound Effects** - Web Audio API synthesized sounds (cards, chips, wins, losses)
 - ✅ **Mute Toggle** - Sound can be enabled/disabled via header icon
+- ✅ **Auto-Bet Toggle** - Automatically place same bet and deal new hand after round completes (default: ON)
 - ✅ **Perfect Pairs Tooltip** - Hover info showing payout table (25:1, 12:1, 6:1)
 - ✅ **Provably Fair UI** - Copy buttons, blockchain commitment display, verify link
 - ✅ **Micro-interactions** - Button hover/press effects, chip selection feedback
 - ✅ **Responsive Design** - Mobile-friendly layout with touch-optimized controls
 
 ### Coming Soon
+- 🔄 Zcash testnet integration testing (requires running zcashd)
+- 🔄 Load testing (requires deployed instance)
 - 🔄 Geo-blocking (UIGEA compliance)
-- 🔄 Responsible gambling tools (limits, self-exclusion)
-- 📋 Real ZEC node connection (testnet first)
+- 🔄 Responsible gambling UI tools (limits, self-exclusion)
+- 🔄 Admin MFA and IP allowlist
+- 🔄 Redis-backed rate limiting for multi-instance deploys
+- 📋 E2E tests (Playwright)
 - 📋 Sports betting (Phase 2)
 - 📋 Poker (Phase 3)
 
@@ -89,13 +111,176 @@ npm run build
 npm start
 ```
 
+### Testing
+
+```bash
+# Run tests in watch mode
+npm test
+
+# Single run
+npx vitest run
+
+# With coverage
+npx vitest run --coverage
+```
+
+**255 tests** across 10 test files:
+
+| Module | File | Tests | Coverage |
+|--------|------|-------|----------|
+| Deck & Cards | `src/lib/game/deck.test.ts` | 72 | Hand values, shuffle determinism, Perfect Pairs |
+| Blackjack Engine | `src/lib/game/blackjack.test.ts` | 54 | Game state, actions, payouts, edge cases |
+| Wallet Utilities | `src/lib/wallet/index.test.ts` | 42 | Address validation, ZEC formatting, conversions |
+| Deposit Addresses | `src/lib/wallet/addresses.test.ts` | 18 | Memo round-trip, explorer URLs, deposit info |
+| Provably Fair | `src/lib/provably-fair/index.test.ts` | 25 | Seed generation, SHA-256 hashing, verification |
+| Admin Auth | `src/lib/admin/auth.test.ts` | 4 | Signed session token validity, tamper/expiry rejection |
+| Admin Rate Limit | `src/lib/admin/rate-limit.test.ts` | 2 | Bucket cap enforcement and retry header behavior |
+| QR Code | `src/components/ui/QRCode.test.tsx` | 15 | Canvas rendering, copy button |
+| Onboarding | `src/components/onboarding/OnboardingModal.test.tsx` | 13 | Flow navigation, address validation |
+| Deposit Polling | `src/hooks/useDepositPolling.test.ts` | 10 | Polling lifecycle, callbacks |
+
+## Deployment
+
+The app includes production-ready deployment configuration.
+
+### Docker
+
+```bash
+# Build and run with Docker Compose
+docker compose up --build
+
+# Or build the image directly
+docker build -t zcashino .
+docker run -p 3000:3000 zcashino
+```
+
+The Dockerfile uses multi-stage builds with Next.js standalone output for minimal image size (~200MB). The health check endpoint at `/api/health` is used for container liveness probes.
+
+### CI/CD
+
+GitHub Actions workflow (`.github/workflows/ci.yml`) runs on every push and PR:
+1. **Lint** - ESLint
+2. **Typecheck** - `tsc --noEmit`
+3. **Test** - `vitest run` (255 tests)
+4. **Build** - Production build verification
+
+### Production Database
+
+The app uses SQLite locally and is Turso-ready for production. Switch by changing `DATABASE_URL` to a Turso connection string — no code changes needed thanks to Prisma's LibSQL adapter.
+
+### Monitoring
+
+- **Sentry** - Error tracking across all Next.js runtimes (server, client, edge). Configure via `SENTRY_DSN` environment variable. No DSN = silently disabled.
+- **Health check** - `GET /api/health` returns DB status, uptime, and timestamp.
+
+See `DEPLOYMENT.md` for full deployment guide.
+
+## Zcash Node Connection
+
+The app supports both **demo mode** and **real zcashd node** connections. Configure via `.env`:
+
+```env
+# Network: testnet or mainnet
+ZCASH_NETWORK=testnet
+
+# RPC credentials (must match zcashd config)
+ZCASH_RPC_USER=zcashrpc
+ZCASH_RPC_PASSWORD=your_rpc_password
+ZCASH_RPC_URL=http://127.0.0.1:8232
+ZCASH_TESTNET_RPC_URL=http://127.0.0.1:18232
+
+# House wallet z-addresses (must be controlled by zcashd wallet)
+HOUSE_ZADDR_MAINNET=
+HOUSE_ZADDR_TESTNET=ztestsapling1...
+
+# Demo mode: set to false when connecting a real node
+DEMO_MODE=true
+
+# Admin dashboard access
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=change-this-password
+ADMIN_SESSION_SECRET=replace-with-a-long-random-secret
+
+# Sentry error tracking (optional - disabled if not set)
+SENTRY_DSN=https://your-dsn@sentry.io/project-id
+
+# Optional admin API rate limits
+ADMIN_RATE_LIMIT_LOGIN_MAX=10
+ADMIN_RATE_LIMIT_LOGIN_WINDOW_MS=900000
+ADMIN_RATE_LIMIT_READ_MAX=180
+ADMIN_RATE_LIMIT_READ_WINDOW_MS=60000
+ADMIN_RATE_LIMIT_ACTION_MAX=30
+ADMIN_RATE_LIMIT_ACTION_WINDOW_MS=60000
+```
+
+### Demo Mode (`DEMO_MODE=true`)
+- Mock commitments (prefixed `mock_`) for provably fair system
+- Instant withdrawal confirmation with `demo_tx_` hashes
+- No zcashd required — works out of the box for development
+
+### Real Node Mode (`DEMO_MODE=false`)
+- On-chain commitments via shielded transactions
+- Async withdrawals via `z_sendmany` with operation tracking
+- Deposit detection via `listunspent` / `z_listreceivedbyaddress`
+- Requires a running zcashd with the configured house z-address in the wallet
+
+## Withdrawals
+
+### Flow
+1. Player submits withdrawal request
+2. Balance deducted immediately (prevents double-spend)
+3. **Demo**: Transaction marked `confirmed` instantly
+4. **Real**: `z_sendmany` called, `operationId` stored, status returned as `pending`
+5. Frontend polls `/api/wallet` with `withdrawal-status` action every 5 seconds
+6. On operation success: transaction updated with `txHash`, marked `confirmed`
+7. On operation failure: balance refunded, transaction marked `failed`
+
+### Error Recovery
+- All failures automatically refund the player's balance
+- Admin can process stuck withdrawals via `POST /api/admin/pool` with `action: "process-withdrawals"`
+- Failure reasons are stored on the transaction record for audit
+
+## Admin Dashboard
+
+The admin dashboard lives at [`/admin`](http://localhost:3000/admin) and is protected by server-side auth.
+
+### What it does
+- Sign-in with `ADMIN_USERNAME` + `ADMIN_PASSWORD`
+- Uses signed, HttpOnly session cookies (`ADMIN_SESSION_SECRET`)
+- Rate-limits admin auth/read/action endpoints by IP
+- Persists admin audit logs in database (`AdminAuditLog`)
+- Shows platform metrics (liabilities, deposits, withdrawals, active games)
+- Shows infrastructure health (node sync + commitment pool status)
+- Lists pending withdrawals for operations triage
+- Shows recent admin audit events + security counters
+- Provides one-click admin actions:
+  - `refill`
+  - `cleanup`
+  - `init`
+  - `process-withdrawals`
+
+### Security notes
+- In production, `ADMIN_PASSWORD` must be at least 12 characters.
+- In production, `ADMIN_SESSION_SECRET` must be at least 32 characters.
+
+### API endpoints
+- `GET/POST/DELETE /api/admin/auth` - login/logout/session check
+- `GET /api/admin/overview` - dashboard data snapshot
+- `GET/POST /api/admin/pool` - protected pool/withdrawal operations
+- `GET /api/health` - liveness probe (DB status, uptime)
+
+### Related docs
+- `notes/admin-dashboard-architecture.md` - implementation and threat model notes
+- `notes/learnings.md` - launch and security learnings log
+
 ## Tech Stack
 
 - **Framework:** Next.js 16 (App Router)
 - **Language:** TypeScript
 - **Styling:** Tailwind CSS v4
-- **Database:** SQLite with Prisma 7 (LibSQL adapter)
+- **Database:** SQLite with Prisma 7 (LibSQL adapter, Turso-ready for production)
 - **Blockchain:** Zcash (ZEC)
+- **Testing:** Vitest 4 + React Testing Library
 
 ## Game Rules
 
@@ -180,17 +365,24 @@ zcashino-app/
 │   │   │   ├── game/       # Game actions API
 │   │   │   ├── wallet/     # Wallet API (deposits, withdrawals)
 │   │   │   ├── verify/     # Game verification API
-│   │   │   └── admin/pool/ # Commitment pool management API
+│   │   │   ├── health/     # Health check endpoint
+│   │   │   └── admin/      # Admin APIs (auth, overview, pool)
 │   │   ├── page.tsx        # Landing page
 │   │   ├── blackjack/      # Blackjack game UI
 │   │   ├── verify/         # Game verification page
+│   │   ├── reserves/       # Proof of reserves dashboard
+│   │   ├── terms/          # Terms of service
+│   │   ├── privacy/        # Privacy policy
+│   │   ├── responsible-gambling/ # Responsible gambling info
 │   │   └── globals.css     # Global styles & animations
 │   ├── components/
 │   │   ├── game/           # Card, Chip components
 │   │   ├── ui/             # PepeLogo, shared UI
-│   │   └── wallet/         # WalletPanel component
+│   │   ├── wallet/         # WalletPanel component
+│   │   └── onboarding/     # OnboardingModal component
 │   ├── hooks/
-│   │   └── useGameSounds.ts # Web Audio sound effects
+│   │   ├── useGameSounds.ts # Web Audio sound effects
+│   │   └── useDepositPolling.ts # Deposit confirmation polling
 │   ├── lib/
 │   │   ├── db.ts           # Prisma client with LibSQL adapter
 │   │   ├── game/           # Blackjack logic, deck utilities
@@ -205,12 +397,28 @@ zcashino-app/
 │   │       ├── addresses.ts # Address generation, deposit info
 │   │       └── rpc.ts      # Zcash RPC client (zcashd)
 │   └── types/              # TypeScript definitions
+├── instrumentation.ts      # Sentry server instrumentation
+├── instrumentation-client.ts # Sentry client instrumentation
+├── sentry.server.config.ts # Sentry server config
+├── sentry.edge.config.ts   # Sentry edge config
+├── Dockerfile              # Multi-stage production build
+├── docker-compose.yml      # Container orchestration
+├── DEPLOYMENT.md           # Production deployment guide
 └── prisma.config.ts        # Prisma 7 configuration
 ```
 
 ## License
 
 Proprietary - All rights reserved.
+
+## Security
+
+- **Cryptographic RNG:** All seed and nonce generation uses `node:crypto.randomBytes` (256-bit entropy)
+- **Security Headers:** CSP, HSTS, X-Frame-Options, X-Content-Type-Options, Permissions-Policy
+- **Rate Limiting:** Per-IP bucket-based limits on all public and admin API endpoints
+- **Admin Auth:** HMAC-SHA256 signed HttpOnly cookies with timing-safe comparison
+- **Audit Logging:** All admin actions (and failures) persisted to database
+- **Error Tracking:** Sentry integration across all runtimes (server, client, edge)
 
 ## Responsible Gambling
 

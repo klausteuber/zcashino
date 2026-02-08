@@ -209,6 +209,11 @@ export async function getPoolStatus(): Promise<PoolStatus> {
 export async function checkAndRefillPool(
   network: ZcashNetwork = DEFAULT_NETWORK
 ): Promise<void> {
+  // In demo mode, skip pool refill - mock commitments are created on-demand
+  if (process.env.DEMO_MODE === 'true') {
+    return
+  }
+
   const status = await getPoolStatus()
 
   if (status.available < POOL_MIN_SIZE) {
@@ -251,6 +256,12 @@ export async function cleanupExpiredCommitments(): Promise<number> {
 export async function initializePool(
   network: ZcashNetwork = DEFAULT_NETWORK
 ): Promise<void> {
+  // In demo mode, skip pool initialization - mock commitments are created on-demand
+  if (process.env.DEMO_MODE === 'true') {
+    console.log('[CommitmentPool] DEMO_MODE enabled, skipping pool initialization (using on-demand mock commitments)')
+    return
+  }
+
   console.log('[CommitmentPool] Initializing commitment pool...')
 
   // Clean up any expired commitments first

@@ -43,8 +43,7 @@ export default function Chip({
         font-bold
         shadow-lg
         flex items-center justify-center
-        transition-all duration-150
-        ${selected ? 'ring-4 ring-monaco-gold scale-110 shadow-[0_0_15px_rgba(201,162,39,0.5)]' : ''}
+        ${selected ? 'chip-select ring-4 ring-monaco-gold shadow-[0_0_15px_rgba(201,162,39,0.5)]' : 'transition-all duration-150'}
         ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:scale-105 active:scale-95 cursor-pointer'}
       `}
     >
