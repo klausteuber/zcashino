@@ -1,8 +1,8 @@
 {
-  "name": "zcashino-app",
+  "name": "cypherjester-app",
   "version": "0.1.0",
   "private": true,
-  "description": "Provably fair privacy casino with Zcash",
+  "description": "CypherJester - Provably fair privacy casino powered by Zcash",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

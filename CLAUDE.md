@@ -1,4 +1,4 @@
-# Zcashino Project Guidelines
+# CypherJester Project Guidelines
 
 ## Tech Stack
 - **Framework:** Next.js 16 (App Router) + React 19
@@ -9,10 +9,10 @@
 
 ## Design System Colors
 **Always use these - NEVER use zinc/amber/blue/gray:**
-- `pepe-green`, `pepe-green-light`, `pepe-green-dark`
-- `monaco-gold`, `champagne-gold`
-- `rich-black`, `ivory-white`
-- `velvet-purple`, `burgundy`
+- `jester-purple`, `jester-purple-light`, `jester-purple-dark`
+- `masque-gold`, `venetian-gold`
+- `midnight-black`, `bone-white`
+- `crimson-mask`, `blood-ruby`
 
 ## Mistakes to Avoid
 

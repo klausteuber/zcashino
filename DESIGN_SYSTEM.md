@@ -1,4 +1,4 @@
-# Zcashino Design System
+# CypherJester Design System
 
 ## Philosophy
 
@@ -12,30 +12,31 @@
 
 ## Colors
 
-### Primary Palette (Classy Pepe)
+### Primary Palette (CypherJester)
 
 | Name | Value | CSS Variable | Usage |
 |------|-------|--------------|-------|
-| Pepe Green | `#3D7A5A` | `--pepe-green` | Main felt color, brand |
-| Pepe Green Dark | `#2A5940` | `--pepe-green-dark` | Darker accents, card backs |
-| Pepe Green Light | `#5A9E78` | `--pepe-green-light` | Success states, highlights |
-| Monaco Gold | `#C9A227` | `--monaco-gold` | Primary accent, CTAs, wins |
-| Champagne Gold | `#E8D5A3` | `--champagne-gold` | Secondary accent, text |
-| Rich Black | `#0D0D0D` | `--rich-black` | Backgrounds, primary text |
-| Ivory White | `#FAF7F0` | `--ivory-white` | Cards, primary text on dark |
-| Velvet Purple | `#4A2C5A` | `--velvet-purple` | Split action, special states |
-| Burgundy | `#722F37` | `--burgundy` | Errors, loss states |
+| Jester Green | `#3D7A5A` | `--jester-purple` | Main felt color, brand |
+| Jester Green Dark | `#2A5940` | `--jester-purple-dark` | Darker accents, card backs |
+| Jester Green Light | `#5A9E78` | `--jester-purple-light` | Success states, highlights |
+| Masque Gold | `#C9A227` | `--masque-gold` | Primary accent, CTAs, wins |
+| Venetian Gold | `#E8D5A3` | `--venetian-gold` | Secondary accent, text |
+| Midnight Black | `#0D0D0D` | `--midnight-black` | Backgrounds, primary text |
+| Bone White | `#FAF7F0` | `--bone-white` | Cards, primary text on dark |
+| Crimson Mask | `#4A2C5A` | `--crimson-mask` | Split action, special states |
+| Blood Ruby | `#722F37` | `--blood-ruby` | Errors, loss states |
 
 ### DO NOT USE
 
 These colors break the design system and should never appear in component files:
 
-- `amber-*` (use `monaco-gold` or `champagne-gold`)
-- `zinc-*` (use `rich-black` + `champagne-gold/opacity`)
-- `blue-*` (use `pepe-green-light` for pending/incoming states)
-- `gray-*` (use `champagne-gold/opacity`)
-- `green-*` (use `pepe-green` variants)
-- `red-*` (use `burgundy`)
+- `amber-*` (use `masque-gold` or `venetian-gold`)
+- `zinc-*` (use `midnight-black` + `venetian-gold/opacity`)
+- `blue-*` (use `jester-purple-light` for pending/incoming states)
+- `gray-*` (use `venetian-gold/opacity`)
+- `green-*` (use `jester-purple-light` for success)
+- `red-*` (use `blood-ruby`)
+- `purple-*` (use `jester-purple` variants)
 
 ---
 
@@ -45,9 +46,9 @@ These colors break the design system and should never appear in component files:
 
 | Type | Font | Usage |
 |------|------|-------|
-| Display | Playfair Display | Headings, hero text |
-| Body | DM Sans | All body text |
-| Mono | JetBrains Mono | Addresses, hashes, numbers |
+| Display | Cinzel | Headings, hero text |
+| Body | Inter | All body text |
+| Mono | IBM Plex Mono | Addresses, hashes, numbers |
 
 ### Size Scale
 
@@ -69,11 +70,11 @@ Only use these three text color levels:
 
 | Tier | Class | Usage |
 |------|-------|-------|
-| Primary | `text-ivory-white` | Main headings, primary content |
-| Secondary | `text-champagne-gold` | Subheadings, labels, emphasis |
-| Tertiary | `text-champagne-gold/50` | Hints, captions, disabled text |
+| Primary | `text-bone-white` | Main headings, primary content |
+| Secondary | `text-venetian-gold` | Subheadings, labels, emphasis |
+| Tertiary | `text-venetian-gold/50` | Hints, captions, disabled text |
 
-**DO NOT USE:** `text-champagne-gold/40`, `/60`, `/70` - these create visual noise.
+**DO NOT USE:** `text-venetian-gold/40`, `/60`, `/70` - these create visual noise.
 
 ---
 
@@ -104,40 +105,40 @@ Only use these three text color levels:
 
 | Type | Classes | Usage |
 |------|---------|-------|
-| Primary | `btn-gold-shimmer text-rich-black` | Main CTAs (Deal, Play Again) |
-| Secondary | `bg-pepe-green text-ivory-white` | Secondary actions (Stand, No Thanks) |
-| Outline | `bg-transparent border-2 border-monaco-gold text-monaco-gold` | Contextual actions (Double) |
-| Subtle | `bg-velvet-purple/50 text-ivory-white` | Rare actions (Split) |
-| Danger | `bg-burgundy text-ivory-white` | Destructive actions |
+| Primary | `btn-gold-shimmer text-midnight-black` | Main CTAs (Deal, Play Again) |
+| Secondary | `bg-jester-purple text-bone-white` | Secondary actions (Stand, No Thanks) |
+| Outline | `bg-transparent border-2 border-masque-gold text-masque-gold` | Contextual actions (Double) |
+| Subtle | `bg-crimson-mask/50 text-bone-white` | Rare actions (Split) |
+| Danger | `bg-blood-ruby text-bone-white` | Destructive actions |
 
 ### Cards/Panels
 
 ```
-bg-rich-black/40
-border border-monaco-gold/20
-hover:border-monaco-gold/40
+bg-midnight-black/40
+border border-masque-gold/20
+hover:border-masque-gold/40
 rounded-xl
 ```
 
 ### Inputs
 
 ```
-bg-rich-black/60
-border border-monaco-gold/20
-focus:border-monaco-gold focus:ring-1 focus:ring-monaco-gold/30
+bg-midnight-black/60
+border border-masque-gold/20
+focus:border-masque-gold focus:ring-1 focus:ring-masque-gold/30
 rounded-lg
-text-ivory-white
-placeholder-champagne-gold/30
+text-bone-white
+placeholder-venetian-gold/30
 ```
 
 ### Badges
 
 | State | Classes |
 |-------|---------|
-| Demo | `bg-monaco-gold/10 border-monaco-gold/30 text-champagne-gold` |
-| Verified | `bg-pepe-green/10 border-pepe-green/30 text-pepe-green-light` |
-| Pending | `bg-monaco-gold/10 border-monaco-gold/30 text-champagne-gold animate-pulse` |
-| Incoming | `bg-pepe-green-light/10 border-pepe-green-light/30 text-pepe-green-light` |
+| Demo | `bg-masque-gold/10 border-masque-gold/30 text-venetian-gold` |
+| Verified | `bg-jester-purple/10 border-jester-purple/30 text-jester-purple-light` |
+| Pending | `bg-masque-gold/10 border-masque-gold/30 text-venetian-gold animate-pulse` |
+| Incoming | `bg-jester-purple-light/10 border-jester-purple-light/30 text-jester-purple-light` |
 
 ---
 
@@ -204,14 +205,14 @@ placeholder-champagne-gold/30
 ### Button Hierarchy (Blackjack Actions)
 
 1. **HIT** - Primary (gold) - most used action
-2. **STAND** - Secondary (green) - ends turn
+2. **STAND** - Secondary (purple) - ends turn
 3. **DOUBLE** - Outline (gold border) - contextual
-4. **SPLIT** - Subtle (purple) - rare action
+4. **SPLIT** - Subtle (crimson) - rare action
 
 ### Insurance Offer
 
 - **YES** - De-emphasized (outline, smaller text) - statistically poor choice
-- **NO** - Emphasized (solid green) - better for player
+- **NO** - Emphasized (solid purple) - better for player
 
 This design choice builds trust by not pushing bad bets.
 
@@ -234,7 +235,7 @@ src/
     globals.css      # Design tokens, animations, utilities
     layout.tsx       # Font loading
   components/
-    ui/              # Reusable primitives
+    ui/              # Reusable primitives (JesterLogo, etc.)
     game/            # Game-specific components
     wallet/          # Wallet components
     onboarding/      # Onboarding flow
@@ -242,14 +243,24 @@ src/
 
 ---
 
+## Background Texture
+
+The site uses a **diamond-tufted green felt** SVG pattern as the background texture (`.felt-texture` class in globals.css):
+- Diamond shapes in `jester-purple-dark` at 0.2 opacity
+- Gold dot at center at 0.1 opacity
+- Creates a classic casino felt table aesthetic
+
+---
+
 ## Migration Notes
 
 When updating existing code:
 
-1. Replace `amber-*` with `monaco-gold` / `champagne-gold`
-2. Replace `zinc-*` with `rich-black` / `champagne-gold/opacity`
-3. Replace `blue-*` with `pepe-green-light`
-4. Replace `gray-*` with `champagne-gold/opacity`
+1. Replace `amber-*` with `masque-gold` / `venetian-gold`
+2. Replace `zinc-*` with `midnight-black` / `venetian-gold/opacity`
+3. Replace `blue-*` with `jester-purple-light`
+4. Replace `gray-*` with `venetian-gold/opacity`
 5. Consolidate text opacities to only use `/50` for tertiary
-6. Replace `green-*` with `pepe-green` variants
-7. Replace `red-*` with `burgundy`
+6. Replace `green-*` with `jester-purple` variants
+7. Replace `red-*` with `blood-ruby`
+8. Replace `purple-*` with `jester-purple` variants (not generic Tailwind purple)

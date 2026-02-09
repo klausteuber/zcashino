@@ -155,3 +155,43 @@ npx prisma generate   # Regenerate client
 **Fix options:**
 - Build in an environment with outbound network access, or
 - switch to local/self-hosted fonts for fully offline builds.
+
+---
+
+## Brand Reskin / Multi-Skin
+
+### sed Order-Dependency for Color Class Replacement (2026-02-09)
+
+**Symptom:** After sed find-and-replace, some classes become malformed (e.g., `jester-purple-dark` instead of `jester-purple-dark`).
+
+**Cause:** When replacing `pepe-green` → `jester-purple`, the pattern also matches inside `pepe-green-dark` and `pepe-green-light`, producing incorrect results.
+
+**Fix:** Always process the longer, more specific names FIRST:
+1. `pepe-green-dark` → `jester-purple-dark`
+2. `pepe-green-light` → `jester-purple-light`
+3. `pepe-green` → `jester-purple` (base, last)
+
+### Split Brand Name in JSX (2026-02-09)
+
+**Symptom:** Brand name renders incorrectly after text find-and-replace.
+
+**Cause:** The brand name is split across two `<span>` elements for two-tone coloring:
+```jsx
+<span className="text-masque-gold">Cypher</span>
+<span className="text-bone-white">Jester</span>
+```
+A naive find-and-replace of "Zcashino" → "CypherJester" won't catch this pattern because the text is split across elements.
+
+**Fix:** Handle the split brand name as a separate search-and-replace pass targeting the HTML structure, not just plain text.
+
+### Hero Image Must Exist Before Deploy (2026-02-09)
+
+**Symptom:** Broken image on live site after deploy.
+
+**Cause:** Code references `/images/jester-mask.png` but the actual AI-generated image wasn't ready at deploy time.
+
+**Fix:** Copy the old image as a temporary placeholder before deploying:
+```bash
+cp public/images/pepe-tuxedo.jpg public/images/jester-mask.png
+```
+Replace with the real asset when available.

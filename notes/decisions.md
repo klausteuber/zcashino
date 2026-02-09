@@ -67,22 +67,22 @@ On-chain commitment scheme using Zcash blockchain.
 ## Design System
 
 ### Decision
-Custom color palette with gold/green theme.
+Custom color palette with gold/purple Venetian masquerade theme.
 
 ### Why
 - Luxury casino aesthetic
-- Brand differentiation
+- Brand differentiation (CypherJester identity)
 - Consistency across components
 
 ### Colors
-- Monaco gold / champagne gold (primary accent)
-- Pepe green variants (brand identity)
-- Rich black / ivory white (text/backgrounds)
-- Velvet purple / burgundy (secondary accents)
+- Masque gold / venetian gold (primary accent)
+- Jester purple variants (brand identity)
+- Midnight black / bone white (text/backgrounds)
+- Crimson mask / blood ruby (secondary accents)
 
 ### Rules
-- Never use generic Tailwind colors (zinc, amber, blue, gray)
-- Three-tier text opacity: 100%, champagne-gold, champagne-gold/50
+- Never use generic Tailwind colors (zinc, amber, blue, gray, purple)
+- Three-tier text opacity: 100%, venetian-gold, venetian-gold/50
 
 ---
 

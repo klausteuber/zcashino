@@ -84,6 +84,29 @@ In-memory limits and remote font fetches are acceptable in dev, but must be call
 6. **Isolate RPC calls behind an adapter layer.**
    All Zcash RPC calls are in `src/lib/wallet/rpc.ts`. When Zallet reaches beta, we swap the implementation without touching game logic. The account-based address model change will require rethinking deposit address generation.
 
+## Brand Reskin Learnings (2026-02-09)
+
+1. **Tailwind v4 `@theme` block makes full color system swaps clean.**
+   Define all custom colors in the `@theme` block in `globals.css` with `--color-` prefix. Tailwind v4 automatically generates utility classes (`text-jester-purple`, `bg-masque-gold`, etc.) from these definitions. Legacy aliases (e.g., `--casino-green: var(--jester-purple)`) can bridge the transition.
+
+2. **sed replacement order matters for overlapping names.**
+   When replacing color class names like `pepe-green-dark`, `pepe-green-light`, and `pepe-green`, process the longer/more-specific names FIRST. Otherwise `pepe-green` matches inside `pepe-green-dark` and produces `jester-purple-dark` → wrong. Order: `-dark` → `-light` → base.
+
+3. **Keep localStorage keys stable across rebrands.**
+   The `zcashino_*` localStorage keys (session, auto-bet, onboarding) were intentionally NOT renamed to avoid breaking existing user sessions. Internal identifiers don't need to match the public brand.
+
+4. **SVG data URIs work well for repeating background textures.**
+   The damask brocade pattern is defined as inline SVG in the `background-image` CSS property, encoded as a data URI. This avoids an extra network request and gives precise control over opacity, color, and repeat pattern.
+
+5. **Google Fonts swap via next/font is seamless.**
+   Changing from Playfair Display/DM Sans/JetBrains Mono to Cinzel/Inter/IBM Plex Mono required only updating the imports and CSS variable names in `layout.tsx`. The `next/font/google` system handles subsetting and self-hosting automatically.
+
+6. **Git rebase conflicts during deploy are manageable.**
+   When the remote had a mobile-responsive commit that modified the same header section being reskinned, the rebase produced 2 conflicts. Resolution: take the reskin colors but keep the remote's responsive classes (px-2 sm:px-4, etc.). Always check both sides before resolving.
+
+7. **Hero image placeholder prevents broken deploys.**
+   The AI-generated hero image wasn't ready at deploy time. Copying the old image as a placeholder (`cp pepe-tuxedo.jpg jester-mask.png`) prevented a broken `<img>` on the live site. Replace with real asset when available.
+
 ## Next Hardening Learnings To Capture
 
 1. Add Redis-backed shared rate limiting for multi-instance deploys.

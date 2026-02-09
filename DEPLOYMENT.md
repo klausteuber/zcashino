@@ -1,4 +1,4 @@
-# Zcashino Deployment Guide
+# CypherJester Deployment Guide
 
 ## Prerequisites
 
@@ -70,10 +70,10 @@ Place behind Nginx for TLS termination:
 ```nginx
 server {
     listen 443 ssl http2;
-    server_name zcashino.example.com;
+    server_name cypherjester.example.com;
 
-    ssl_certificate /etc/letsencrypt/live/zcashino.example.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/zcashino.example.com/privkey.pem;
+    ssl_certificate /etc/letsencrypt/live/cypherjester.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/cypherjester.example.com/privkey.pem;
 
     location / {
         proxy_pass http://127.0.0.1:3000;
@@ -86,7 +86,7 @@ server {
 
 server {
     listen 80;
-    server_name zcashino.example.com;
+    server_name cypherjester.example.com;
     return 301 https://$host$request_uri;
 }
 ```
@@ -100,14 +100,14 @@ For production, use Turso instead of local SQLite:
 curl -sSfL https://get.tur.so/install.sh | bash
 
 # Create database
-turso db create zcashino
+turso db create cypherjester
 
 # Get connection URL and token
-turso db show zcashino --url
-turso db tokens create zcashino
+turso db show cypherjester --url
+turso db tokens create cypherjester
 
 # Set in .env
-DATABASE_URL="libsql://zcashino-<your-org>.turso.io"
+DATABASE_URL="libsql://cypherjester-<your-org>.turso.io"
 TURSO_AUTH_TOKEN="<your-token>"
 
 # Push schema

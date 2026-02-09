@@ -1,6 +1,6 @@
-# Zcashino
+# CypherJester
 
-A provably fair, privacy-focused online casino powered by Zcash (ZEC).
+Play in Private. Verify in Public. A provably fair, privacy-focused online casino powered by Zcash (ZEC).
 
 ## Features
 
@@ -150,8 +150,8 @@ The app includes production-ready deployment configuration.
 docker compose up --build
 
 # Or build the image directly
-docker build -t zcashino .
-docker run -p 3000:3000 zcashino
+docker build -t cypherjester .
+docker run -p 3000:3000 cypherjester
 ```
 
 The Dockerfile uses multi-stage builds with Next.js standalone output for minimal image size (~200MB). The health check endpoint at `/api/health` is used for container liveness probes.
@@ -377,7 +377,7 @@ zcashino-app/
 │   │   └── globals.css     # Global styles & animations
 │   ├── components/
 │   │   ├── game/           # Card, Chip components
-│   │   ├── ui/             # PepeLogo, shared UI
+│   │   ├── ui/             # JesterLogo, shared UI
 │   │   ├── wallet/         # WalletPanel component
 │   │   └── onboarding/     # OnboardingModal component
 │   ├── hooks/
