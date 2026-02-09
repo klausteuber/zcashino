@@ -250,12 +250,13 @@ function executeHit(state: BlackjackGameState): BlackjackGameState {
   const newCards = [...currentHand.cards, newCard]
   const handValue = calculateHandValue(newCards)
   const busted = handValue > 21
+  const got21 = handValue === 21
 
   const updatedHand: Hand = {
     ...currentHand,
     cards: newCards,
     isBusted: busted,
-    isStood: busted  // Auto-stand if busted
+    isStood: busted || got21  // Auto-stand if busted or 21
   }
 
   const updatedHands = [...state.playerHands]
@@ -267,11 +268,13 @@ function executeHit(state: BlackjackGameState): BlackjackGameState {
     deck: remainingDeck,
     message: busted
       ? `Bust! Hand value: ${handValue}`
-      : `Hand value: ${handValue}. Hit or stand?`
+      : got21
+        ? `21! Standing automatically.`
+        : `Hand value: ${handValue}. Hit or stand?`
   }
 
-  // If busted, move to next hand or dealer turn
-  if (busted) {
+  // If busted or hit 21, move to next hand or dealer turn
+  if (busted || got21) {
     newState = advanceToNextHand(newState)
   }
 

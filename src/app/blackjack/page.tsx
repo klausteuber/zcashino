@@ -9,7 +9,7 @@ import { MIN_BET, MAX_BET, getAvailableActions } from '@/lib/game/blackjack'
 import PepeLogo from '@/components/ui/PepeLogo'
 import { useGameSounds } from '@/hooks/useGameSounds'
 import { OnboardingModal } from '@/components/onboarding/OnboardingModal'
-import { DepositWidget } from '@/components/wallet/DepositWidget'
+import { DepositWidget, DepositWidgetCompact } from '@/components/wallet/DepositWidget'
 
 const CHIP_VALUES = [0.01, 0.05, 0.1, 0.25, 0.5, 1]
 
@@ -709,32 +709,32 @@ export default function BlackjackPage() {
     <main className="min-h-screen felt-texture">
       {/* Header */}
       <header className="border-b border-monaco-gold/20 bg-rich-black/30 backdrop-blur-sm">
-        <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-          <a href="/" className="flex items-center gap-3">
+        <div className="container mx-auto px-2 sm:px-4 py-3 sm:py-4 flex justify-between items-center">
+          <a href="/" className="flex items-center gap-1.5 sm:gap-3 shrink-0">
             <PepeLogo size="md" className="text-pepe-green-light" />
-            <span className="text-xl font-display font-bold tracking-tight">
+            <span className="text-base sm:text-xl font-display font-bold tracking-tight">
               <span className="text-monaco-gold">Z</span>
               <span className="text-ivory-white">cashino</span>
             </span>
           </a>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-1 sm:gap-4">
             {/* Sound toggle */}
             <button
               onClick={() => {
                 toggleMute()
                 if (!isMuted) playSound('buttonClick')
               }}
-              className="text-champagne-gold/60 hover:text-monaco-gold transition-colors p-2"
+              className="text-champagne-gold/60 hover:text-monaco-gold transition-colors p-1.5 sm:p-2"
               title={isMuted ? 'Unmute sounds' : 'Mute sounds'}
             >
               {isMuted ? (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
                 </svg>
               ) : (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
                 </svg>
               )}
@@ -743,28 +743,37 @@ export default function BlackjackPage() {
             {/* Auto-bet toggle */}
             <button
               onClick={toggleAutoBet}
-              className={`transition-colors p-2 ${
+              className={`transition-colors p-1.5 sm:p-2 ${
                 isAutoBetEnabled
                   ? 'text-monaco-gold'
                   : 'text-champagne-gold/60 hover:text-monaco-gold'
               }`}
               title={isAutoBetEnabled ? 'Auto-bet enabled (click to disable)' : 'Auto-bet disabled (click to enable)'}
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                   d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
               </svg>
             </button>
 
-            {/* Balance & Deposit Widget */}
+            {/* Balance & Deposit Widget - compact on mobile, full on desktop */}
             <div className="relative">
-              <DepositWidget
-                balance={session?.balance ?? 0}
-                isDemo={session?.isDemo ?? session?.walletAddress?.startsWith('demo_') ?? true}
-                isAuthenticated={session?.isAuthenticated ?? false}
-                onDepositClick={() => setShowOnboarding(true)}
-                onSwitchToReal={session?.isDemo || session?.walletAddress?.startsWith('demo_') ? handleSwitchToReal : undefined}
-              />
+              <div className="hidden sm:block">
+                <DepositWidget
+                  balance={session?.balance ?? 0}
+                  isDemo={session?.isDemo ?? session?.walletAddress?.startsWith('demo_') ?? true}
+                  isAuthenticated={session?.isAuthenticated ?? false}
+                  onDepositClick={() => setShowOnboarding(true)}
+                  onSwitchToReal={session?.isDemo || session?.walletAddress?.startsWith('demo_') ? handleSwitchToReal : undefined}
+                />
+              </div>
+              <div className="block sm:hidden">
+                <DepositWidgetCompact
+                  balance={session?.balance ?? 0}
+                  isDemo={session?.isDemo ?? session?.walletAddress?.startsWith('demo_') ?? true}
+                  onDepositClick={() => setShowOnboarding(true)}
+                />
+              </div>
               {/* Floating payout indicator */}
               {showFloatingPayout && floatingPayoutAmount > 0 && (
                 <span className="absolute -top-2 -right-2 text-green-400 font-bold text-sm float-up z-10">
