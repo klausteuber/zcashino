@@ -32,7 +32,7 @@ services:
     ports:
       - "18232:18232"
     volumes:
-      - zcash-data:/root/.zcash
+      - zcash-data:/srv/zcashd/.zcash
     restart: unless-stopped
     # zcashd needs ~8GB RAM for shielded tx and ~60GB disk for testnet
     # Mainnet: change -testnet to nothing, -rpcport=8232, and expect ~300GB disk
