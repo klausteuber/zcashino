@@ -1,28 +1,28 @@
 @import "tailwindcss";
 
 :root {
-  --foreground-rgb: 250, 247, 240;
-  --background-start-rgb: 42, 89, 64;
-  --background-end-rgb: 61, 122, 90;
+  --foreground-rgb: 245, 240, 232;
+  --background-start-rgb: 74, 31, 115;
+  --background-end-rgb: 107, 47, 160;
 
-  /* Classy Pepe Color System */
-  --pepe-green: #3D7A5A;
-  --pepe-green-dark: #2A5940;
-  --pepe-green-light: #5A9E78;
-  --monaco-gold: #C9A227;
-  --champagne-gold: #E8D5A3;
-  --rich-black: #0D0D0D;
-  --ivory-white: #FAF7F0;
-  --velvet-purple: #4A2C5A;
-  --burgundy: #722F37;
+  /* CypherJester Color System */
+  --jester-purple: #6B2FA0;
+  --jester-purple-dark: #4A1F73;
+  --jester-purple-light: #9B5ED4;
+  --masque-gold: #D4A847;
+  --venetian-gold: #EEDCB3;
+  --midnight-black: #0A0A12;
+  --bone-white: #F5F0E8;
+  --crimson-mask: #8B2252;
+  --blood-ruby: #9B1B30;
 
   /* Legacy aliases for gradual migration */
-  --zec-yellow: var(--monaco-gold);
-  --zec-black: var(--rich-black);
-  --casino-green: var(--pepe-green-dark);
-  --casino-gold: var(--monaco-gold);
-  --casino-red: var(--burgundy);
-  --felt-green: var(--pepe-green);
+  --zec-yellow: var(--masque-gold);
+  --zec-black: var(--midnight-black);
+  --casino-green: var(--jester-purple-dark);
+  --casino-gold: var(--masque-gold);
+  --casino-red: var(--blood-ruby);
+  --felt-green: var(--jester-purple);
 }
 
 body {
@@ -37,7 +37,7 @@ body {
 
 /* Card styling */
 .playing-card {
-  background-color: var(--ivory-white);
+  background-color: var(--bone-white);
   border-radius: 0.5rem;
   box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.2), inset 0 1px 2px rgb(255 255 255 / 0.1);
   display: flex;
@@ -45,21 +45,21 @@ body {
   justify-content: center;
   font-weight: bold;
   aspect-ratio: 2.5 / 3.5;
-  border: 1px solid var(--champagne-gold);
+  border: 1px solid var(--venetian-gold);
 }
 
 .playing-card.red {
-  color: var(--burgundy);
+  color: var(--blood-ruby);
 }
 
 .playing-card.black {
-  color: var(--rich-black);
+  color: var(--midnight-black);
 }
 
-/* Felt table texture - Diamond tufted luxury pattern */
+/* Masquerade texture - Venetian damask luxury pattern */
 .felt-texture {
-  background-color: var(--pepe-green);
-  background-image: url("data:image/svg+xml,%3Csvg width='80' height='80' viewBox='0 0 80 80' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' stroke='%232A5940' stroke-width='1'%3E%3Cpath d='M0 40 L40 0 L80 40 L40 80 Z' stroke-opacity='0.2'/%3E%3Ccircle cx='40' cy='40' r='2' fill='%23C9A227' fill-opacity='0.1'/%3E%3C/g%3E%3C/svg%3E");
+  background-color: var(--jester-purple);
+  background-image: url("data:image/svg+xml,%3Csvg width='80' height='80' viewBox='0 0 80 80' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' stroke='%234A1F73' stroke-width='0.8'%3E%3Cpath d='M40 0 Q50 20 40 40 Q30 20 40 0Z' stroke-opacity='0.15'/%3E%3Cpath d='M0 40 Q20 30 40 40 Q20 50 0 40Z' stroke-opacity='0.15'/%3E%3Cpath d='M40 40 Q50 60 40 80 Q30 60 40 40Z' stroke-opacity='0.15'/%3E%3Cpath d='M40 40 Q60 30 80 40 Q60 50 40 40Z' stroke-opacity='0.15'/%3E%3Ccircle cx='40' cy='40' r='2' fill='%23D4A847' fill-opacity='0.08'/%3E%3C/g%3E%3C/svg%3E");
 }
 
 /* Chip styling */
@@ -77,38 +77,38 @@ body {
 
 /* Custom color utilities for Tailwind v4 */
 @theme {
-  /* Classy Pepe Color System */
-  --color-pepe-green: #3D7A5A;
-  --color-pepe-green-dark: #2A5940;
-  --color-pepe-green-light: #5A9E78;
-  --color-monaco-gold: #C9A227;
-  --color-champagne-gold: #E8D5A3;
-  --color-rich-black: #0D0D0D;
-  --color-ivory-white: #FAF7F0;
-  --color-velvet-purple: #4A2C5A;
-  --color-burgundy: #722F37;
+  /* CypherJester Color System */
+  --color-jester-purple: #6B2FA0;
+  --color-jester-purple-dark: #4A1F73;
+  --color-jester-purple-light: #9B5ED4;
+  --color-masque-gold: #D4A847;
+  --color-venetian-gold: #EEDCB3;
+  --color-midnight-black: #0A0A12;
+  --color-bone-white: #F5F0E8;
+  --color-crimson-mask: #8B2252;
+  --color-blood-ruby: #9B1B30;
 
   /* Legacy aliases */
-  --color-zec-yellow: #C9A227;
-  --color-zec-black: #0D0D0D;
-  --color-casino-green: #2A5940;
-  --color-casino-gold: #C9A227;
-  --color-casino-red: #722F37;
-  --color-felt-green: #3D7A5A;
+  --color-zec-yellow: #D4A847;
+  --color-zec-black: #0A0A12;
+  --color-casino-green: #4A1F73;
+  --color-casino-gold: #D4A847;
+  --color-casino-red: #9B1B30;
+  --color-felt-green: #6B2FA0;
 }
 
 /* Typography utilities */
 .font-display {
-  font-family: var(--font-playfair), Georgia, serif;
+  font-family: var(--font-cinzel), Georgia, serif;
 }
 
 .font-body {
-  font-family: var(--font-dm-sans), system-ui, sans-serif;
+  font-family: var(--font-inter), system-ui, sans-serif;
 }
 
 /* Gold gradient text effect */
 .text-gold-gradient {
-  background: linear-gradient(135deg, #C9A227 0%, #E8D5A3 50%, #C9A227 100%);
+  background: linear-gradient(135deg, #D4A847 0%, #EEDCB3 50%, #D4A847 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -116,14 +116,14 @@ body {
 
 /* Button hover animations */
 .btn-gold-shimmer {
-  background: linear-gradient(135deg, #C9A227 0%, #E8D5A3 50%, #C9A227 100%);
+  background: linear-gradient(135deg, #D4A847 0%, #EEDCB3 50%, #D4A847 100%);
   background-size: 200% 200%;
   transition: all 0.3s ease;
 }
 
 .btn-gold-shimmer:hover {
   background-position: 100% 0;
-  box-shadow: 0 4px 20px rgba(201, 162, 39, 0.4);
+  box-shadow: 0 4px 20px rgba(212, 168, 71, 0.4);
   transform: translateY(-1px);
 }
 
@@ -162,8 +162,8 @@ body {
 
 /* Win celebration */
 @keyframes goldPulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(201, 162, 39, 0.4); }
-  50% { box-shadow: 0 0 20px 10px rgba(201, 162, 39, 0.2); }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(212, 168, 71, 0.4); }
+  50% { box-shadow: 0 0 20px 10px rgba(212, 168, 71, 0.2); }
 }
 
 .win-glow {
@@ -172,15 +172,15 @@ body {
 
 /* Balance change animations */
 @keyframes balanceIncrease {
-  0% { transform: scale(1); color: var(--monaco-gold); }
+  0% { transform: scale(1); color: var(--masque-gold); }
   50% { transform: scale(1.15); color: #4ade80; }
-  100% { transform: scale(1); color: var(--monaco-gold); }
+  100% { transform: scale(1); color: var(--masque-gold); }
 }
 
 @keyframes balanceDecrease {
-  0% { transform: scale(1); color: var(--monaco-gold); }
-  50% { transform: scale(0.95); color: var(--burgundy); }
-  100% { transform: scale(1); color: var(--monaco-gold); }
+  0% { transform: scale(1); color: var(--masque-gold); }
+  50% { transform: scale(0.95); color: var(--blood-ruby); }
+  100% { transform: scale(1); color: var(--masque-gold); }
 }
 
 .balance-increase {
@@ -242,12 +242,12 @@ body {
 /* Blackjack celebration */
 @keyframes blackjackGlow {
   0%, 100% {
-    box-shadow: 0 0 10px rgba(201, 162, 39, 0.5), 0 0 20px rgba(201, 162, 39, 0.3);
-    text-shadow: 0 0 10px rgba(201, 162, 39, 0.8);
+    box-shadow: 0 0 10px rgba(212, 168, 71, 0.5), 0 0 20px rgba(212, 168, 71, 0.3);
+    text-shadow: 0 0 10px rgba(212, 168, 71, 0.8);
   }
   50% {
-    box-shadow: 0 0 25px rgba(201, 162, 39, 0.8), 0 0 40px rgba(201, 162, 39, 0.5);
-    text-shadow: 0 0 20px rgba(201, 162, 39, 1);
+    box-shadow: 0 0 25px rgba(212, 168, 71, 0.8), 0 0 40px rgba(212, 168, 71, 0.5);
+    text-shadow: 0 0 20px rgba(212, 168, 71, 1);
   }
 }
 
@@ -267,12 +267,12 @@ body {
   left: 50%;
   transform: translateX(-50%);
   padding: 0.5rem 0.75rem;
-  background: var(--rich-black);
-  color: var(--ivory-white);
+  background: var(--midnight-black);
+  color: var(--bone-white);
   font-size: 0.75rem;
   white-space: nowrap;
   border-radius: 0.375rem;
-  border: 1px solid var(--monaco-gold);
+  border: 1px solid var(--masque-gold);
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.2s ease;
@@ -336,10 +336,10 @@ body {
 /* Active hand pulse - gold glow for player's turn */
 @keyframes activeHandPulse {
   0%, 100% {
-    box-shadow: 0 0 10px rgba(201, 162, 39, 0.3), inset 0 0 5px rgba(201, 162, 39, 0.1);
+    box-shadow: 0 0 10px rgba(212, 168, 71, 0.3), inset 0 0 5px rgba(212, 168, 71, 0.1);
   }
   50% {
-    box-shadow: 0 0 20px rgba(201, 162, 39, 0.6), 0 0 30px rgba(201, 162, 39, 0.3), inset 0 0 10px rgba(201, 162, 39, 0.2);
+    box-shadow: 0 0 20px rgba(212, 168, 71, 0.6), 0 0 30px rgba(212, 168, 71, 0.3), inset 0 0 10px rgba(212, 168, 71, 0.2);
   }
 }
 
@@ -380,11 +380,11 @@ body {
 @keyframes dealerDrawing {
   0%, 100% {
     opacity: 1;
-    box-shadow: 0 0 10px rgba(201, 162, 39, 0.3);
+    box-shadow: 0 0 10px rgba(212, 168, 71, 0.3);
   }
   50% {
     opacity: 0.8;
-    box-shadow: 0 0 20px rgba(201, 162, 39, 0.5);
+    box-shadow: 0 0 20px rgba(212, 168, 71, 0.5);
   }
 }
 
@@ -397,7 +397,7 @@ body {
 
 /* Push/tie hand styling */
 .push-hand {
-  box-shadow: 0 0 15px rgba(201, 162, 39, 0.4);
+  box-shadow: 0 0 15px rgba(212, 168, 71, 0.4);
   border-radius: 12px;
   padding: 8px;
   margin: -8px;
@@ -560,10 +560,10 @@ body {
 
 /* Shadow system */
 :root {
-  --shadow-subtle: 0 2px 8px rgba(0, 0, 0, 0.15);
-  --shadow-card: 0 4px 16px rgba(0, 0, 0, 0.2);
-  --shadow-elevated: 0 8px 32px rgba(0, 0, 0, 0.3);
-  --shadow-gold-glow: 0 0 20px rgba(201, 162, 39, 0.3);
+  --shadow-subtle: 0 2px 8px rgba(0, 0, 0, 0.2);
+  --shadow-card: 0 4px 16px rgba(0, 0, 0, 0.25);
+  --shadow-elevated: 0 8px 32px rgba(0, 0, 0, 0.35);
+  --shadow-gold-glow: 0 0 20px rgba(212, 168, 71, 0.3);
 }
 
 /* Default transitions for interactive elements */

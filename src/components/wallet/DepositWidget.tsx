@@ -26,26 +26,26 @@ export function DepositWidget({
       <div className="flex items-center gap-4">
         {/* Demo Mode Badge */}
         <div
-          className="flex items-center gap-2 px-3 py-1.5 bg-monaco-gold/10 border border-monaco-gold/30 rounded-lg"
+          className="flex items-center gap-2 px-3 py-1.5 bg-masque-gold/10 border border-masque-gold/30 rounded-lg"
           onMouseEnter={() => setShowTooltip(true)}
           onMouseLeave={() => setShowTooltip(false)}
         >
-          <span className="text-champagne-gold text-sm">🎮</span>
-          <span className="text-champagne-gold text-sm font-medium">DEMO</span>
+          <span className="text-venetian-gold text-sm">🎮</span>
+          <span className="text-venetian-gold text-sm font-medium">DEMO</span>
         </div>
 
         {/* Balance */}
-        <div className="text-ivory-white font-mono">
-          <span className="text-champagne-gold/50 text-sm mr-1">Balance:</span>
+        <div className="text-bone-white font-mono">
+          <span className="text-venetian-gold/50 text-sm mr-1">Balance:</span>
           <span className="text-lg font-semibold">{balance.toFixed(4)}</span>
-          <span className="text-champagne-gold/50 ml-1">ZEC</span>
+          <span className="text-venetian-gold/50 ml-1">ZEC</span>
         </div>
 
         {/* Switch to Real Button */}
         {onSwitchToReal && (
           <button
             onClick={onSwitchToReal}
-            className="btn-gold-shimmer px-3 py-1.5 text-rich-black text-sm font-semibold rounded-lg"
+            className="btn-gold-shimmer px-3 py-1.5 text-midnight-black text-sm font-semibold rounded-lg"
           >
             Play with Real ZEC →
           </button>
@@ -53,7 +53,7 @@ export function DepositWidget({
 
         {/* Tooltip */}
         {showTooltip && (
-          <div className="absolute top-full mt-2 right-0 w-48 p-2 bg-rich-black border border-monaco-gold/30 rounded-lg shadow-xl text-xs text-champagne-gold z-50">
+          <div className="absolute top-full mt-2 right-0 w-48 p-2 bg-midnight-black border border-masque-gold/30 rounded-lg shadow-xl text-xs text-venetian-gold z-50">
             Demo mode uses play money. Switch to real ZEC to play for real.
           </div>
         )}
@@ -66,32 +66,32 @@ export function DepositWidget({
     <div className="flex items-center gap-4">
       {/* Auth Status Badge */}
       {isAuthenticated ? (
-        <div className="flex items-center gap-1.5 px-2 py-1 bg-pepe-green/10 border border-pepe-green/30 rounded-lg">
-          <span className="text-pepe-green-light text-xs">✓</span>
-          <span className="text-pepe-green-light text-xs font-medium">Verified</span>
+        <div className="flex items-center gap-1.5 px-2 py-1 bg-jester-purple/10 border border-jester-purple/30 rounded-lg">
+          <span className="text-jester-purple-light text-xs">✓</span>
+          <span className="text-jester-purple-light text-xs font-medium">Verified</span>
         </div>
       ) : (
-        <div className="flex items-center gap-1.5 px-2 py-1 bg-monaco-gold/10 border border-monaco-gold/30 rounded-lg animate-pulse">
-          <span className="text-champagne-gold text-xs">○</span>
-          <span className="text-champagne-gold text-xs font-medium">Pending</span>
+        <div className="flex items-center gap-1.5 px-2 py-1 bg-masque-gold/10 border border-masque-gold/30 rounded-lg animate-pulse">
+          <span className="text-venetian-gold text-xs">○</span>
+          <span className="text-venetian-gold text-xs font-medium">Pending</span>
         </div>
       )}
 
       {/* Balance Display */}
-      <div className="text-ivory-white font-mono">
-        <span className="text-champagne-gold/50 text-sm mr-1">Balance:</span>
+      <div className="text-bone-white font-mono">
+        <span className="text-venetian-gold/50 text-sm mr-1">Balance:</span>
         <span className="text-lg font-semibold">{balance.toFixed(4)}</span>
-        <span className="text-champagne-gold/50 ml-1">ZEC</span>
+        <span className="text-venetian-gold/50 ml-1">ZEC</span>
       </div>
 
       {/* Pending Deposit Indicator */}
       {pendingDeposit && (
-        <div className="flex items-center gap-2 px-3 py-1.5 bg-pepe-green-light/10 border border-pepe-green-light/30 rounded-lg">
-          <div className="w-2 h-2 bg-pepe-green-light rounded-full animate-pulse" />
-          <span className="text-pepe-green-light text-sm">
+        <div className="flex items-center gap-2 px-3 py-1.5 bg-jester-purple-light/10 border border-jester-purple-light/30 rounded-lg">
+          <div className="w-2 h-2 bg-jester-purple-light rounded-full animate-pulse" />
+          <span className="text-jester-purple-light text-sm">
             +{pendingDeposit.amount.toFixed(4)} incoming
           </span>
-          <span className="text-pepe-green-light/70 text-xs">
+          <span className="text-jester-purple-light/70 text-xs">
             ({pendingDeposit.confirmations}/3)
           </span>
         </div>
@@ -100,7 +100,7 @@ export function DepositWidget({
       {/* Deposit Button */}
       <button
         onClick={onDepositClick}
-        className="btn-gold-shimmer flex items-center gap-1.5 px-3 py-1.5 text-rich-black text-sm font-semibold rounded-lg"
+        className="btn-gold-shimmer flex items-center gap-1.5 px-3 py-1.5 text-midnight-black text-sm font-semibold rounded-lg"
       >
         <span>+</span>
         <span>Deposit</span>
@@ -119,23 +119,23 @@ export function DepositWidgetCompact({
   return (
     <div className="flex items-center gap-2">
       {isDemo && (
-        <span className="text-champagne-gold text-xs px-1.5 py-0.5 bg-monaco-gold/20 rounded">
+        <span className="text-venetian-gold text-xs px-1.5 py-0.5 bg-masque-gold/20 rounded">
           DEMO
         </span>
       )}
 
-      <div className="text-ivory-white font-mono text-sm">
+      <div className="text-bone-white font-mono text-sm">
         <span className="font-semibold">{balance.toFixed(4)}</span>
-        <span className="text-champagne-gold/50 ml-1">ZEC</span>
+        <span className="text-venetian-gold/50 ml-1">ZEC</span>
       </div>
 
       {pendingDeposit && (
-        <div className="w-2 h-2 bg-pepe-green-light rounded-full animate-pulse" title={`+${pendingDeposit.amount} incoming`} />
+        <div className="w-2 h-2 bg-jester-purple-light rounded-full animate-pulse" title={`+${pendingDeposit.amount} incoming`} />
       )}
 
       <button
         onClick={onDepositClick}
-        className="w-8 h-8 flex items-center justify-center btn-gold-shimmer text-rich-black font-bold rounded-lg"
+        className="w-8 h-8 flex items-center justify-center btn-gold-shimmer text-midnight-black font-bold rounded-lg"
       >
         +
       </button>

@@ -215,10 +215,18 @@ zcash-cli -testnet getblockchaininfo
 No hosted RPC provider supports the wallet methods we need (`z_sendmany`, `z_getnewaddress`, etc.) — these require private keys on the node. Self-hosted is the only option.
 
 **Recommended VPS providers:**
-- **Hetzner CX32** (~$8/month, 8 GB RAM, 80 GB disk) — sufficient for testnet
-- **Hetzner CPX31** (~$15/month, 8 GB RAM, 160 GB disk) — good for testnet + app
+- **1984.hosting** (~€60/month, 8 GB RAM, 4 CPU, 160 GB SSD, Iceland, no-KYC) — current deployment
+- **Hetzner CX32** (~$8/month, 8 GB RAM, 80 GB disk) — budget option (requires passport/KYC)
 - **DigitalOcean** ($48/month, 8 GB RAM, 160 GB disk) — testnet or small mainnet
 - For mainnet, add a volume for 300+ GB blockchain storage
+
+### Docker Gotchas
+
+- **Must use `node:22-slim`** (NOT `node:22-alpine`) — Alpine's musl libc breaks @libsql native binaries (`fcntl64: symbol not found`)
+- **Copy native modules to production stage**: `node_modules/.prisma`, `node_modules/@prisma`, `node_modules/@libsql`
+- **SQLite file permissions**: App runs as uid 1001 (nextjs user). DB file AND parent directory must be owned by 1001: `chown -R 1001:1001 /data`
+- **CSP + Next.js**: `script-src` must include `'unsafe-inline'` — Next.js uses inline scripts for hydration that CSP blocks otherwise
+- **Firewall**: Only expose ports 22 (SSH) and 3000 (app). Block zcashd RPC port (18232/8232) externally
 
 ## Monitoring
 

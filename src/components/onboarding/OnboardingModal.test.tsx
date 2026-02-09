@@ -46,8 +46,8 @@ describe('OnboardingModal', () => {
     it('should render welcome screen when modal is open', () => {
       render(<OnboardingModal {...defaultProps} />)
 
-      expect(screen.getByText('Welcome to Zcashino')).toBeInTheDocument()
-      expect(screen.getByText('Provably Fair ZEC Blackjack')).toBeInTheDocument()
+      expect(screen.getByText('Welcome to CypherJester')).toBeInTheDocument()
+      expect(screen.getByText('Play in Private. Verify in Public.')).toBeInTheDocument()
     })
 
     it('should show Demo and Real ZEC options', () => {
@@ -63,7 +63,7 @@ describe('OnboardingModal', () => {
     it('should not render when isOpen is false', () => {
       render(<OnboardingModal {...defaultProps} isOpen={false} />)
 
-      expect(screen.queryByText('Welcome to Zcashino')).not.toBeInTheDocument()
+      expect(screen.queryByText('Welcome to CypherJester')).not.toBeInTheDocument()
     })
 
     it('should call onDemoSelect and onClose when Demo is clicked', async () => {
@@ -120,7 +120,7 @@ describe('OnboardingModal', () => {
       await user.click(backButton)
 
       await waitFor(() => {
-        expect(screen.getByText('Welcome to Zcashino')).toBeInTheDocument()
+        expect(screen.getByText('Welcome to CypherJester')).toBeInTheDocument()
       })
     })
 

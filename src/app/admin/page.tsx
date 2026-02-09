@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
-import PepeLogo from '@/components/ui/PepeLogo'
+import JesterLogo from '@/components/ui/JesterLogo'
 
 type AdminAction = 'refill' | 'cleanup' | 'init' | 'process-withdrawals'
 
@@ -284,7 +284,7 @@ export default function AdminPage() {
   if (!authChecked) {
     return (
       <main className="min-h-screen felt-texture flex items-center justify-center px-4">
-        <div className="bg-rich-black/60 border border-monaco-gold/20 rounded-xl p-6 text-champagne-gold/70">
+        <div className="bg-midnight-black/60 border border-masque-gold/20 rounded-xl p-6 text-venetian-gold/70">
           Checking admin session...
         </div>
       </main>
@@ -294,22 +294,22 @@ export default function AdminPage() {
   if (!configured) {
     return (
       <main className="min-h-screen felt-texture flex items-center justify-center px-4">
-        <div className="w-full max-w-2xl bg-rich-black/70 border border-burgundy/60 rounded-xl p-6">
-          <h1 className="text-2xl font-display font-bold text-ivory-white mb-3">
+        <div className="w-full max-w-2xl bg-midnight-black/70 border border-blood-ruby/60 rounded-xl p-6">
+          <h1 className="text-2xl font-display font-bold text-bone-white mb-3">
             Admin Dashboard Not Configured
           </h1>
-          <p className="text-champagne-gold/70 mb-4">
+          <p className="text-venetian-gold/70 mb-4">
             Set the following environment variables before using `/admin`.
           </p>
-          <div className="bg-rich-black/70 border border-monaco-gold/20 rounded-lg p-4">
+          <div className="bg-midnight-black/70 border border-masque-gold/20 rounded-lg p-4">
             {missingConfig.length > 0 ? (
-              <ul className="list-disc list-inside text-monaco-gold font-mono text-sm">
+              <ul className="list-disc list-inside text-masque-gold font-mono text-sm">
                 {missingConfig.map((entry) => (
                   <li key={entry}>{entry}</li>
                 ))}
               </ul>
             ) : (
-              <div className="text-monaco-gold font-mono text-sm">
+              <div className="text-masque-gold font-mono text-sm">
                 ADMIN_PASSWORD, ADMIN_SESSION_SECRET
               </div>
             )}
@@ -322,50 +322,50 @@ export default function AdminPage() {
   if (!isAuthenticated) {
     return (
       <main className="min-h-screen felt-texture flex items-center justify-center px-4">
-        <div className="w-full max-w-md bg-rich-black/70 border border-monaco-gold/30 rounded-xl p-6">
+        <div className="w-full max-w-md bg-midnight-black/70 border border-masque-gold/30 rounded-xl p-6">
           <div className="flex items-center gap-3 mb-5">
-            <PepeLogo size="sm" className="text-pepe-green-light" />
-            <h1 className="text-2xl font-display font-bold text-ivory-white">
+            <JesterLogo size="sm" className="text-jester-purple-light" />
+            <h1 className="text-2xl font-display font-bold text-bone-white">
               Admin Sign In
             </h1>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
-              <label className="block text-sm text-champagne-gold/60 mb-1">
+              <label className="block text-sm text-venetian-gold/60 mb-1">
                 Username
               </label>
               <input
                 type="text"
                 value={username}
                 onChange={(event) => setUsername(event.target.value)}
-                className="w-full bg-rich-black/80 border border-monaco-gold/20 rounded px-3 py-2 text-ivory-white"
+                className="w-full bg-midnight-black/80 border border-masque-gold/20 rounded px-3 py-2 text-bone-white"
                 autoComplete="username"
                 required
               />
             </div>
 
             <div>
-              <label className="block text-sm text-champagne-gold/60 mb-1">
+              <label className="block text-sm text-venetian-gold/60 mb-1">
                 Password
               </label>
               <input
                 type="password"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
-                className="w-full bg-rich-black/80 border border-monaco-gold/20 rounded px-3 py-2 text-ivory-white"
+                className="w-full bg-midnight-black/80 border border-masque-gold/20 rounded px-3 py-2 text-bone-white"
                 autoComplete="current-password"
                 required
               />
             </div>
 
             {authError && (
-              <div className="text-sm text-burgundy">{authError}</div>
+              <div className="text-sm text-blood-ruby">{authError}</div>
             )}
 
             <button
               type="submit"
-              className="w-full btn-gold-shimmer text-rich-black px-4 py-2 rounded-lg font-semibold"
+              className="w-full btn-gold-shimmer text-midnight-black px-4 py-2 rounded-lg font-semibold"
             >
               Sign In
             </button>
@@ -377,15 +377,15 @@ export default function AdminPage() {
 
   return (
     <main className="min-h-screen felt-texture pb-10">
-      <header className="border-b border-monaco-gold/20 bg-rich-black/40 backdrop-blur-sm">
+      <header className="border-b border-masque-gold/20 bg-midnight-black/40 backdrop-blur-sm">
         <div className="container mx-auto px-4 py-4 flex flex-wrap gap-3 items-center justify-between">
           <div className="flex items-center gap-3">
-            <PepeLogo size="sm" className="text-pepe-green-light" />
+            <JesterLogo size="sm" className="text-jester-purple-light" />
             <div>
-              <h1 className="text-2xl font-display font-bold text-ivory-white">
+              <h1 className="text-2xl font-display font-bold text-bone-white">
                 Admin Dashboard
               </h1>
-              <p className="text-xs text-champagne-gold/60">
+              <p className="text-xs text-venetian-gold/60">
                 Signed in as {currentAdmin}
               </p>
             </div>
@@ -394,20 +394,20 @@ export default function AdminPage() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => fetchOverview()}
-              className="px-3 py-2 rounded-lg border border-monaco-gold/30 text-monaco-gold hover:bg-monaco-gold/10 transition-colors"
+              className="px-3 py-2 rounded-lg border border-masque-gold/30 text-masque-gold hover:bg-masque-gold/10 transition-colors"
               disabled={isLoadingOverview}
             >
               {isLoadingOverview ? 'Refreshing...' : 'Refresh'}
             </button>
             <a
               href="/blackjack"
-              className="px-3 py-2 rounded-lg border border-monaco-gold/20 text-champagne-gold/70 hover:text-monaco-gold"
+              className="px-3 py-2 rounded-lg border border-masque-gold/20 text-venetian-gold/70 hover:text-masque-gold"
             >
               Back to Game
             </a>
             <button
               onClick={handleLogout}
-              className="px-3 py-2 rounded-lg border border-burgundy/50 text-burgundy hover:bg-burgundy/10 transition-colors"
+              className="px-3 py-2 rounded-lg border border-blood-ruby/50 text-blood-ruby hover:bg-blood-ruby/10 transition-colors"
             >
               Sign Out
             </button>
@@ -417,13 +417,13 @@ export default function AdminPage() {
 
       <div className="container mx-auto px-4 py-6 space-y-6">
         {overviewError && (
-          <div className="bg-burgundy/20 border border-burgundy/50 rounded-lg p-3 text-burgundy">
+          <div className="bg-blood-ruby/20 border border-blood-ruby/50 rounded-lg p-3 text-blood-ruby">
             {overviewError}
           </div>
         )}
 
         {actionMessage && (
-          <div className="bg-monaco-gold/10 border border-monaco-gold/30 rounded-lg p-3 text-monaco-gold">
+          <div className="bg-masque-gold/10 border border-masque-gold/30 rounded-lg p-3 text-masque-gold">
             {actionMessage}
           </div>
         )}
@@ -459,8 +459,8 @@ export default function AdminPage() {
             </section>
 
             <section className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-              <div className="bg-rich-black/50 border border-monaco-gold/20 rounded-xl p-4">
-                <h2 className="text-lg font-semibold text-ivory-white mb-3">Infrastructure</h2>
+              <div className="bg-midnight-black/50 border border-masque-gold/20 rounded-xl p-4">
+                <h2 className="text-lg font-semibold text-bone-white mb-3">Infrastructure</h2>
                 <div className="space-y-2 text-sm">
                   <StatusRow
                     label="Network"
@@ -493,15 +493,15 @@ export default function AdminPage() {
                     positive={overview.pool.blockchainAvailable}
                   />
                   {overview.nodeStatus.error && (
-                    <div className="text-burgundy text-xs mt-2">
+                    <div className="text-blood-ruby text-xs mt-2">
                       Node error: {overview.nodeStatus.error}
                     </div>
                   )}
                 </div>
               </div>
 
-              <div className="bg-rich-black/50 border border-monaco-gold/20 rounded-xl p-4">
-                <h2 className="text-lg font-semibold text-ivory-white mb-3">Pool & Transaction Totals</h2>
+              <div className="bg-midnight-black/50 border border-masque-gold/20 rounded-xl p-4">
+                <h2 className="text-lg font-semibold text-bone-white mb-3">Pool & Transaction Totals</h2>
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <InlineStat label="Pool Available" value={String(overview.pool.available)} />
                   <InlineStat label="Pool Used" value={String(overview.pool.used)} />
@@ -516,44 +516,44 @@ export default function AdminPage() {
                     value={`${overview.transactions.confirmedWithdrawalCount} (${formatZec(overview.transactions.confirmedWithdrawalVolume)})`}
                   />
                 </div>
-                <div className="text-xs text-champagne-gold/50 mt-3">
+                <div className="text-xs text-venetian-gold/50 mt-3">
                   Last updated: {new Date(overview.timestamp).toLocaleString()}
                 </div>
               </div>
             </section>
 
-            <section className="bg-rich-black/50 border border-monaco-gold/20 rounded-xl p-4">
-              <h2 className="text-lg font-semibold text-ivory-white mb-3">Admin Actions</h2>
+            <section className="bg-midnight-black/50 border border-masque-gold/20 rounded-xl p-4">
+              <h2 className="text-lg font-semibold text-bone-white mb-3">Admin Actions</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {(Object.keys(ACTIONS) as AdminAction[]).map((action) => (
                   <button
                     key={action}
                     onClick={() => runAdminAction(action)}
                     disabled={runningAction !== null}
-                    className="text-left p-3 rounded-lg border border-monaco-gold/20 bg-rich-black/60 hover:border-monaco-gold/50 disabled:opacity-60"
+                    className="text-left p-3 rounded-lg border border-masque-gold/20 bg-midnight-black/60 hover:border-masque-gold/50 disabled:opacity-60"
                   >
-                    <div className="text-ivory-white font-medium">{ACTIONS[action].label}</div>
-                    <div className="text-xs text-champagne-gold/60 mt-1">
+                    <div className="text-bone-white font-medium">{ACTIONS[action].label}</div>
+                    <div className="text-xs text-venetian-gold/60 mt-1">
                       {ACTIONS[action].description}
                     </div>
                     {runningAction === action && (
-                      <div className="text-xs text-monaco-gold mt-2">Running...</div>
+                      <div className="text-xs text-masque-gold mt-2">Running...</div>
                     )}
                   </button>
                 ))}
               </div>
             </section>
 
-            <section className="bg-rich-black/50 border border-monaco-gold/20 rounded-xl p-4">
-              <h2 className="text-lg font-semibold text-ivory-white mb-3">Pending Withdrawals</h2>
+            <section className="bg-midnight-black/50 border border-masque-gold/20 rounded-xl p-4">
+              <h2 className="text-lg font-semibold text-bone-white mb-3">Pending Withdrawals</h2>
 
               {overview.pendingWithdrawals.length === 0 ? (
-                <div className="text-champagne-gold/60 text-sm">No pending withdrawals.</div>
+                <div className="text-venetian-gold/60 text-sm">No pending withdrawals.</div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-monaco-gold/20 text-champagne-gold/60">
+                      <tr className="border-b border-masque-gold/20 text-venetian-gold/60">
                         <th className="text-left py-2 px-1">Transaction</th>
                         <th className="text-left py-2 px-1">Session</th>
                         <th className="text-right py-2 px-1">Amount</th>
@@ -563,27 +563,27 @@ export default function AdminPage() {
                     </thead>
                     <tbody>
                       {overview.pendingWithdrawals.map((withdrawal) => (
-                        <tr key={withdrawal.id} className="border-b border-monaco-gold/10">
-                          <td className="py-2 px-1 font-mono text-ivory-white">
+                        <tr key={withdrawal.id} className="border-b border-masque-gold/10">
+                          <td className="py-2 px-1 font-mono text-bone-white">
                             {shortId(withdrawal.id)}
                           </td>
                           <td className="py-2 px-1">
-                            <div className="font-mono text-ivory-white">
+                            <div className="font-mono text-bone-white">
                               {shortId(withdrawal.sessionId)}
                             </div>
-                            <div className="text-xs text-champagne-gold/50">
+                            <div className="text-xs text-venetian-gold/50">
                               Balance {formatZec(withdrawal.sessionBalance)}
                             </div>
                           </td>
-                          <td className="py-2 px-1 text-right text-ivory-white font-mono">
+                          <td className="py-2 px-1 text-right text-bone-white font-mono">
                             {formatZec(withdrawal.amount)}
                           </td>
                           <td className="py-2 px-1">
-                            <span className="font-mono text-xs text-champagne-gold/70">
+                            <span className="font-mono text-xs text-venetian-gold/70">
                               {withdrawal.operationId ? shortId(withdrawal.operationId) : 'n/a'}
                             </span>
                           </td>
-                          <td className="py-2 px-1 text-right text-champagne-gold/50">
+                          <td className="py-2 px-1 text-right text-venetian-gold/50">
                             {new Date(withdrawal.createdAt).toLocaleString()}
                           </td>
                         </tr>
@@ -594,16 +594,16 @@ export default function AdminPage() {
               )}
             </section>
 
-            <section className="bg-rich-black/50 border border-monaco-gold/20 rounded-xl p-4">
-              <h2 className="text-lg font-semibold text-ivory-white mb-3">Recent Admin Audit Log</h2>
+            <section className="bg-midnight-black/50 border border-masque-gold/20 rounded-xl p-4">
+              <h2 className="text-lg font-semibold text-bone-white mb-3">Recent Admin Audit Log</h2>
 
               {overview.auditLogs.length === 0 ? (
-                <div className="text-champagne-gold/60 text-sm">No admin audit events yet.</div>
+                <div className="text-venetian-gold/60 text-sm">No admin audit events yet.</div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-monaco-gold/20 text-champagne-gold/60">
+                      <tr className="border-b border-masque-gold/20 text-venetian-gold/60">
                         <th className="text-left py-2 px-1">Time</th>
                         <th className="text-left py-2 px-1">Action</th>
                         <th className="text-left py-2 px-1">Actor</th>
@@ -614,29 +614,29 @@ export default function AdminPage() {
                     </thead>
                     <tbody>
                       {overview.auditLogs.map((entry) => (
-                        <tr key={entry.id} className="border-b border-monaco-gold/10">
-                          <td className="py-2 px-1 text-champagne-gold/50">
+                        <tr key={entry.id} className="border-b border-masque-gold/10">
+                          <td className="py-2 px-1 text-venetian-gold/50">
                             {new Date(entry.createdAt).toLocaleString()}
                           </td>
-                          <td className="py-2 px-1 font-mono text-ivory-white">
+                          <td className="py-2 px-1 font-mono text-bone-white">
                             {entry.action}
                           </td>
-                          <td className="py-2 px-1 text-ivory-white">
+                          <td className="py-2 px-1 text-bone-white">
                             {entry.actor || '-'}
                           </td>
-                          <td className="py-2 px-1 text-ivory-white font-mono">
+                          <td className="py-2 px-1 text-bone-white font-mono">
                             {entry.ipAddress || '-'}
                           </td>
                           <td className="py-2 px-1">
                             <span
                               className={
-                                entry.success ? 'text-pepe-green font-medium' : 'text-burgundy font-medium'
+                                entry.success ? 'text-jester-purple font-medium' : 'text-blood-ruby font-medium'
                               }
                             >
                               {entry.success ? 'Success' : 'Failed'}
                             </span>
                           </td>
-                          <td className="py-2 px-1 text-champagne-gold/70">
+                          <td className="py-2 px-1 text-venetian-gold/70">
                             {entry.details || '-'}
                           </td>
                         </tr>
@@ -655,10 +655,10 @@ export default function AdminPage() {
 
 function MetricCard({ label, value, detail }: { label: string; value: string; detail: string }) {
   return (
-    <div className="bg-rich-black/50 border border-monaco-gold/20 rounded-xl p-4">
-      <div className="text-sm text-champagne-gold/60">{label}</div>
-      <div className="text-2xl font-bold text-monaco-gold mt-1">{value}</div>
-      <div className="text-xs text-champagne-gold/50 mt-2">{detail}</div>
+    <div className="bg-midnight-black/50 border border-masque-gold/20 rounded-xl p-4">
+      <div className="text-sm text-venetian-gold/60">{label}</div>
+      <div className="text-2xl font-bold text-masque-gold mt-1">{value}</div>
+      <div className="text-xs text-venetian-gold/50 mt-2">{detail}</div>
     </div>
   )
 }
@@ -674,17 +674,17 @@ function StatusRow({
 }) {
   return (
     <div className="flex items-start justify-between gap-3">
-      <span className="text-champagne-gold/60">{label}</span>
-      <span className={positive ? 'text-pepe-green' : 'text-burgundy'}>{value}</span>
+      <span className="text-venetian-gold/60">{label}</span>
+      <span className={positive ? 'text-jester-purple' : 'text-blood-ruby'}>{value}</span>
     </div>
   )
 }
 
 function InlineStat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="bg-rich-black/70 border border-monaco-gold/10 rounded-lg p-2">
-      <div className="text-xs text-champagne-gold/60">{label}</div>
-      <div className="text-sm text-ivory-white mt-1">{value}</div>
+    <div className="bg-midnight-black/70 border border-masque-gold/10 rounded-lg p-2">
+      <div className="text-xs text-venetian-gold/60">{label}</div>
+      <div className="text-sm text-bone-white mt-1">{value}</div>
     </div>
   )
 }

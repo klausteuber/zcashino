@@ -20,10 +20,10 @@ const suitSymbols: Record<Suit, string> = {
 }
 
 const suitColors: Record<Suit, string> = {
-  hearts: 'text-burgundy',
-  diamonds: 'text-burgundy',
-  clubs: 'text-rich-black',
-  spades: 'text-rich-black'
+  hearts: 'text-blood-ruby',
+  diamonds: 'text-blood-ruby',
+  clubs: 'text-midnight-black',
+  spades: 'text-midnight-black'
 }
 
 const sizeClasses = {
@@ -86,7 +86,7 @@ export default function Card({ card, size = 'md', className = '', dealDelay = 0,
 
   // Render face-down card back
   const renderCardBack = () => (
-    <div className="w-3/4 h-3/4 border border-monaco-gold/30 rounded-md bg-pepe-green-dark/60 flex items-center justify-center relative overflow-hidden">
+    <div className="w-3/4 h-3/4 border border-masque-gold/30 rounded-md bg-jester-purple-dark/60 flex items-center justify-center relative overflow-hidden">
       {/* Diamond tufted pattern overlay */}
       <div
         className="absolute inset-0 opacity-20"
@@ -96,7 +96,7 @@ export default function Card({ card, size = 'md', className = '', dealDelay = 0,
         }}
       />
       {/* Crown icon */}
-      <svg className="w-6 h-6 text-monaco-gold/50" viewBox="0 0 24 24" fill="currentColor">
+      <svg className="w-6 h-6 text-masque-gold/50" viewBox="0 0 24 24" fill="currentColor">
         <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" />
       </svg>
     </div>
@@ -131,7 +131,7 @@ export default function Card({ card, size = 'md', className = '', dealDelay = 0,
   if (!showFace) {
     return (
       <div
-        className={`${sizeClasses[size]} bg-gradient-to-br from-pepe-green-dark via-pepe-green to-pepe-green-dark rounded-lg shadow-lg flex items-center justify-center border-2 border-monaco-gold/40 ${transitionClass} ${dealAnimationClass} ${flipAnimationClass} ${className}`}
+        className={`${sizeClasses[size]} bg-gradient-to-br from-jester-purple-dark via-jester-purple to-jester-purple-dark rounded-lg shadow-lg flex items-center justify-center border-2 border-masque-gold/40 ${transitionClass} ${dealAnimationClass} ${flipAnimationClass} ${className}`}
         style={{ transformStyle: 'preserve-3d' }}
       >
         {renderCardBack()}
@@ -142,7 +142,7 @@ export default function Card({ card, size = 'md', className = '', dealDelay = 0,
   // Card is face up
   return (
     <div
-      className={`${sizeClasses[size]} bg-ivory-white rounded-lg shadow-lg flex flex-col justify-between p-1.5 border border-champagne-gold/50 ${transitionClass} ${dealAnimationClass} ${flipAnimationClass} ${className}`}
+      className={`${sizeClasses[size]} bg-bone-white rounded-lg shadow-lg flex flex-col justify-between p-1.5 border border-venetian-gold/50 ${transitionClass} ${dealAnimationClass} ${flipAnimationClass} ${className}`}
       style={{ transformStyle: 'preserve-3d' }}
     >
       {renderCardFace()}
@@ -218,7 +218,7 @@ export function Hand({
   return (
     <div className={`flex flex-col items-center gap-2 ${className}`}>
       {label && (
-        <div className="text-sm font-semibold text-champagne-gold/50">{label}</div>
+        <div className="text-sm font-semibold text-venetian-gold/50">{label}</div>
       )}
 
       <div className={`flex ${highlightClass}`}>
@@ -238,10 +238,10 @@ export function Hand({
       {showValue && value !== undefined && (
         <div className={`text-lg font-bold px-3 py-1 rounded-full border transition-all duration-300
           ${isBust
-            ? 'text-burgundy bg-burgundy/20 border-burgundy/50 animate-pulse'
+            ? 'text-blood-ruby bg-blood-ruby/20 border-blood-ruby/50 animate-pulse'
             : isBlackjack
-              ? 'text-monaco-gold bg-monaco-gold/20 border-monaco-gold win-glow'
-              : 'text-monaco-gold bg-rich-black/40 border-monaco-gold/30'
+              ? 'text-masque-gold bg-masque-gold/20 border-masque-gold win-glow'
+              : 'text-masque-gold bg-midnight-black/40 border-masque-gold/30'
           }`}>
           {isBust && '💥 '}
           {value}

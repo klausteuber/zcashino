@@ -6,7 +6,7 @@ import { Hand } from '@/components/game/Card'
 import { ChipStack } from '@/components/game/Chip'
 import { calculateHandValue } from '@/lib/game/deck'
 import { MIN_BET, MAX_BET, getAvailableActions } from '@/lib/game/blackjack'
-import PepeLogo from '@/components/ui/PepeLogo'
+import JesterLogo from '@/components/ui/JesterLogo'
 import { useGameSounds } from '@/hooks/useGameSounds'
 import { OnboardingModal } from '@/components/onboarding/OnboardingModal'
 import { DepositWidget, DepositWidgetCompact } from '@/components/wallet/DepositWidget'
@@ -698,8 +698,8 @@ export default function BlackjackPage() {
     return (
       <main className="min-h-screen felt-texture flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
-          <PepeLogo size="lg" className="text-pepe-green-light animate-pulse" />
-          <div className="text-champagne-gold/50 font-display">Shuffling the deck...</div>
+          <JesterLogo size="lg" className="text-jester-purple-light animate-pulse" />
+          <div className="text-venetian-gold/50 font-display">Shuffling the deck...</div>
         </div>
       </main>
     )
@@ -708,13 +708,13 @@ export default function BlackjackPage() {
   return (
     <main className="min-h-screen felt-texture">
       {/* Header */}
-      <header className="border-b border-monaco-gold/20 bg-rich-black/30 backdrop-blur-sm">
+      <header className="border-b border-masque-gold/20 bg-midnight-black/30 backdrop-blur-sm">
         <div className="container mx-auto px-2 sm:px-4 py-3 sm:py-4 flex justify-between items-center">
           <a href="/" className="flex items-center gap-1.5 sm:gap-3 shrink-0">
-            <PepeLogo size="md" className="text-pepe-green-light" />
+            <JesterLogo size="md" className="text-jester-purple-light" />
             <span className="text-base sm:text-xl font-display font-bold tracking-tight">
-              <span className="text-monaco-gold">Z</span>
-              <span className="text-ivory-white">cashino</span>
+              <span className="text-masque-gold">Cypher</span>
+              <span className="text-bone-white">Jester</span>
             </span>
           </a>
 
@@ -725,7 +725,7 @@ export default function BlackjackPage() {
                 toggleMute()
                 if (!isMuted) playSound('buttonClick')
               }}
-              className="text-champagne-gold/60 hover:text-monaco-gold transition-colors p-1.5 sm:p-2"
+              className="text-venetian-gold/60 hover:text-masque-gold transition-colors p-1.5 sm:p-2"
               title={isMuted ? 'Unmute sounds' : 'Mute sounds'}
             >
               {isMuted ? (
@@ -745,8 +745,8 @@ export default function BlackjackPage() {
               onClick={toggleAutoBet}
               className={`transition-colors p-1.5 sm:p-2 ${
                 isAutoBetEnabled
-                  ? 'text-monaco-gold'
-                  : 'text-champagne-gold/60 hover:text-monaco-gold'
+                  ? 'text-masque-gold'
+                  : 'text-venetian-gold/60 hover:text-masque-gold'
               }`}
               title={isAutoBetEnabled ? 'Auto-bet enabled (click to disable)' : 'Auto-bet disabled (click to enable)'}
             >
@@ -788,7 +788,7 @@ export default function BlackjackPage() {
       {/* Error Display */}
       {error && (
         <div className="container mx-auto px-4 py-2">
-          <div className="bg-burgundy/30 border border-burgundy text-ivory-white px-4 py-2 rounded-lg">
+          <div className="bg-blood-ruby/30 border border-blood-ruby text-bone-white px-4 py-2 rounded-lg">
             {error}
           </div>
         </div>
@@ -814,30 +814,30 @@ export default function BlackjackPage() {
           ) : (
             <div className="h-28 flex flex-col items-center justify-center gap-2">
               <div className="flex gap-1">
-                <div className="w-2 h-2 bg-monaco-gold/30 rounded-full animate-pulse" style={{ animationDelay: '0ms' }} />
-                <div className="w-2 h-2 bg-monaco-gold/30 rounded-full animate-pulse" style={{ animationDelay: '150ms' }} />
-                <div className="w-2 h-2 bg-monaco-gold/30 rounded-full animate-pulse" style={{ animationDelay: '300ms' }} />
+                <div className="w-2 h-2 bg-masque-gold/30 rounded-full animate-pulse" style={{ animationDelay: '0ms' }} />
+                <div className="w-2 h-2 bg-masque-gold/30 rounded-full animate-pulse" style={{ animationDelay: '150ms' }} />
+                <div className="w-2 h-2 bg-masque-gold/30 rounded-full animate-pulse" style={{ animationDelay: '300ms' }} />
               </div>
-              <span className="text-champagne-gold/50 text-sm">Place your bet to deal</span>
+              <span className="text-venetian-gold/50 text-sm">Place your bet to deal</span>
             </div>
           )}
         </div>
 
         {/* Game Message */}
         <div className="text-center mb-4">
-          <div className={`bg-rich-black/40 inline-block px-6 py-3 rounded-lg border transition-all duration-300 ${
-            resultAnimation === 'blackjack' ? 'border-monaco-gold blackjack-glow result-pop' :
+          <div className={`bg-midnight-black/40 inline-block px-6 py-3 rounded-lg border transition-all duration-300 ${
+            resultAnimation === 'blackjack' ? 'border-masque-gold blackjack-glow result-pop' :
             resultAnimation === 'win' ? 'border-green-500 win-glow result-pop' :
-            resultAnimation === 'loss' ? 'border-burgundy loss-shake' :
-            resultAnimation === 'push' ? 'border-champagne-gold/50 result-pop' :
-            'border-monaco-gold/20'
+            resultAnimation === 'loss' ? 'border-blood-ruby loss-shake' :
+            resultAnimation === 'push' ? 'border-venetian-gold/50 result-pop' :
+            'border-masque-gold/20'
           }`}>
             <span className={`text-lg font-semibold ${
-              resultAnimation === 'blackjack' ? 'text-monaco-gold' :
+              resultAnimation === 'blackjack' ? 'text-masque-gold' :
               resultAnimation === 'win' ? 'text-green-400' :
-              resultAnimation === 'loss' ? 'text-burgundy' :
-              resultAnimation === 'push' ? 'text-champagne-gold' :
-              'text-ivory-white'
+              resultAnimation === 'loss' ? 'text-blood-ruby' :
+              resultAnimation === 'push' ? 'text-venetian-gold' :
+              'text-bone-white'
             }`}>
               {resultAnimation === 'blackjack' && '🎰 '}
               {gameState?.message || 'Place your bet to begin'}
@@ -851,12 +851,12 @@ export default function BlackjackPage() {
           <div className="text-center mb-4">
             <div className={`inline-block px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 ${
               gameState.perfectPairsResult.outcome === 'perfect'
-                ? 'bg-monaco-gold/20 border border-monaco-gold text-monaco-gold animate-pulse'
+                ? 'bg-masque-gold/20 border border-masque-gold text-masque-gold animate-pulse'
                 : gameState.perfectPairsResult.outcome === 'colored'
-                ? 'bg-velvet-purple/20 border border-velvet-purple text-velvet-purple'
+                ? 'bg-crimson-mask/20 border border-crimson-mask text-crimson-mask'
                 : gameState.perfectPairsResult.outcome === 'mixed'
-                ? 'bg-pepe-green/20 border border-pepe-green text-pepe-green'
-                : 'bg-burgundy/10 border border-burgundy/30 text-champagne-gold/60'
+                ? 'bg-jester-purple/20 border border-jester-purple text-jester-purple'
+                : 'bg-blood-ruby/10 border border-blood-ruby/30 text-venetian-gold/60'
             }`}>
               {gameState.perfectPairsResult.outcome === 'perfect' && (
                 <span>✨ Perfect Pair! +{gameState.perfectPairsResult.payout.toFixed(2)} ZEC (25:1) ✨</span>
@@ -902,7 +902,7 @@ export default function BlackjackPage() {
                       result={getHandResult(index)}
                     />
                     {hand.bet > 0 && (
-                      <div className="text-center mt-2 text-sm text-champagne-gold/60">
+                      <div className="text-center mt-2 text-sm text-venetian-gold/60">
                         Bet: {hand.bet.toFixed(2)} ZEC
                       </div>
                     )}
@@ -921,7 +921,7 @@ export default function BlackjackPage() {
             <>
               {/* Bet Selection */}
               <div className="text-center mb-4">
-                <div className="text-sm text-champagne-gold/60 mb-2 uppercase tracking-wide">Select Bet Amount</div>
+                <div className="text-sm text-venetian-gold/60 mb-2 uppercase tracking-wide">Select Bet Amount</div>
                 <ChipStack
                   values={CHIP_VALUES}
                   selectedValue={selectedBet}
@@ -936,14 +936,14 @@ export default function BlackjackPage() {
               {/* Current Bet Display */}
               <div className="text-center space-y-1">
                 <div>
-                  <span className="text-champagne-gold/60">Main Bet: </span>
-                  <span className="text-monaco-gold font-bold">{selectedBet} ZEC</span>
+                  <span className="text-venetian-gold/60">Main Bet: </span>
+                  <span className="text-masque-gold font-bold">{selectedBet} ZEC</span>
                 </div>
                 {perfectPairsBet > 0 && (
                   <div className="text-sm">
-                    <span className="text-champagne-gold/60">Total Bet: </span>
-                    <span className="text-monaco-gold font-bold">{(selectedBet + perfectPairsBet).toFixed(3)} ZEC</span>
-                    <span className="text-champagne-gold/40 text-xs ml-1">({selectedBet} + {perfectPairsBet.toFixed(3)} PP)</span>
+                    <span className="text-venetian-gold/60">Total Bet: </span>
+                    <span className="text-masque-gold font-bold">{(selectedBet + perfectPairsBet).toFixed(3)} ZEC</span>
+                    <span className="text-venetian-gold/40 text-xs ml-1">({selectedBet} + {perfectPairsBet.toFixed(3)} PP)</span>
                   </div>
                 )}
               </div>
@@ -955,10 +955,10 @@ export default function BlackjackPage() {
                     type="checkbox"
                     checked={perfectPairsBet > 0}
                     onChange={(e) => setPerfectPairsBet(e.target.checked ? selectedBet * 0.1 : 0)}
-                    className="w-4 h-4 accent-monaco-gold"
+                    className="w-4 h-4 accent-masque-gold"
                     disabled={isLoading}
                   />
-                  <span className="text-sm text-champagne-gold/70">
+                  <span className="text-sm text-venetian-gold/70">
                     Perfect Pairs (+{(selectedBet * 0.1).toFixed(3)} ZEC)
                   </span>
                 </label>
@@ -968,7 +968,7 @@ export default function BlackjackPage() {
                   onMouseEnter={() => setShowPerfectPairsTooltip(true)}
                   onMouseLeave={() => setShowPerfectPairsTooltip(false)}
                   onClick={() => setShowPerfectPairsTooltip(!showPerfectPairsTooltip)}
-                  className="text-champagne-gold/50 hover:text-monaco-gold transition-colors"
+                  className="text-venetian-gold/50 hover:text-masque-gold transition-colors"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -976,22 +976,22 @@ export default function BlackjackPage() {
                 </button>
                 {/* Tooltip */}
                 {showPerfectPairsTooltip && (
-                  <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 bg-rich-black border border-monaco-gold rounded-lg p-3 shadow-xl z-50 w-64">
-                    <div className="text-xs text-ivory-white font-bold mb-2">Perfect Pairs Side Bet</div>
+                  <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 bg-midnight-black border border-masque-gold rounded-lg p-3 shadow-xl z-50 w-64">
+                    <div className="text-xs text-bone-white font-bold mb-2">Perfect Pairs Side Bet</div>
                     <div className="space-y-1.5 text-xs">
                       {Object.entries(PERFECT_PAIRS_INFO).map(([key, info]) => (
                         <div key={key} className="flex justify-between">
-                          <span className="text-champagne-gold/70">{info.name}</span>
-                          <span className="text-monaco-gold font-mono">{info.multiplier}</span>
+                          <span className="text-venetian-gold/70">{info.name}</span>
+                          <span className="text-masque-gold font-mono">{info.multiplier}</span>
                         </div>
                       ))}
                     </div>
-                    <div className="text-xs text-champagne-gold/50 mt-2 pt-2 border-t border-monaco-gold/20">
+                    <div className="text-xs text-venetian-gold/50 mt-2 pt-2 border-t border-masque-gold/20">
                       Win if your first two cards are a pair!
                     </div>
                     {/* Tooltip arrow */}
                     <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-px">
-                      <div className="border-8 border-transparent border-t-monaco-gold"></div>
+                      <div className="border-8 border-transparent border-t-masque-gold"></div>
                     </div>
                   </div>
                 )}
@@ -1001,7 +1001,7 @@ export default function BlackjackPage() {
               <button
                 onClick={handlePlaceBet}
                 disabled={isLoading || !session || selectedBet > session.balance}
-                className="btn-gold-shimmer text-rich-black px-8 py-3 rounded-lg font-bold text-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                className="btn-gold-shimmer text-midnight-black px-8 py-3 rounded-lg font-bold text-lg disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isLoading ? 'Dealing...' : 'DEAL'}
               </button>
@@ -1011,8 +1011,8 @@ export default function BlackjackPage() {
           {/* Insurance Offer */}
           {showInsuranceOffer && (
             <div className="flex flex-col items-center gap-4 mb-4">
-              <div className="bg-rich-black/60 px-4 py-2 rounded-lg border border-monaco-gold/20">
-                <span className="text-champagne-gold/50 text-sm">
+              <div className="bg-midnight-black/60 px-4 py-2 rounded-lg border border-masque-gold/20">
+                <span className="text-venetian-gold/50 text-sm">
                   Insurance? ({insuranceAmount.toFixed(4)} ZEC - pays 2:1 if dealer has Blackjack)
                 </span>
               </div>
@@ -1023,7 +1023,7 @@ export default function BlackjackPage() {
                     handleInsurance(true)
                   }}
                   disabled={isLoading || insuranceAmount > (session?.balance ?? 0)}
-                  className="bg-transparent border border-champagne-gold/50 text-champagne-gold px-6 py-2 rounded-lg font-medium hover:bg-champagne-gold/10 hover:scale-105 active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:hover:scale-100"
+                  className="bg-transparent border border-venetian-gold/50 text-venetian-gold px-6 py-2 rounded-lg font-medium hover:bg-venetian-gold/10 hover:scale-105 active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:hover:scale-100"
                 >
                   Yes ({insuranceAmount.toFixed(2)} ZEC)
                 </button>
@@ -1033,7 +1033,7 @@ export default function BlackjackPage() {
                     handleInsurance(false)
                   }}
                   disabled={isLoading}
-                  className="bg-pepe-green text-ivory-white px-6 py-2 rounded-lg font-bold hover:bg-pepe-green-light hover:scale-105 active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:hover:scale-100 shadow-lg"
+                  className="bg-jester-purple text-bone-white px-6 py-2 rounded-lg font-bold hover:bg-jester-purple-light hover:scale-105 active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:hover:scale-100 shadow-lg"
                 >
                   No Thanks
                 </button>
@@ -1050,7 +1050,7 @@ export default function BlackjackPage() {
                     handleAction('hit')
                   }}
                   disabled={isLoading}
-                  className="btn-gold-shimmer text-rich-black px-8 py-3 rounded-lg font-bold hover:scale-105 active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:hover:scale-100 shadow-lg"
+                  className="btn-gold-shimmer text-midnight-black px-8 py-3 rounded-lg font-bold hover:scale-105 active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:hover:scale-100 shadow-lg"
                 >
                   HIT
                 </button>
@@ -1062,7 +1062,7 @@ export default function BlackjackPage() {
                     handleAction('stand')
                   }}
                   disabled={isLoading}
-                  className="bg-pepe-green text-ivory-white px-8 py-3 rounded-lg font-bold hover:bg-pepe-green-light hover:scale-105 active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:hover:scale-100 shadow-lg hover:shadow-pepe-green/30"
+                  className="bg-jester-purple text-bone-white px-8 py-3 rounded-lg font-bold hover:bg-jester-purple-light hover:scale-105 active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:hover:scale-100 shadow-lg hover:shadow-jester-purple/30"
                 >
                   STAND
                 </button>
@@ -1074,7 +1074,7 @@ export default function BlackjackPage() {
                     handleAction('double')
                   }}
                   disabled={isLoading}
-                  className="bg-transparent border-2 border-monaco-gold text-monaco-gold px-8 py-3 rounded-lg font-bold hover:bg-monaco-gold/10 hover:scale-105 active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:hover:scale-100"
+                  className="bg-transparent border-2 border-masque-gold text-masque-gold px-8 py-3 rounded-lg font-bold hover:bg-masque-gold/10 hover:scale-105 active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:hover:scale-100"
                 >
                   DOUBLE
                 </button>
@@ -1086,7 +1086,7 @@ export default function BlackjackPage() {
                     handleAction('split')
                   }}
                   disabled={isLoading}
-                  className="bg-velvet-purple/50 text-ivory-white px-8 py-3 rounded-lg font-bold hover:bg-velvet-purple/70 hover:scale-105 active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:hover:scale-100 shadow-lg"
+                  className="bg-crimson-mask/50 text-bone-white px-8 py-3 rounded-lg font-bold hover:bg-crimson-mask/70 hover:scale-105 active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:hover:scale-100 shadow-lg"
                 >
                   SPLIT
                 </button>
@@ -1096,9 +1096,9 @@ export default function BlackjackPage() {
 
           {/* Compact next-bet adjuster during active play */}
           {gameState && gameState.phase !== 'complete' && (
-            <div className="mt-4 bg-rich-black/40 rounded-lg border border-monaco-gold/10 px-4 py-2.5 w-full max-w-md">
+            <div className="mt-4 bg-midnight-black/40 rounded-lg border border-masque-gold/10 px-4 py-2.5 w-full max-w-md">
               <div className="flex items-center justify-between gap-3">
-                <span className="text-xs text-champagne-gold/40 uppercase tracking-wide whitespace-nowrap">Next hand</span>
+                <span className="text-xs text-venetian-gold/40 uppercase tracking-wide whitespace-nowrap">Next hand</span>
                 <div className="flex items-center gap-1.5">
                   {CHIP_VALUES.map(value => (
                     <button
@@ -1110,8 +1110,8 @@ export default function BlackjackPage() {
                       }}
                       className={`w-7 h-7 rounded-full text-[10px] font-bold transition-all border ${
                         selectedBet === value
-                          ? 'border-monaco-gold bg-monaco-gold/30 text-monaco-gold'
-                          : 'border-champagne-gold/20 text-champagne-gold/50 hover:border-monaco-gold/40'
+                          ? 'border-masque-gold bg-masque-gold/30 text-masque-gold'
+                          : 'border-venetian-gold/20 text-venetian-gold/50 hover:border-masque-gold/40'
                       }`}
                     >
                       {value}
@@ -1123,9 +1123,9 @@ export default function BlackjackPage() {
                     type="checkbox"
                     checked={perfectPairsBet > 0}
                     onChange={(e) => setPerfectPairsBet(e.target.checked ? selectedBet * 0.1 : 0)}
-                    className="w-3 h-3 accent-monaco-gold"
+                    className="w-3 h-3 accent-masque-gold"
                   />
-                  <span className="text-[10px] text-champagne-gold/60">PP</span>
+                  <span className="text-[10px] text-venetian-gold/60">PP</span>
                 </label>
               </div>
             </div>
@@ -1143,7 +1143,7 @@ export default function BlackjackPage() {
                 if (payout > 0) {
                   return (
                     <div className={`text-2xl font-bold px-6 py-3 rounded-lg result-pop ${
-                      resultAnimation === 'blackjack' ? 'blackjack-glow bg-monaco-gold/20 text-monaco-gold' : 'win-glow bg-green-500/20 text-green-400'
+                      resultAnimation === 'blackjack' ? 'blackjack-glow bg-masque-gold/20 text-masque-gold' : 'win-glow bg-green-500/20 text-green-400'
                     }`}>
                       +{payout.toFixed(4)} ZEC
                       {netResult > 0 && (
@@ -1153,13 +1153,13 @@ export default function BlackjackPage() {
                   )
                 } else if (isPush) {
                   return (
-                    <div className="text-xl font-bold text-champagne-gold px-6 py-3 rounded-lg bg-champagne-gold/10 border border-champagne-gold/30 result-pop">
+                    <div className="text-xl font-bold text-venetian-gold px-6 py-3 rounded-lg bg-venetian-gold/10 border border-venetian-gold/30 result-pop">
                       Push - Bet Returned
                     </div>
                   )
                 } else {
                   return (
-                    <div className="text-xl font-bold text-burgundy px-6 py-3 rounded-lg bg-burgundy/10 border border-burgundy/30 loss-shake">
+                    <div className="text-xl font-bold text-blood-ruby px-6 py-3 rounded-lg bg-blood-ruby/10 border border-blood-ruby/30 loss-shake">
                       -{totalBet.toFixed(4)} ZEC
                     </div>
                   )
@@ -1169,7 +1169,7 @@ export default function BlackjackPage() {
               {/* Auto-bet countdown indicator */}
               {isAutoBetEnabled && isAutoBetting && autoBetCountdown !== null && (
                 <div className="flex flex-col items-center gap-2 animate-pulse">
-                  <div className="text-sm text-monaco-gold flex items-center gap-2">
+                  <div className="text-sm text-masque-gold flex items-center gap-2">
                     <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                         d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -1178,7 +1178,7 @@ export default function BlackjackPage() {
                   </div>
                   <button
                     onClick={cancelAutoBet}
-                    className="text-xs text-champagne-gold/60 hover:text-burgundy transition-colors underline"
+                    className="text-xs text-venetian-gold/60 hover:text-blood-ruby transition-colors underline"
                   >
                     Cancel
                   </button>
@@ -1187,7 +1187,7 @@ export default function BlackjackPage() {
 
               {/* Insufficient balance warning */}
               {isAutoBetEnabled && session && selectedBet + perfectPairsBet > session.balance && (
-                <div className="text-sm text-burgundy bg-burgundy/10 px-4 py-2 rounded-lg border border-burgundy/30">
+                <div className="text-sm text-blood-ruby bg-blood-ruby/10 px-4 py-2 rounded-lg border border-blood-ruby/30">
                   Auto-bet paused: Insufficient balance for {selectedBet} ZEC bet
                 </div>
               )}
@@ -1196,17 +1196,17 @@ export default function BlackjackPage() {
               {!isAutoBetting && (
                 <button
                   onClick={handleNewRound}
-                  className="btn-gold-shimmer text-rich-black px-10 py-4 rounded-lg font-bold text-xl hover:scale-105 active:scale-95 transition-all duration-150 shadow-lg hover:shadow-monaco-gold/40 mt-2"
+                  className="btn-gold-shimmer text-midnight-black px-10 py-4 rounded-lg font-bold text-xl hover:scale-105 active:scale-95 transition-all duration-150 shadow-lg hover:shadow-masque-gold/40 mt-2"
                 >
                   PLAY AGAIN
                 </button>
               )}
 
               {/* Adjust next bet panel */}
-              <div className="bg-rich-black/50 rounded-lg border border-monaco-gold/20 p-4 w-full max-w-md">
-                <div className="text-xs text-champagne-gold/50 uppercase tracking-wide mb-3 text-center">
+              <div className="bg-midnight-black/50 rounded-lg border border-masque-gold/20 p-4 w-full max-w-md">
+                <div className="text-xs text-venetian-gold/50 uppercase tracking-wide mb-3 text-center">
                   {isAutoBetEnabled ? 'Next Auto-Bet' : 'Next Bet'}
-                  {isAutoBetEnabled && <span className="text-pepe-green-light ml-1">(auto)</span>}
+                  {isAutoBetEnabled && <span className="text-jester-purple-light ml-1">(auto)</span>}
                 </div>
                 {/* Chip selector row */}
                 <div className="flex justify-center gap-1.5 mb-3">
@@ -1221,8 +1221,8 @@ export default function BlackjackPage() {
                       }}
                       className={`w-10 h-10 rounded-full text-xs font-bold transition-all duration-150 border-2 ${
                         selectedBet === value
-                          ? 'border-monaco-gold bg-monaco-gold/30 text-monaco-gold scale-110 shadow-lg shadow-monaco-gold/20'
-                          : 'border-champagne-gold/30 bg-rich-black/60 text-champagne-gold/70 hover:border-monaco-gold/50 hover:scale-105'
+                          ? 'border-masque-gold bg-masque-gold/30 text-masque-gold scale-110 shadow-lg shadow-masque-gold/20'
+                          : 'border-venetian-gold/30 bg-midnight-black/60 text-venetian-gold/70 hover:border-masque-gold/50 hover:scale-105'
                       }`}
                     >
                       {value}
@@ -1236,18 +1236,18 @@ export default function BlackjackPage() {
                       type="checkbox"
                       checked={perfectPairsBet > 0}
                       onChange={(e) => setPerfectPairsBet(e.target.checked ? selectedBet * 0.1 : 0)}
-                      className="w-3.5 h-3.5 accent-monaco-gold"
+                      className="w-3.5 h-3.5 accent-masque-gold"
                     />
-                    <span className="text-xs text-champagne-gold/70">
+                    <span className="text-xs text-venetian-gold/70">
                       Perfect Pairs
                     </span>
                   </label>
                   <div className="text-xs text-right">
-                    <span className="text-monaco-gold font-bold">{selectedBet}</span>
+                    <span className="text-masque-gold font-bold">{selectedBet}</span>
                     {perfectPairsBet > 0 && (
-                      <span className="text-champagne-gold/50"> + {perfectPairsBet.toFixed(3)} PP</span>
+                      <span className="text-venetian-gold/50"> + {perfectPairsBet.toFixed(3)} PP</span>
                     )}
-                    <span className="text-champagne-gold/40"> ZEC</span>
+                    <span className="text-venetian-gold/40"> ZEC</span>
                   </div>
                 </div>
               </div>
@@ -1257,42 +1257,42 @@ export default function BlackjackPage() {
 
         {/* Provably Fair Info */}
         <div className="mt-12 text-center">
-          <details className="bg-rich-black/40 rounded-lg p-4 max-w-lg mx-auto border border-monaco-gold/20">
-            <summary className="cursor-pointer text-champagne-gold/60 hover:text-monaco-gold transition-colors flex items-center justify-center gap-2">
+          <details className="bg-midnight-black/40 rounded-lg p-4 max-w-lg mx-auto border border-masque-gold/20">
+            <summary className="cursor-pointer text-venetian-gold/60 hover:text-masque-gold transition-colors flex items-center justify-center gap-2">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
               </svg>
               Blockchain Provably Fair
             </summary>
-            <div className="mt-4 text-left text-sm text-champagne-gold/60 space-y-3 font-mono">
+            <div className="mt-4 text-left text-sm text-venetian-gold/60 space-y-3 font-mono">
               {/* Blockchain Commitment */}
               {commitment && (
-                <div className="bg-pepe-green/10 border border-pepe-green/30 rounded-lg p-3 mb-4">
+                <div className="bg-jester-purple/10 border border-jester-purple/30 rounded-lg p-3 mb-4">
                   <div className="flex items-center gap-2 mb-2">
-                    <svg className="w-4 h-4 text-pepe-green" fill="currentColor" viewBox="0 0 20 20">
+                    <svg className="w-4 h-4 text-jester-purple" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                     </svg>
-                    <span className="text-pepe-green text-xs font-bold uppercase tracking-wide">
+                    <span className="text-jester-purple text-xs font-bold uppercase tracking-wide">
                       On-Chain Committed
                     </span>
                   </div>
                   <div className="text-xs space-y-1">
                     <div>
-                      <span className="text-champagne-gold/40">Tx Hash: </span>
-                      <code className="text-ivory-white/70 break-all">
+                      <span className="text-venetian-gold/40">Tx Hash: </span>
+                      <code className="text-bone-white/70 break-all">
                         {commitment.txHash.substring(0, 20)}...
                       </code>
                     </div>
                     <div>
-                      <span className="text-champagne-gold/40">Block: </span>
-                      <code className="text-ivory-white/70">{commitment.blockHeight}</code>
+                      <span className="text-venetian-gold/40">Block: </span>
+                      <code className="text-bone-white/70">{commitment.blockHeight}</code>
                     </div>
                     {commitment.explorerUrl && (
                       <a
                         href={commitment.explorerUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-monaco-gold hover:text-champagne-gold transition-colors inline-flex items-center gap-1"
+                        className="text-masque-gold hover:text-venetian-gold transition-colors inline-flex items-center gap-1"
                       >
                         View on Explorer
                         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1306,15 +1306,15 @@ export default function BlackjackPage() {
 
               <div className="flex items-start gap-2">
                 <div className="flex-1">
-                  <span className="text-champagne-gold/40">Server Seed Hash: </span>
-                  <code className="text-xs break-all text-ivory-white/70">
+                  <span className="text-venetian-gold/40">Server Seed Hash: </span>
+                  <code className="text-xs break-all text-bone-white/70">
                     {gameState?.serverSeedHash || 'Will be shown when game starts'}
                   </code>
                 </div>
                 {gameState?.serverSeedHash && (
                   <button
                     onClick={() => copyToClipboard(gameState.serverSeedHash!, 'serverSeedHash')}
-                    className="text-champagne-gold/40 hover:text-monaco-gold transition-colors p-1"
+                    className="text-venetian-gold/40 hover:text-masque-gold transition-colors p-1"
                     title="Copy to clipboard"
                   >
                     {copiedField === 'serverSeedHash' ? (
@@ -1331,15 +1331,15 @@ export default function BlackjackPage() {
               </div>
               <div className="flex items-start gap-2">
                 <div className="flex-1">
-                  <span className="text-champagne-gold/40">Client Seed: </span>
-                  <code className="text-xs break-all text-ivory-white/70">
+                  <span className="text-venetian-gold/40">Client Seed: </span>
+                  <code className="text-xs break-all text-bone-white/70">
                     {gameState?.clientSeed || 'Generated automatically'}
                   </code>
                 </div>
                 {gameState?.clientSeed && (
                   <button
                     onClick={() => copyToClipboard(gameState.clientSeed!, 'clientSeed')}
-                    className="text-champagne-gold/40 hover:text-monaco-gold transition-colors p-1"
+                    className="text-venetian-gold/40 hover:text-masque-gold transition-colors p-1"
                     title="Copy to clipboard"
                   >
                     {copiedField === 'clientSeed' ? (
@@ -1355,18 +1355,18 @@ export default function BlackjackPage() {
                 )}
               </div>
               <div>
-                <span className="text-champagne-gold/40">Nonce: </span>
-                <code className="text-ivory-white/70">{gameState?.nonce ?? 0}</code>
+                <span className="text-venetian-gold/40">Nonce: </span>
+                <code className="text-bone-white/70">{gameState?.nonce ?? 0}</code>
               </div>
               {gameId && (
                 <div className="flex items-start gap-2">
                   <div className="flex-1">
-                    <span className="text-champagne-gold/40">Game ID: </span>
-                    <code className="text-xs text-ivory-white/70">{gameId}</code>
+                    <span className="text-venetian-gold/40">Game ID: </span>
+                    <code className="text-xs text-bone-white/70">{gameId}</code>
                   </div>
                   <button
                     onClick={() => copyToClipboard(gameId, 'gameId')}
-                    className="text-champagne-gold/40 hover:text-monaco-gold transition-colors p-1"
+                    className="text-venetian-gold/40 hover:text-masque-gold transition-colors p-1"
                     title="Copy to clipboard"
                   >
                     {copiedField === 'gameId' ? (
@@ -1382,15 +1382,15 @@ export default function BlackjackPage() {
                 </div>
               )}
 
-              <div className="pt-3 border-t border-monaco-gold/10 font-body">
-                <p className="text-xs text-champagne-gold/50 mb-3">
+              <div className="pt-3 border-t border-masque-gold/10 font-body">
+                <p className="text-xs text-venetian-gold/50 mb-3">
                   The server seed hash is committed to the Zcash blockchain BEFORE you bet.
                   After the game, you can verify the outcome was fair.
                 </p>
                 {gameId && gameState?.phase === 'complete' && (
                   <a
                     href={`/verify?gameId=${gameId}`}
-                    className="inline-flex items-center gap-2 bg-monaco-gold/20 hover:bg-monaco-gold/30 text-monaco-gold px-4 py-2 rounded-lg transition-colors"
+                    className="inline-flex items-center gap-2 bg-masque-gold/20 hover:bg-masque-gold/30 text-masque-gold px-4 py-2 rounded-lg transition-colors"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -1406,16 +1406,16 @@ export default function BlackjackPage() {
         {/* Session Stats */}
         {session && (
           <div className="mt-8 text-center">
-            <div className="bg-rich-black/30 inline-block rounded-lg px-6 py-3 border border-monaco-gold/10">
-              <div className="text-xs text-champagne-gold/40 mb-1 uppercase tracking-wide">Session Stats</div>
+            <div className="bg-midnight-black/30 inline-block rounded-lg px-6 py-3 border border-masque-gold/10">
+              <div className="text-xs text-venetian-gold/40 mb-1 uppercase tracking-wide">Session Stats</div>
               <div className="flex gap-6 text-sm">
                 <div>
-                  <span className="text-champagne-gold/60">Wagered: </span>
-                  <span className="text-ivory-white">{session.totalWagered.toFixed(4)} ZEC</span>
+                  <span className="text-venetian-gold/60">Wagered: </span>
+                  <span className="text-bone-white">{session.totalWagered.toFixed(4)} ZEC</span>
                 </div>
                 <div>
-                  <span className="text-champagne-gold/60">Won: </span>
-                  <span className="text-monaco-gold">{session.totalWon.toFixed(4)} ZEC</span>
+                  <span className="text-venetian-gold/60">Won: </span>
+                  <span className="text-masque-gold">{session.totalWon.toFixed(4)} ZEC</span>
                 </div>
               </div>
             </div>

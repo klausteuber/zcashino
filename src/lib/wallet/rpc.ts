@@ -48,7 +48,7 @@ async function rpcCall<T = unknown>(
 
   const body = JSON.stringify({
     jsonrpc: '1.0',
-    id: `zcashino-${Date.now()}`,
+    id: `cypherjester-${Date.now()}`,
     method,
     params,
   })

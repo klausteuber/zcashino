@@ -1,7 +1,7 @@
 /**
  * Zcash Wallet Integration
  *
- * This module provides wallet functionality for Zcashino:
+ * This module provides wallet functionality for CypherJester:
  * - Address validation and parsing
  * - Deposit address generation (via HD wallet derivation)
  * - Balance checking (via RPC)

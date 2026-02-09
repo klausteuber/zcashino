@@ -9,12 +9,12 @@ interface ChipProps {
 }
 
 const chipStyles: Record<number, string> = {
-  0.01: 'bg-ivory-white border-monaco-gold text-rich-black',
-  0.05: 'bg-burgundy border-burgundy/70 text-ivory-white',
-  0.1: 'bg-pepe-green border-pepe-green-light text-ivory-white',
-  0.25: 'bg-velvet-purple border-velvet-purple/70 text-ivory-white',
-  0.5: 'bg-gradient-to-br from-monaco-gold to-champagne-gold border-champagne-gold text-rich-black',
-  1: 'bg-rich-black border-monaco-gold text-monaco-gold'
+  0.01: 'bg-bone-white border-masque-gold text-midnight-black',
+  0.05: 'bg-blood-ruby border-blood-ruby/70 text-bone-white',
+  0.1: 'bg-jester-purple border-jester-purple-light text-bone-white',
+  0.25: 'bg-crimson-mask border-crimson-mask/70 text-bone-white',
+  0.5: 'bg-gradient-to-br from-masque-gold to-venetian-gold border-venetian-gold text-midnight-black',
+  1: 'bg-midnight-black border-masque-gold text-masque-gold'
 }
 
 const sizeClasses = {
@@ -43,7 +43,7 @@ export default function Chip({
         font-bold
         shadow-lg
         flex items-center justify-center
-        ${selected ? 'chip-select ring-4 ring-monaco-gold shadow-[0_0_15px_rgba(201,162,39,0.5)]' : 'transition-all duration-150'}
+        ${selected ? 'chip-select ring-4 ring-masque-gold shadow-[0_0_15px_rgba(201,162,39,0.5)]' : 'transition-all duration-150'}
         ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:scale-105 active:scale-95 cursor-pointer'}
       `}
     >

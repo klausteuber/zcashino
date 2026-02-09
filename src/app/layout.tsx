@@ -1,31 +1,31 @@
 import type { Metadata } from 'next'
-import { Playfair_Display, DM_Sans, JetBrains_Mono } from 'next/font/google'
+import { Cinzel, Inter, IBM_Plex_Mono } from 'next/font/google'
 import './globals.css'
 
-const playfair = Playfair_Display({
-  variable: '--font-playfair',
+const cinzel = Cinzel({
+  variable: '--font-cinzel',
   subsets: ['latin'],
   weight: ['400', '500', '600', '700'],
 })
 
-const dmSans = DM_Sans({
-  variable: '--font-dm-sans',
+const inter = Inter({
+  variable: '--font-inter',
   subsets: ['latin'],
   weight: ['400', '500', '600', '700'],
 })
 
-const jetbrainsMono = JetBrains_Mono({
+const ibmPlexMono = IBM_Plex_Mono({
   variable: '--font-mono',
   subsets: ['latin'],
   weight: ['400', '500'],
 })
 
 export const metadata: Metadata = {
-  title: 'Zcashino - Provably Fair Privacy Casino',
-  description: 'The first provably fair casino with Zcash. True privacy, verifiable fairness, instant payouts.',
-  keywords: ['zcash', 'casino', 'provably fair', 'cryptocurrency', 'blackjack', 'privacy'],
+  title: 'CypherJester - Play in Private. Verify in Public.',
+  description: 'The provably fair crypto casino. True privacy, verifiable fairness, instant payouts.',
+  keywords: ['zcash', 'casino', 'provably fair', 'cryptocurrency', 'blackjack', 'privacy', 'cypherjester'],
   openGraph: {
-    title: 'Zcashino - Provably Fair Privacy Casino',
+    title: 'CypherJester - Play in Private. Verify in Public.',
     description: 'True privacy, verifiable fairness, instant payouts.',
     type: 'website',
   },
@@ -39,7 +39,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${playfair.variable} ${dmSans.variable} ${jetbrainsMono.variable} font-body antialiased`}
+        className={`${cinzel.variable} ${inter.variable} ${ibmPlexMono.variable} font-body antialiased`}
       >
         {children}
       </body>

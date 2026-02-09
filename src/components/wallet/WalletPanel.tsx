@@ -205,16 +205,16 @@ export function WalletPanel({ sessionId, onBalanceUpdate, onAuthUpdate }: Wallet
 
   if (isLoading) {
     return (
-      <div className="bg-rich-black/40 rounded-lg p-4 border border-monaco-gold/20">
-        <div className="text-champagne-gold/60">Loading wallet...</div>
+      <div className="bg-midnight-black/40 rounded-lg p-4 border border-masque-gold/20">
+        <div className="text-venetian-gold/60">Loading wallet...</div>
       </div>
     )
   }
 
   if (error && !walletData) {
     return (
-      <div className="bg-rich-black/40 rounded-lg p-4 border border-burgundy/50">
-        <div className="text-burgundy">{error}</div>
+      <div className="bg-midnight-black/40 rounded-lg p-4 border border-blood-ruby/50">
+        <div className="text-blood-ruby">{error}</div>
       </div>
     )
   }
@@ -223,17 +223,17 @@ export function WalletPanel({ sessionId, onBalanceUpdate, onAuthUpdate }: Wallet
   const hasWithdrawalAddress = !!walletData?.auth.withdrawalAddress
 
   return (
-    <div className="bg-rich-black/40 rounded-lg p-4 border border-monaco-gold/20">
+    <div className="bg-midnight-black/40 rounded-lg p-4 border border-masque-gold/20">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-ivory-white">Wallet</h3>
+        <h3 className="text-lg font-semibold text-bone-white">Wallet</h3>
         <div className="flex items-center gap-2">
           {/* Auth Status Badge */}
           <span
             className={`px-2 py-0.5 rounded text-xs font-medium ${
               isAuthenticated
-                ? 'bg-pepe-green/20 text-pepe-green'
-                : 'bg-monaco-gold/20 text-monaco-gold'
+                ? 'bg-jester-purple/20 text-jester-purple'
+                : 'bg-masque-gold/20 text-masque-gold'
             }`}
           >
             {isAuthenticated ? '✓ Verified' : 'Not Verified'}
@@ -247,7 +247,7 @@ export function WalletPanel({ sessionId, onBalanceUpdate, onAuthUpdate }: Wallet
                 : 'bg-red-500'
             }`}
           />
-          <span className="text-xs text-champagne-gold/60">
+          <span className="text-xs text-venetian-gold/60">
             {walletData?.wallet.network}
           </span>
         </div>
@@ -255,12 +255,12 @@ export function WalletPanel({ sessionId, onBalanceUpdate, onAuthUpdate }: Wallet
 
       {/* Balance */}
       <div className="mb-4">
-        <div className="text-sm text-champagne-gold/60 mb-1">Balance</div>
-        <div className="text-2xl font-bold text-monaco-gold">
+        <div className="text-sm text-venetian-gold/60 mb-1">Balance</div>
+        <div className="text-2xl font-bold text-masque-gold">
           {walletData?.balance.confirmed.toFixed(4)} ZEC
         </div>
         {(walletData?.balance.pending ?? 0) > 0 && (
-          <div className="text-sm text-champagne-gold/60">
+          <div className="text-sm text-venetian-gold/60">
             + {walletData?.balance.pending.toFixed(4)} pending
           </div>
         )}
@@ -268,9 +268,9 @@ export function WalletPanel({ sessionId, onBalanceUpdate, onAuthUpdate }: Wallet
 
       {/* Withdrawal Address */}
       {hasWithdrawalAddress && (
-        <div className="mb-4 p-3 bg-rich-black/60 rounded-lg border border-monaco-gold/10">
-          <div className="text-xs text-champagne-gold/60 mb-1">Withdrawal Address</div>
-          <div className="font-mono text-xs text-ivory-white break-all">
+        <div className="mb-4 p-3 bg-midnight-black/60 rounded-lg border border-masque-gold/10">
+          <div className="text-xs text-venetian-gold/60 mb-1">Withdrawal Address</div>
+          <div className="font-mono text-xs text-bone-white break-all">
             {walletData?.auth.withdrawalAddress}
           </div>
         </div>
@@ -278,22 +278,22 @@ export function WalletPanel({ sessionId, onBalanceUpdate, onAuthUpdate }: Wallet
 
       {/* Authentication Required Message */}
       {!isAuthenticated && !hasWithdrawalAddress && (
-        <div className="mb-4 p-3 bg-monaco-gold/10 rounded-lg border border-monaco-gold/30">
-          <div className="text-sm text-monaco-gold font-medium mb-1">
+        <div className="mb-4 p-3 bg-masque-gold/10 rounded-lg border border-masque-gold/30">
+          <div className="text-sm text-masque-gold font-medium mb-1">
             Authentication Required
           </div>
-          <div className="text-xs text-champagne-gold/70">
+          <div className="text-xs text-venetian-gold/70">
             Set your withdrawal address and make a deposit to start playing.
           </div>
         </div>
       )}
 
       {!isAuthenticated && hasWithdrawalAddress && (
-        <div className="mb-4 p-3 bg-monaco-gold/10 rounded-lg border border-monaco-gold/30">
-          <div className="text-sm text-monaco-gold font-medium mb-1">
+        <div className="mb-4 p-3 bg-masque-gold/10 rounded-lg border border-masque-gold/30">
+          <div className="text-sm text-masque-gold font-medium mb-1">
             Deposit Required
           </div>
-          <div className="text-xs text-champagne-gold/70">
+          <div className="text-xs text-venetian-gold/70">
             Send ZEC to your deposit address to verify your account.
           </div>
         </div>
@@ -304,7 +304,7 @@ export function WalletPanel({ sessionId, onBalanceUpdate, onAuthUpdate }: Wallet
         {!hasWithdrawalAddress ? (
           <button
             onClick={() => setShowSetAddress(!showSetAddress)}
-            className="flex-1 bg-monaco-gold hover:bg-monaco-gold/80 text-rich-black px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+            className="flex-1 bg-masque-gold hover:bg-masque-gold/80 text-midnight-black px-4 py-2 rounded-lg text-sm font-medium transition-colors"
           >
             Set Withdrawal Address
           </button>
@@ -312,14 +312,14 @@ export function WalletPanel({ sessionId, onBalanceUpdate, onAuthUpdate }: Wallet
           <>
             <button
               onClick={() => setShowDeposit(!showDeposit)}
-              className="flex-1 bg-monaco-gold/20 hover:bg-monaco-gold/30 text-monaco-gold px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+              className="flex-1 bg-masque-gold/20 hover:bg-masque-gold/30 text-masque-gold px-4 py-2 rounded-lg text-sm font-medium transition-colors"
             >
               Deposit
             </button>
             <button
               onClick={() => setShowWithdraw(!showWithdraw)}
               disabled={!isAuthenticated}
-              className="flex-1 bg-ivory-white/10 hover:bg-ivory-white/20 text-ivory-white px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 bg-bone-white/10 hover:bg-bone-white/20 text-bone-white px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               title={!isAuthenticated ? 'Deposit first to enable withdrawals' : undefined}
             >
               Withdraw
@@ -328,7 +328,7 @@ export function WalletPanel({ sessionId, onBalanceUpdate, onAuthUpdate }: Wallet
         )}
         <button
           onClick={checkDeposits}
-          className="bg-ivory-white/10 hover:bg-ivory-white/20 text-ivory-white px-3 py-2 rounded-lg text-sm transition-colors"
+          className="bg-bone-white/10 hover:bg-bone-white/20 text-bone-white px-3 py-2 rounded-lg text-sm transition-colors"
           title="Check for deposits"
         >
           ↻
@@ -337,8 +337,8 @@ export function WalletPanel({ sessionId, onBalanceUpdate, onAuthUpdate }: Wallet
 
       {/* Set Withdrawal Address Panel */}
       {showSetAddress && (
-        <div className="bg-rich-black/60 rounded-lg p-4 mb-4 border border-monaco-gold/10">
-          <div className="text-sm text-champagne-gold/60 mb-2">
+        <div className="bg-midnight-black/60 rounded-lg p-4 mb-4 border border-masque-gold/10">
+          <div className="text-sm text-venetian-gold/60 mb-2">
             Enter your Zcash address for withdrawals:
           </div>
           <div className="space-y-3">
@@ -347,20 +347,20 @@ export function WalletPanel({ sessionId, onBalanceUpdate, onAuthUpdate }: Wallet
               value={withdrawalAddressInput}
               onChange={(e) => setWithdrawalAddressInput(e.target.value)}
               placeholder="t1... or zs... or u1..."
-              className="w-full bg-rich-black/80 border border-monaco-gold/20 rounded px-3 py-2 text-ivory-white text-sm placeholder:text-champagne-gold/30"
+              className="w-full bg-midnight-black/80 border border-masque-gold/20 rounded px-3 py-2 text-bone-white text-sm placeholder:text-venetian-gold/30"
             />
-            <div className="text-xs text-champagne-gold/50">
+            <div className="text-xs text-venetian-gold/50">
               • This address will receive all your withdrawals
               <br />
               • You can use transparent (t), shielded (z), or unified (u) addresses
             </div>
             {error && (
-              <div className="text-sm text-burgundy">{error}</div>
+              <div className="text-sm text-blood-ruby">{error}</div>
             )}
             <button
               onClick={handleSetWithdrawalAddress}
               disabled={settingAddress || !withdrawalAddressInput}
-              className="w-full bg-monaco-gold text-rich-black px-4 py-2 rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full bg-masque-gold text-midnight-black px-4 py-2 rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {settingAddress ? 'Setting...' : 'Set Address & Continue'}
             </button>
@@ -370,27 +370,27 @@ export function WalletPanel({ sessionId, onBalanceUpdate, onAuthUpdate }: Wallet
 
       {/* Deposit Panel */}
       {showDeposit && walletData && (
-        <div className="bg-rich-black/60 rounded-lg p-4 mb-4 border border-monaco-gold/10">
-          <div className="text-sm text-champagne-gold/60 mb-2">
+        <div className="bg-midnight-black/60 rounded-lg p-4 mb-4 border border-masque-gold/10">
+          <div className="text-sm text-venetian-gold/60 mb-2">
             Send ZEC to this address:
           </div>
           <div className="flex items-center gap-2 mb-3">
-            <code className="flex-1 bg-rich-black/80 px-3 py-2 rounded text-xs text-ivory-white break-all">
+            <code className="flex-1 bg-midnight-black/80 px-3 py-2 rounded text-xs text-bone-white break-all">
               {walletData.wallet.depositAddress}
             </code>
             <button
               onClick={() => copyToClipboard(walletData.wallet.depositAddress)}
-              className="bg-monaco-gold/20 hover:bg-monaco-gold/30 text-monaco-gold px-3 py-2 rounded text-sm"
+              className="bg-masque-gold/20 hover:bg-masque-gold/30 text-masque-gold px-3 py-2 rounded text-sm"
             >
               Copy
             </button>
           </div>
-          <div className="text-xs text-champagne-gold/50 space-y-1">
+          <div className="text-xs text-venetian-gold/50 space-y-1">
             <p>• Minimum deposit: {walletData.depositInfo.minimumDeposit} ZEC</p>
             <p>• {walletData.depositInfo.confirmationsRequired} confirmations required</p>
             <p>• Network: {walletData.wallet.network}</p>
             {!isAuthenticated && (
-              <p className="text-monaco-gold">
+              <p className="text-masque-gold">
                 • First deposit will verify your account
               </p>
             )}
@@ -400,15 +400,15 @@ export function WalletPanel({ sessionId, onBalanceUpdate, onAuthUpdate }: Wallet
 
       {/* Withdraw Panel */}
       {showWithdraw && isAuthenticated && (
-        <div className="bg-rich-black/60 rounded-lg p-4 border border-monaco-gold/10">
+        <div className="bg-midnight-black/60 rounded-lg p-4 border border-masque-gold/10">
           <div className="space-y-3">
-            <div className="text-sm text-champagne-gold/60">
-              Withdrawing to: <span className="text-ivory-white font-mono text-xs">
+            <div className="text-sm text-venetian-gold/60">
+              Withdrawing to: <span className="text-bone-white font-mono text-xs">
                 {walletData?.auth.withdrawalAddress?.substring(0, 12)}...
               </span>
             </div>
             <div>
-              <label className="text-sm text-champagne-gold/60 block mb-1">
+              <label className="text-sm text-venetian-gold/60 block mb-1">
                 Amount (ZEC)
               </label>
               <input
@@ -417,19 +417,19 @@ export function WalletPanel({ sessionId, onBalanceUpdate, onAuthUpdate }: Wallet
                 value={withdrawAmount}
                 onChange={(e) => setWithdrawAmount(e.target.value)}
                 placeholder="0.00"
-                className="w-full bg-rich-black/80 border border-monaco-gold/20 rounded px-3 py-2 text-ivory-white text-sm placeholder:text-champagne-gold/30"
+                className="w-full bg-midnight-black/80 border border-masque-gold/20 rounded px-3 py-2 text-bone-white text-sm placeholder:text-venetian-gold/30"
               />
             </div>
-            <div className="text-xs text-champagne-gold/50">
+            <div className="text-xs text-venetian-gold/50">
               Network fee: 0.0001 ZEC
             </div>
             {error && (
-              <div className="text-sm text-burgundy">{error}</div>
+              <div className="text-sm text-blood-ruby">{error}</div>
             )}
             <button
               onClick={handleWithdraw}
               disabled={withdrawing || !withdrawAmount}
-              className="w-full bg-monaco-gold text-rich-black px-4 py-2 rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full bg-masque-gold text-midnight-black px-4 py-2 rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {withdrawing ? 'Processing...' : 'Withdraw'}
             </button>
@@ -441,19 +441,19 @@ export function WalletPanel({ sessionId, onBalanceUpdate, onAuthUpdate }: Wallet
       {pendingWithdrawal && (
         <div className={`rounded-lg p-3 mb-4 border ${
           pendingWithdrawal.status === 'confirmed'
-            ? 'bg-pepe-green/10 border-pepe-green/30'
+            ? 'bg-jester-purple/10 border-jester-purple/30'
             : pendingWithdrawal.status === 'failed'
-            ? 'bg-burgundy/10 border-burgundy/30'
-            : 'bg-monaco-gold/10 border-monaco-gold/30'
+            ? 'bg-blood-ruby/10 border-blood-ruby/30'
+            : 'bg-masque-gold/10 border-masque-gold/30'
         }`}>
           <div className="flex items-center justify-between mb-1">
-            <span className="text-xs font-medium text-champagne-gold/60">Withdrawal</span>
+            <span className="text-xs font-medium text-venetian-gold/60">Withdrawal</span>
             <span className={`text-xs font-medium ${
               pendingWithdrawal.status === 'confirmed'
-                ? 'text-pepe-green'
+                ? 'text-jester-purple'
                 : pendingWithdrawal.status === 'failed'
-                ? 'text-burgundy'
-                : 'text-monaco-gold'
+                ? 'text-blood-ruby'
+                : 'text-masque-gold'
             }`}>
               {pendingWithdrawal.status === 'pending'
                 ? `Processing${pendingWithdrawal.operationStatus ? ` (${pendingWithdrawal.operationStatus})` : '...'}`
@@ -463,19 +463,19 @@ export function WalletPanel({ sessionId, onBalanceUpdate, onAuthUpdate }: Wallet
             </span>
           </div>
           {pendingWithdrawal.txHash && (
-            <div className="text-xs font-mono text-ivory-white/70 break-all">
+            <div className="text-xs font-mono text-bone-white/70 break-all">
               TX: {pendingWithdrawal.txHash}
             </div>
           )}
           {pendingWithdrawal.failReason && (
-            <div className="text-xs text-burgundy mt-1">
+            <div className="text-xs text-blood-ruby mt-1">
               {pendingWithdrawal.failReason}. Balance has been refunded.
             </div>
           )}
           {(pendingWithdrawal.status === 'confirmed' || pendingWithdrawal.status === 'failed') && (
             <button
               onClick={() => setPendingWithdrawal(null)}
-              className="text-xs text-champagne-gold/50 hover:text-champagne-gold mt-2"
+              className="text-xs text-venetian-gold/50 hover:text-venetian-gold mt-2"
             >
               Dismiss
             </button>
@@ -484,10 +484,10 @@ export function WalletPanel({ sessionId, onBalanceUpdate, onAuthUpdate }: Wallet
       )}
 
       {/* Proof of Reserves Link */}
-      <div className="mt-4 pt-3 border-t border-monaco-gold/10">
+      <div className="mt-4 pt-3 border-t border-masque-gold/10">
         <a
           href="/reserves"
-          className="text-xs text-champagne-gold/50 hover:text-monaco-gold transition-colors"
+          className="text-xs text-venetian-gold/50 hover:text-masque-gold transition-colors"
         >
           View Proof of Reserves →
         </a>

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
-import PepeLogo from '@/components/ui/PepeLogo'
+import JesterLogo from '@/components/ui/JesterLogo'
 import type { FullVerificationResult, GameVerificationData } from '@/types'
 
 type VerificationMode = 'gameId' | 'manual'
@@ -102,18 +102,18 @@ function VerifyPageContent() {
   return (
     <main className="min-h-screen felt-texture">
       {/* Header */}
-      <header className="border-b border-monaco-gold/20 bg-rich-black/30 backdrop-blur-sm">
+      <header className="border-b border-masque-gold/20 bg-midnight-black/30 backdrop-blur-sm">
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
           <a href="/" className="flex items-center gap-3">
-            <PepeLogo size="md" className="text-pepe-green-light" />
+            <JesterLogo size="md" className="text-jester-purple-light" />
             <span className="text-xl font-display font-bold tracking-tight">
-              <span className="text-monaco-gold">Z</span>
-              <span className="text-ivory-white">cashino</span>
+              <span className="text-masque-gold">Cypher</span>
+              <span className="text-bone-white">Jester</span>
             </span>
           </a>
           <a
             href="/blackjack"
-            className="text-champagne-gold/60 hover:text-monaco-gold transition-colors"
+            className="text-venetian-gold/60 hover:text-masque-gold transition-colors"
           >
             Back to Game
           </a>
@@ -121,10 +121,10 @@ function VerifyPageContent() {
       </header>
 
       <div className="container mx-auto px-4 py-8 max-w-4xl">
-        <h1 className="text-3xl font-display font-bold text-ivory-white mb-2">
+        <h1 className="text-3xl font-display font-bold text-bone-white mb-2">
           Provably Fair Verification
         </h1>
-        <p className="text-champagne-gold/60 mb-8">
+        <p className="text-venetian-gold/60 mb-8">
           Verify that your game was fair using blockchain-committed seeds.
         </p>
 
@@ -134,8 +134,8 @@ function VerifyPageContent() {
             onClick={() => setMode('gameId')}
             className={`px-4 py-2 rounded-lg font-medium transition-colors ${
               mode === 'gameId'
-                ? 'bg-monaco-gold text-rich-black'
-                : 'bg-rich-black/40 text-champagne-gold/60 hover:text-ivory-white border border-monaco-gold/20'
+                ? 'bg-masque-gold text-midnight-black'
+                : 'bg-midnight-black/40 text-venetian-gold/60 hover:text-bone-white border border-masque-gold/20'
             }`}
           >
             Verify by Game ID
@@ -144,8 +144,8 @@ function VerifyPageContent() {
             onClick={() => setMode('manual')}
             className={`px-4 py-2 rounded-lg font-medium transition-colors ${
               mode === 'manual'
-                ? 'bg-monaco-gold text-rich-black'
-                : 'bg-rich-black/40 text-champagne-gold/60 hover:text-ivory-white border border-monaco-gold/20'
+                ? 'bg-masque-gold text-midnight-black'
+                : 'bg-midnight-black/40 text-venetian-gold/60 hover:text-bone-white border border-masque-gold/20'
             }`}
           >
             Manual Verification
@@ -153,31 +153,31 @@ function VerifyPageContent() {
         </div>
 
         {/* Input Form */}
-        <div className="bg-rich-black/40 rounded-lg p-6 border border-monaco-gold/20 mb-8">
+        <div className="bg-midnight-black/40 rounded-lg p-6 border border-masque-gold/20 mb-8">
           {mode === 'gameId' ? (
             <div className="space-y-4">
               <div>
-                <label className="block text-sm text-champagne-gold/60 mb-2">Game ID</label>
+                <label className="block text-sm text-venetian-gold/60 mb-2">Game ID</label>
                 <input
                   type="text"
                   value={gameId}
                   onChange={(e) => setGameId(e.target.value)}
                   placeholder="Enter game ID (e.g., clx1234...)"
-                  className="w-full bg-rich-black/60 border border-monaco-gold/20 rounded-lg px-4 py-3 text-ivory-white placeholder-champagne-gold/30 focus:outline-none focus:border-monaco-gold"
+                  className="w-full bg-midnight-black/60 border border-masque-gold/20 rounded-lg px-4 py-3 text-bone-white placeholder-venetian-gold/30 focus:outline-none focus:border-masque-gold"
                 />
               </div>
               <div className="flex gap-3">
                 <button
                   onClick={handleVerify}
                   disabled={isLoading || !gameId}
-                  className="btn-gold-shimmer text-rich-black px-6 py-3 rounded-lg font-bold disabled:opacity-50"
+                  className="btn-gold-shimmer text-midnight-black px-6 py-3 rounded-lg font-bold disabled:opacity-50"
                 >
                   {isLoading ? 'Verifying...' : 'Verify Game'}
                 </button>
                 <button
                   onClick={handleLoadGame}
                   disabled={isLoading || !gameId}
-                  className="bg-rich-black/60 text-champagne-gold border border-monaco-gold/20 px-6 py-3 rounded-lg font-medium hover:border-monaco-gold/40 transition-colors disabled:opacity-50"
+                  className="bg-midnight-black/60 text-venetian-gold border border-masque-gold/20 px-6 py-3 rounded-lg font-medium hover:border-masque-gold/40 transition-colors disabled:opacity-50"
                 >
                   Load for Manual Check
                 </button>
@@ -187,48 +187,48 @@ function VerifyPageContent() {
             <div className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm text-champagne-gold/60 mb-2">Server Seed</label>
+                  <label className="block text-sm text-venetian-gold/60 mb-2">Server Seed</label>
                   <input
                     type="text"
                     value={serverSeed}
                     onChange={(e) => setServerSeed(e.target.value)}
                     placeholder="64-character hex string"
-                    className="w-full bg-rich-black/60 border border-monaco-gold/20 rounded-lg px-4 py-3 text-ivory-white placeholder-champagne-gold/30 focus:outline-none focus:border-monaco-gold font-mono text-sm"
+                    className="w-full bg-midnight-black/60 border border-masque-gold/20 rounded-lg px-4 py-3 text-bone-white placeholder-venetian-gold/30 focus:outline-none focus:border-masque-gold font-mono text-sm"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm text-champagne-gold/60 mb-2">Server Seed Hash</label>
+                  <label className="block text-sm text-venetian-gold/60 mb-2">Server Seed Hash</label>
                   <input
                     type="text"
                     value={serverSeedHash}
                     onChange={(e) => setServerSeedHash(e.target.value)}
                     placeholder="SHA-256 hash of server seed"
-                    className="w-full bg-rich-black/60 border border-monaco-gold/20 rounded-lg px-4 py-3 text-ivory-white placeholder-champagne-gold/30 focus:outline-none focus:border-monaco-gold font-mono text-sm"
+                    className="w-full bg-midnight-black/60 border border-masque-gold/20 rounded-lg px-4 py-3 text-bone-white placeholder-venetian-gold/30 focus:outline-none focus:border-masque-gold font-mono text-sm"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm text-champagne-gold/60 mb-2">Client Seed</label>
+                  <label className="block text-sm text-venetian-gold/60 mb-2">Client Seed</label>
                   <input
                     type="text"
                     value={clientSeed}
                     onChange={(e) => setClientSeed(e.target.value)}
                     placeholder="Your client seed"
-                    className="w-full bg-rich-black/60 border border-monaco-gold/20 rounded-lg px-4 py-3 text-ivory-white placeholder-champagne-gold/30 focus:outline-none focus:border-monaco-gold font-mono text-sm"
+                    className="w-full bg-midnight-black/60 border border-masque-gold/20 rounded-lg px-4 py-3 text-bone-white placeholder-venetian-gold/30 focus:outline-none focus:border-masque-gold font-mono text-sm"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm text-champagne-gold/60 mb-2">Nonce</label>
+                  <label className="block text-sm text-venetian-gold/60 mb-2">Nonce</label>
                   <input
                     type="number"
                     value={nonce}
                     onChange={(e) => setNonce(e.target.value)}
                     placeholder="Game number in session"
-                    className="w-full bg-rich-black/60 border border-monaco-gold/20 rounded-lg px-4 py-3 text-ivory-white placeholder-champagne-gold/30 focus:outline-none focus:border-monaco-gold"
+                    className="w-full bg-midnight-black/60 border border-masque-gold/20 rounded-lg px-4 py-3 text-bone-white placeholder-venetian-gold/30 focus:outline-none focus:border-masque-gold"
                   />
                 </div>
               </div>
               <div>
-                <label className="block text-sm text-champagne-gold/60 mb-2">
+                <label className="block text-sm text-venetian-gold/60 mb-2">
                   Commitment Transaction Hash (Optional)
                 </label>
                 <input
@@ -236,13 +236,13 @@ function VerifyPageContent() {
                   value={txHash}
                   onChange={(e) => setTxHash(e.target.value)}
                   placeholder="Zcash transaction hash for blockchain verification"
-                  className="w-full bg-rich-black/60 border border-monaco-gold/20 rounded-lg px-4 py-3 text-ivory-white placeholder-champagne-gold/30 focus:outline-none focus:border-monaco-gold font-mono text-sm"
+                  className="w-full bg-midnight-black/60 border border-masque-gold/20 rounded-lg px-4 py-3 text-bone-white placeholder-venetian-gold/30 focus:outline-none focus:border-masque-gold font-mono text-sm"
                 />
               </div>
               <button
                 onClick={handleVerify}
                 disabled={isLoading || !serverSeed || !serverSeedHash || !clientSeed || !nonce}
-                className="btn-gold-shimmer text-rich-black px-6 py-3 rounded-lg font-bold disabled:opacity-50"
+                className="btn-gold-shimmer text-midnight-black px-6 py-3 rounded-lg font-bold disabled:opacity-50"
               >
                 {isLoading ? 'Verifying...' : 'Verify'}
               </button>
@@ -252,7 +252,7 @@ function VerifyPageContent() {
 
         {/* Error Display */}
         {error && (
-          <div className="bg-burgundy/30 border border-burgundy text-ivory-white px-4 py-3 rounded-lg mb-8">
+          <div className="bg-blood-ruby/30 border border-blood-ruby text-bone-white px-4 py-3 rounded-lg mb-8">
             {error}
           </div>
         )}
@@ -263,12 +263,12 @@ function VerifyPageContent() {
             {/* Overall Status */}
             <div className={`rounded-lg p-6 border ${
               result.valid
-                ? 'bg-pepe-green/10 border-pepe-green'
-                : 'bg-burgundy/10 border-burgundy'
+                ? 'bg-jester-purple/10 border-jester-purple'
+                : 'bg-blood-ruby/10 border-blood-ruby'
             }`}>
               <div className="flex items-center gap-3 mb-4">
                 <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                  result.valid ? 'bg-pepe-green' : 'bg-burgundy'
+                  result.valid ? 'bg-jester-purple' : 'bg-blood-ruby'
                 }`}>
                   {result.valid ? (
                     <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -281,10 +281,10 @@ function VerifyPageContent() {
                   )}
                 </div>
                 <div>
-                  <h2 className="text-xl font-bold text-ivory-white">
+                  <h2 className="text-xl font-bold text-bone-white">
                     {result.valid ? 'Verification Successful' : 'Verification Failed'}
                   </h2>
-                  <p className="text-champagne-gold/60">
+                  <p className="text-venetian-gold/60">
                     {result.valid
                       ? 'This game was provably fair.'
                       : 'Some verification steps failed.'}
@@ -318,9 +318,9 @@ function VerifyPageContent() {
 
               {/* Errors */}
               {result.errors.length > 0 && (
-                <div className="mt-4 p-4 bg-rich-black/40 rounded-lg">
-                  <h3 className="text-sm font-medium text-burgundy mb-2">Issues Found:</h3>
-                  <ul className="list-disc list-inside text-sm text-champagne-gold/60 space-y-1">
+                <div className="mt-4 p-4 bg-midnight-black/40 rounded-lg">
+                  <h3 className="text-sm font-medium text-blood-ruby mb-2">Issues Found:</h3>
+                  <ul className="list-disc list-inside text-sm text-venetian-gold/60 space-y-1">
                     {result.errors.map((err, i) => (
                       <li key={i}>{err}</li>
                     ))}
@@ -330,8 +330,8 @@ function VerifyPageContent() {
             </div>
 
             {/* Game Details */}
-            <div className="bg-rich-black/40 rounded-lg p-6 border border-monaco-gold/20">
-              <h3 className="text-lg font-bold text-ivory-white mb-4">Game Details</h3>
+            <div className="bg-midnight-black/40 rounded-lg p-6 border border-masque-gold/20">
+              <h3 className="text-lg font-bold text-bone-white mb-4">Game Details</h3>
               <div className="space-y-3 font-mono text-sm">
                 <DetailRow label="Game ID" value={result.data.gameId} />
                 <DetailRow label="Server Seed" value={result.data.serverSeed} truncate />
@@ -349,8 +349,8 @@ function VerifyPageContent() {
 
             {/* Blockchain Proof */}
             {result.data.commitment && (
-              <div className="bg-rich-black/40 rounded-lg p-6 border border-monaco-gold/20">
-                <h3 className="text-lg font-bold text-ivory-white mb-4">Blockchain Proof</h3>
+              <div className="bg-midnight-black/40 rounded-lg p-6 border border-masque-gold/20">
+                <h3 className="text-lg font-bold text-bone-white mb-4">Blockchain Proof</h3>
                 <div className="space-y-3 font-mono text-sm">
                   <DetailRow label="Transaction Hash" value={result.data.commitment.txHash} truncate />
                   <DetailRow label="Block Height" value={result.data.commitment.blockHeight.toString()} />
@@ -364,7 +364,7 @@ function VerifyPageContent() {
                         href={result.data.commitment.explorerUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-monaco-gold hover:text-champagne-gold transition-colors"
+                        className="text-masque-gold hover:text-venetian-gold transition-colors"
                       >
                         View on Block Explorer
                       </a>
@@ -377,32 +377,32 @@ function VerifyPageContent() {
         )}
 
         {/* How It Works */}
-        <div className="mt-12 bg-rich-black/40 rounded-lg p-6 border border-monaco-gold/20">
-          <h3 className="text-lg font-bold text-ivory-white mb-4">How Provably Fair Works</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm text-champagne-gold/70">
+        <div className="mt-12 bg-midnight-black/40 rounded-lg p-6 border border-masque-gold/20">
+          <h3 className="text-lg font-bold text-bone-white mb-4">How Provably Fair Works</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm text-venetian-gold/70">
             <div>
-              <h4 className="text-ivory-white font-medium mb-2">1. Pre-Game Commitment</h4>
+              <h4 className="text-bone-white font-medium mb-2">1. Pre-Game Commitment</h4>
               <p>
                 Before you place your bet, we generate a server seed and commit its SHA-256 hash
                 to the Zcash blockchain. This commitment is immutable and timestamped.
               </p>
             </div>
             <div>
-              <h4 className="text-ivory-white font-medium mb-2">2. Your Contribution</h4>
+              <h4 className="text-bone-white font-medium mb-2">2. Your Contribution</h4>
               <p>
                 You provide a client seed (or we generate one for you). This ensures we cannot
                 predict the outcome, as the final result depends on your input.
               </p>
             </div>
             <div>
-              <h4 className="text-ivory-white font-medium mb-2">3. Game Outcome</h4>
+              <h4 className="text-bone-white font-medium mb-2">3. Game Outcome</h4>
               <p>
                 The deck is shuffled using SHA256(serverSeed:clientSeed:nonce). The nonce
                 increments each game, ensuring uniqueness even with the same seeds.
               </p>
             </div>
             <div>
-              <h4 className="text-ivory-white font-medium mb-2">4. Verification</h4>
+              <h4 className="text-bone-white font-medium mb-2">4. Verification</h4>
               <p>
                 After the game, we reveal the server seed. You can verify: (a) it hashes to the
                 pre-committed hash, (b) the commitment is on the blockchain, (c) the outcome matches.
@@ -425,20 +425,20 @@ function VerificationStep({
   description: string
 }) {
   return (
-    <div className={`p-3 rounded-lg ${passed ? 'bg-pepe-green/20' : 'bg-burgundy/20'}`}>
+    <div className={`p-3 rounded-lg ${passed ? 'bg-jester-purple/20' : 'bg-blood-ruby/20'}`}>
       <div className="flex items-center gap-2 mb-1">
         {passed ? (
-          <svg className="w-4 h-4 text-pepe-green" fill="currentColor" viewBox="0 0 20 20">
+          <svg className="w-4 h-4 text-jester-purple" fill="currentColor" viewBox="0 0 20 20">
             <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
           </svg>
         ) : (
-          <svg className="w-4 h-4 text-burgundy" fill="currentColor" viewBox="0 0 20 20">
+          <svg className="w-4 h-4 text-blood-ruby" fill="currentColor" viewBox="0 0 20 20">
             <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
           </svg>
         )}
-        <span className="text-xs font-medium text-ivory-white">{label}</span>
+        <span className="text-xs font-medium text-bone-white">{label}</span>
       </div>
-      <p className="text-xs text-champagne-gold/50">{description}</p>
+      <p className="text-xs text-venetian-gold/50">{description}</p>
     </div>
   )
 }
@@ -458,8 +458,8 @@ function DetailRow({
 
   return (
     <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4">
-      <span className="text-champagne-gold/50 min-w-[140px]">{label}:</span>
-      <span className="text-ivory-white break-all" title={truncate ? value : undefined}>
+      <span className="text-venetian-gold/50 min-w-[140px]">{label}:</span>
+      <span className="text-bone-white break-all" title={truncate ? value : undefined}>
         {displayValue}
       </span>
     </div>
@@ -470,7 +470,7 @@ function DetailRow({
 function VerifyPageLoading() {
   return (
     <main className="min-h-screen felt-texture flex items-center justify-center">
-      <div className="text-xl text-champagne-gold/60">Loading verification...</div>
+      <div className="text-xl text-venetian-gold/60">Loading verification...</div>
     </main>
   )
 }
