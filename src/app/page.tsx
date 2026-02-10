@@ -29,9 +29,6 @@ export default function Home() {
             <a href="/responsible-gambling" className="hover:text-masque-gold transition-colors">
               Responsible Gambling
             </a>
-            <a href="/admin" className="hover:text-masque-gold transition-colors">
-              Admin
-            </a>
           </nav>
           <button
             onClick={() => setWalletConnected(!walletConnected)}
