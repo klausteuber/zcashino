@@ -6,9 +6,9 @@ interface JesterLogoProps {
 }
 
 const sizeClasses = {
-  sm: 'h-6 w-auto',
-  md: 'h-8 w-auto',
-  lg: 'h-10 w-auto'
+  sm: 'h-8 w-auto',
+  md: 'h-12 w-auto',
+  lg: 'h-16 w-auto'
 }
 
 // CypherJester logo — jester hat with Guy Fawkes mask
