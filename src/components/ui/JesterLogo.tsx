@@ -1,23 +1,26 @@
-'use client'
+import Image from 'next/image'
 
 interface JesterLogoProps {
   className?: string
   size?: 'sm' | 'md' | 'lg'
 }
 
-const sizeClasses = {
-  sm: 'h-8 w-auto',
-  md: 'h-12 w-auto',
-  lg: 'h-16 w-auto'
+const sizeDimensions = {
+  sm: { width: 32, height: 32 },
+  md: { width: 48, height: 48 },
+  lg: { width: 64, height: 64 },
 }
 
 // CypherJester logo — jester hat with Guy Fawkes mask
 export default function JesterLogo({ className = '', size = 'md' }: JesterLogoProps) {
+  const dims = sizeDimensions[size]
   return (
-    <img
+    <Image
       src="/images/jester-logo.png"
       alt="CypherJester"
-      className={`${sizeClasses[size]} ${className}`}
+      width={dims.width}
+      height={dims.height}
+      className={className}
     />
   )
 }
@@ -43,9 +46,11 @@ export function JesterBell({ className = '' }: { className?: string }) {
 // Compact version for favicon/small uses
 export function JesterIcon({ className = '' }: { className?: string }) {
   return (
-    <img
+    <Image
       src="/images/jester-logo.png"
       alt="CypherJester"
+      width={24}
+      height={24}
       className={className}
     />
   )

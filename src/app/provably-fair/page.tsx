@@ -1,12 +1,57 @@
+import type { Metadata } from 'next'
 import JesterLogo from '@/components/ui/JesterLogo'
+import { FAQJsonLd, BreadcrumbJsonLd } from '@/components/seo/JsonLd'
 
-export const metadata = {
-  title: 'Provably Fair | CypherJester',
-  description: 'Learn how CypherJester ensures every game outcome is verifiably fair using cryptographic commitments and the Zcash blockchain.',
+export const metadata: Metadata = {
+  title: 'Provably Fair Gaming',
+  description:
+    'Learn how CypherJester ensures every game outcome is verifiably fair using cryptographic commitments and the Zcash blockchain.',
+  openGraph: {
+    title: 'How Provably Fair Gaming Works | CypherJester',
+    description:
+      'Every hand determined by math you can verify. SHA-256 commitments on the Zcash blockchain.',
+    url: 'https://cypherjester.com/provably-fair',
+  },
 }
+
+const faqItems = [
+  {
+    question: 'Can the house change the outcome after I bet?',
+    answer:
+      'No. The server seed hash is committed before your bet. Changing the seed would produce a different hash, which would not match the commitment. This is mathematically provable.',
+  },
+  {
+    question: 'What if the server generates a weak seed?',
+    answer:
+      'Server seeds are generated using Node.js crypto.randomBytes (CSPRNG), producing 32 bytes of cryptographically secure randomness. Additionally, your client seed is mixed in, so even a hypothetically weak server seed cannot solely determine the outcome.',
+  },
+  {
+    question: 'Can I change my client seed?',
+    answer:
+      'Yes. You can set a custom client seed before any game. This gives you direct influence over the randomness.',
+  },
+  {
+    question: 'What happens in demo mode?',
+    answer:
+      'The provably fair system works identically in demo mode. The only difference is that blockchain commitments use a local mock instead of on-chain transactions. The cryptographic verification is real.',
+  },
+  {
+    question: 'Where can I see the source code?',
+    answer:
+      'The shuffle algorithm and verification logic are deterministic and based on standard cryptographic primitives (SHA-256, HMAC, Fisher-Yates). You can verify outcomes using any SHA-256 tool.',
+  },
+]
 
 export default function ProvablyFairPage() {
   return (
+    <>
+      <FAQJsonLd questions={faqItems} />
+      <BreadcrumbJsonLd
+        items={[
+          { name: 'Home', url: 'https://cypherjester.com' },
+          { name: 'Provably Fair', url: 'https://cypherjester.com/provably-fair' },
+        ]}
+      />
     <main className="min-h-screen felt-texture">
       {/* Header */}
       <header className="border-b border-masque-gold/20 bg-midnight-black/30 backdrop-blur-sm">
@@ -209,6 +254,7 @@ export default function ProvablyFairPage() {
         </div>
       </footer>
     </main>
+    </>
   )
 }
 

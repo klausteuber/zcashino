@@ -2,8 +2,13 @@ import type { Metadata } from 'next'
 import JesterLogo from '@/components/ui/JesterLogo'
 
 export const metadata: Metadata = {
-  title: 'Terms of Service - CypherJester',
-  description: 'Terms and conditions for using CypherJester, a provably fair privacy casino.',
+  title: 'Terms of Service',
+  description:
+    'Terms and conditions for using CypherJester, a provably fair privacy casino powered by Zcash.',
+  openGraph: {
+    title: 'Terms of Service | CypherJester',
+    url: 'https://cypherjester.com/terms',
+  },
 }
 
 export default function TermsPage() {

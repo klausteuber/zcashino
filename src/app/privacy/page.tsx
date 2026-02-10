@@ -2,8 +2,13 @@ import type { Metadata } from 'next'
 import JesterLogo from '@/components/ui/JesterLogo'
 
 export const metadata: Metadata = {
-  title: 'Privacy Policy - CypherJester',
-  description: 'How CypherJester handles your data and protects your privacy.',
+  title: 'Privacy Policy',
+  description:
+    'How CypherJester handles your data and protects your privacy. No KYC, no tracking, privacy by design.',
+  openGraph: {
+    title: 'Privacy Policy | CypherJester',
+    url: 'https://cypherjester.com/privacy',
+  },
 }
 
 export default function PrivacyPage() {

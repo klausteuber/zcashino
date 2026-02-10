@@ -1,13 +1,15 @@
-'use client'
-
-import { useState } from 'react'
 import Image from 'next/image'
 import JesterLogo from '@/components/ui/JesterLogo'
+import ConnectWalletButton from '@/components/wallet/ConnectWalletButton'
+import { BreadcrumbJsonLd } from '@/components/seo/JsonLd'
 
 export default function Home() {
-  const [walletConnected, setWalletConnected] = useState(false)
-
   return (
+    <>
+      <BreadcrumbJsonLd
+        items={[{ name: 'Home', url: 'https://cypherjester.com' }]}
+      />
+
     <main className="min-h-screen felt-texture">
       {/* Header */}
       <header className="border-b border-masque-gold/20 bg-midnight-black/30 backdrop-blur-sm">
@@ -30,12 +32,7 @@ export default function Home() {
               Responsible Gambling
             </a>
           </nav>
-          <button
-            onClick={() => setWalletConnected(!walletConnected)}
-            className="btn-gold-shimmer text-midnight-black px-4 py-2 rounded-lg font-semibold"
-          >
-            {walletConnected ? 'Wallet Connected' : 'Connect Wallet'}
-          </button>
+          <ConnectWalletButton />
         </div>
       </header>
 
@@ -204,5 +201,6 @@ export default function Home() {
         </div>
       </footer>
     </main>
+    </>
   )
 }

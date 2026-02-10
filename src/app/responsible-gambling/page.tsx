@@ -2,8 +2,13 @@ import type { Metadata } from 'next'
 import JesterLogo from '@/components/ui/JesterLogo'
 
 export const metadata: Metadata = {
-  title: 'Responsible Gambling - CypherJester',
-  description: 'Tools and resources for responsible gambling at CypherJester.',
+  title: 'Responsible Gambling',
+  description:
+    'Tools and resources for responsible gambling at CypherJester. Set deposit limits, loss limits, and self-exclusion.',
+  openGraph: {
+    title: 'Responsible Gambling | CypherJester',
+    url: 'https://cypherjester.com/responsible-gambling',
+  },
 }
 
 export default function ResponsibleGamblingPage() {
