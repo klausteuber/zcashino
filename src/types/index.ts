@@ -216,6 +216,15 @@ export interface TransactionInfo {
   confirmedAt?: Date
 }
 
+// Hand history entry for UI display
+export interface HandHistoryEntry {
+  id: string
+  outcome: 'win' | 'lose' | 'push' | 'blackjack'
+  mainBet: number
+  payout: number
+  createdAt: string | Date
+}
+
 // Wallet balance types
 export interface WalletBalance {
   confirmed: number           // Confirmed balance (3+ confirmations)

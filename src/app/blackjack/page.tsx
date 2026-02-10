@@ -1,15 +1,18 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import type { BlackjackGameState, BlackjackAction, BlockchainCommitment } from '@/types'
+import type { BlackjackGameState, BlackjackAction, BlockchainCommitment, HandHistoryEntry } from '@/types'
 import { Hand } from '@/components/game/Card'
 import { ChipStack } from '@/components/game/Chip'
+import { HandHistory } from '@/components/game/HandHistory'
 import { calculateHandValue } from '@/lib/game/deck'
 import { MIN_BET, MAX_BET, getAvailableActions } from '@/lib/game/blackjack'
 import JesterLogo from '@/components/ui/JesterLogo'
 import { useGameSounds } from '@/hooks/useGameSounds'
+import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 import { OnboardingModal } from '@/components/onboarding/OnboardingModal'
 import { DepositWidget, DepositWidgetCompact } from '@/components/wallet/DepositWidget'
+import { WithdrawalModal } from '@/components/wallet/WithdrawalModal'
 
 const CHIP_VALUES = [0.01, 0.05, 0.1, 0.25, 0.5, 1]
 
@@ -29,6 +32,7 @@ interface SessionData {
   isDemo?: boolean
   isAuthenticated?: boolean
   depositAddress?: string
+  withdrawalAddress?: string | null
 }
 
 export default function BlackjackPage() {
@@ -46,6 +50,9 @@ export default function BlackjackPage() {
   const [hasSeenOnboarding, setHasSeenOnboarding] = useState(false)
   const [depositAddress, setDepositAddress] = useState<string | null>(null)
 
+  // Withdrawal state
+  const [showWithdrawal, setShowWithdrawal] = useState(false)
+
   // Animation state
   const [balanceAnimation, setBalanceAnimation] = useState<'increase' | 'decrease' | null>(null)
   const [showFloatingPayout, setShowFloatingPayout] = useState(false)
@@ -55,6 +62,7 @@ export default function BlackjackPage() {
   const [showPerfectPairsTooltip, setShowPerfectPairsTooltip] = useState(false)
   const [copiedField, setCopiedField] = useState<string | null>(null)
   const [insuranceDeclined, setInsuranceDeclined] = useState(false)
+  const [handHistory, setHandHistory] = useState<HandHistoryEntry[]>([])
 
   // Track previous balance and game state for animations
   const prevBalanceRef = useRef<number | null>(null)
@@ -764,6 +772,7 @@ export default function BlackjackPage() {
                   isDemo={session?.isDemo ?? session?.walletAddress?.startsWith('demo_') ?? true}
                   isAuthenticated={session?.isAuthenticated ?? false}
                   onDepositClick={() => setShowOnboarding(true)}
+                  onWithdrawClick={() => setShowWithdrawal(true)}
                   onSwitchToReal={session?.isDemo || session?.walletAddress?.startsWith('demo_') ? handleSwitchToReal : undefined}
                 />
               </div>
@@ -772,6 +781,7 @@ export default function BlackjackPage() {
                   balance={session?.balance ?? 0}
                   isDemo={session?.isDemo ?? session?.walletAddress?.startsWith('demo_') ?? true}
                   onDepositClick={() => setShowOnboarding(true)}
+                  onWithdrawClick={() => setShowWithdrawal(true)}
                 />
               </div>
               {/* Floating payout indicator */}
@@ -1433,6 +1443,19 @@ export default function BlackjackPage() {
         depositAddress={depositAddress}
         onCreateRealSession={handleCreateRealSession}
         onSetWithdrawalAddress={handleSetWithdrawalAddress}
+      />
+
+      {/* Withdrawal Modal */}
+      <WithdrawalModal
+        isOpen={showWithdrawal}
+        onClose={() => setShowWithdrawal(false)}
+        sessionId={session?.id || null}
+        balance={session?.balance ?? 0}
+        withdrawalAddress={session?.withdrawalAddress ?? null}
+        isDemo={session?.isDemo ?? session?.walletAddress?.startsWith('demo_') ?? true}
+        onBalanceUpdate={(newBalance) => {
+          setSession(prev => prev ? { ...prev, balance: newBalance } : null)
+        }}
       />
     </main>
   )

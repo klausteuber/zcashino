@@ -8,6 +8,7 @@ interface DepositWidgetProps {
   isAuthenticated: boolean
   pendingDeposit?: { amount: number; confirmations: number } | null
   onDepositClick: () => void
+  onWithdrawClick?: () => void
   onSwitchToReal?: () => void
 }
 
@@ -17,6 +18,7 @@ export function DepositWidget({
   isAuthenticated,
   pendingDeposit,
   onDepositClick,
+  onWithdrawClick,
   onSwitchToReal
 }: DepositWidgetProps) {
   const [showTooltip, setShowTooltip] = useState(false)
@@ -97,14 +99,25 @@ export function DepositWidget({
         </div>
       )}
 
-      {/* Deposit Button */}
-      <button
-        onClick={onDepositClick}
-        className="btn-gold-shimmer flex items-center gap-1.5 px-3 py-1.5 text-midnight-black text-sm font-semibold rounded-lg"
-      >
-        <span>+</span>
-        <span>Deposit</span>
-      </button>
+      {/* Deposit & Withdraw Buttons */}
+      <div className="flex items-center gap-2">
+        <button
+          onClick={onDepositClick}
+          className="btn-gold-shimmer flex items-center gap-1.5 px-3 py-1.5 text-midnight-black text-sm font-semibold rounded-lg"
+        >
+          <span>+</span>
+          <span>Deposit</span>
+        </button>
+        {onWithdrawClick && balance > 0 && (
+          <button
+            onClick={onWithdrawClick}
+            className="flex items-center gap-1.5 px-3 py-1.5 border border-masque-gold/30 text-venetian-gold text-sm font-semibold rounded-lg hover:bg-masque-gold/10 transition-colors"
+          >
+            <span>&minus;</span>
+            <span>Withdraw</span>
+          </button>
+        )}
+      </div>
     </div>
   )
 }
@@ -114,7 +127,8 @@ export function DepositWidgetCompact({
   balance,
   isDemo,
   pendingDeposit,
-  onDepositClick
+  onDepositClick,
+  onWithdrawClick,
 }: Omit<DepositWidgetProps, 'isAuthenticated' | 'onSwitchToReal'>) {
   return (
     <div className="flex items-center gap-2">
@@ -139,6 +153,14 @@ export function DepositWidgetCompact({
       >
         +
       </button>
+      {onWithdrawClick && balance > 0 && (
+        <button
+          onClick={onWithdrawClick}
+          className="w-8 h-8 flex items-center justify-center border border-masque-gold/30 text-venetian-gold font-bold rounded-lg hover:bg-masque-gold/10 transition-colors"
+        >
+          &minus;
+        </button>
+      )}
     </div>
   )
 }
