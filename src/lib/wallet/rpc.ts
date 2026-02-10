@@ -347,7 +347,7 @@ export async function sendZec(
 
   const opid = await rpcCall<string>(
     'z_sendmany',
-    [fromAddress, [recipient]],
+    [fromAddress, [recipient], 1, null, 'AllowRevealedAmounts'],
     network
   )
 
