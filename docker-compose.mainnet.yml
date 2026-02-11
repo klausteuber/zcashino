@@ -1,0 +1,97 @@
+# CypherJester Mainnet Docker Compose
+#
+# Usage: docker compose -f docker-compose.mainnet.yml up -d
+#
+# PREREQUISITES:
+# 1. VPS has >= 400GB disk, >= 16GB RAM
+# 2. .env.mainnet is configured with all required variables
+# 3. House wallet z-address generated and funded
+# 4. Wallet backup stored off-site (encrypted)
+#
+# FIRST RUN:
+# 1. Start zcashd first: docker compose -f docker-compose.mainnet.yml up -d zcashd
+# 2. Wait for full sync (15-24 hours): docker compose -f docker-compose.mainnet.yml exec zcashd zcash-cli getblockchaininfo
+# 3. Generate house wallet: docker compose -f docker-compose.mainnet.yml exec zcashd zcash-cli z_getnewaddress sapling
+# 4. Back up wallet immediately: see DEPLOYMENT.md
+# 5. Fund house wallet, set HOUSE_ZADDR_MAINNET in .env.mainnet
+# 6. Start app: docker compose -f docker-compose.mainnet.yml up -d app
+
+services:
+  app:
+    build: .
+    ports:
+      - "127.0.0.1:3000:3000"  # Localhost only — Nginx proxies public traffic
+    env_file:
+      - .env.mainnet
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=file:/app/data/zcashino.db
+      - ZCASH_RPC_URL=http://zcashd:8232
+    volumes:
+      - app-data:/app/data
+    restart: unless-stopped
+    depends_on:
+      zcashd:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  zcashd:
+    image: electriccoinco/zcashd:v6.1.0  # Pinned version — update every 12 weeks
+    command:
+      - -rpcuser=${ZCASH_RPC_USER:-zcashrpc}
+      - -rpcpassword=${ZCASH_RPC_PASSWORD:?ZCASH_RPC_PASSWORD is required}
+      - -rpcallowip=172.16.0.0/12    # Docker internal network only
+      - -rpcbind=0.0.0.0
+      - -rpcport=8232
+      - -experimentalfeatures=1
+      - -txindex=1
+      - -i-am-aware-zcashd-will-be-replaced-by-zebrad-and-zallet-in-2025=1
+    # NOTE: No -testnet flag — this runs MAINNET
+    # NOTE: No ports exposed — RPC accessible only from Docker network
+    volumes:
+      - zcash-mainnet-data:/srv/zcashd/.zcash
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 12G
+        reservations:
+          memory: 8G
+    healthcheck:
+      test: ["CMD", "zcash-cli", "-rpcuser=${ZCASH_RPC_USER:-zcashrpc}", "-rpcpassword=${ZCASH_RPC_PASSWORD}", "getblockchaininfo"]
+      interval: 60s
+      timeout: 10s
+      start_period: 300s    # 5 min grace for startup
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "3"
+
+volumes:
+  app-data:
+    driver: local
+  zcash-mainnet-data:
+    driver: local
+    # To use a separate mount point for chain data (if disk add-on is a block device):
+    # driver_opts:
+    #   type: none
+    #   o: bind
+    #   device: /mnt/zcash-data

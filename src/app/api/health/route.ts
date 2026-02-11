@@ -1,11 +1,16 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
-import { checkNodeStatus } from '@/lib/wallet/rpc'
-import { DEFAULT_NETWORK } from '@/lib/wallet'
+import { checkNodeStatus, getAddressBalance } from '@/lib/wallet/rpc'
+import { DEFAULT_NETWORK, getHouseAddress } from '@/lib/wallet'
+import { isKillSwitchActive } from '@/lib/kill-switch'
+
+// Severity thresholds
+const POOL_LOW_THRESHOLD = 5
+const BALANCE_WARN_THRESHOLD = parseFloat(process.env.HOUSE_BALANCE_ALERT_THRESHOLD || '0.5')
 
 export async function GET() {
   const checks: Record<string, unknown> = {}
-  let healthy = true
+  let severity: 'ok' | 'warning' | 'critical' = 'ok'
 
   // Database check
   try {
@@ -13,7 +18,7 @@ export async function GET() {
     checks.db = true
   } catch {
     checks.db = false
-    healthy = false
+    severity = 'critical'
   }
 
   // Zcash node check
@@ -25,7 +30,6 @@ export async function GET() {
       blockHeight: nodeStatus.blockHeight,
     }
     if (!nodeStatus.connected) {
-      // Node being down is not a hard failure in demo mode
       checks.zcashNodeWarning = 'Node not connected (demo mode may be active)'
     }
   } catch {
@@ -38,17 +42,56 @@ export async function GET() {
       where: { status: 'available' },
     })
     checks.commitmentPool = { available }
-    if (available < 5) {
+    if (available === 0) {
+      severity = severity === 'critical' ? 'critical' : 'critical'
+      checks.commitmentPoolWarning = 'Pool is empty — games cannot start'
+    } else if (available < POOL_LOW_THRESHOLD) {
+      if (severity === 'ok') severity = 'warning'
       checks.commitmentPoolWarning = 'Pool is low, games may experience delays'
     }
   } catch {
     checks.commitmentPool = { available: 0 }
   }
 
+  // House wallet balance check
+  try {
+    const houseAddr = getHouseAddress(DEFAULT_NETWORK)
+    if (houseAddr && !houseAddr.startsWith('ztestsapling1...')) {
+      const balance = await getAddressBalance(houseAddr, DEFAULT_NETWORK)
+      checks.houseBalance = {
+        confirmed: balance.confirmed,
+        pending: balance.pending,
+      }
+      if (balance.confirmed < BALANCE_WARN_THRESHOLD) {
+        if (severity === 'ok') severity = 'warning'
+        checks.houseBalanceWarning = `House balance low: ${balance.confirmed} ZEC`
+      }
+    }
+  } catch {
+    // Balance check failure is not critical — node may be offline
+    checks.houseBalance = null
+  }
+
+  // Pending withdrawals check
+  try {
+    const pendingWithdrawals = await prisma.transaction.count({
+      where: { type: 'withdrawal', status: { in: ['pending', 'pending_approval'] } },
+    })
+    checks.pendingWithdrawals = pendingWithdrawals
+  } catch {
+    checks.pendingWithdrawals = null
+  }
+
+  // Kill switch status
+  checks.killSwitch = isKillSwitchActive()
+
+  const healthy = severity !== 'critical'
+
   return NextResponse.json(
     {
-      status: healthy ? 'ok' : 'degraded',
+      status: severity,
       timestamp: new Date().toISOString(),
+      network: DEFAULT_NETWORK,
       ...checks,
     },
     { status: healthy ? 200 : 503 }

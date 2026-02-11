@@ -262,3 +262,108 @@ Replace all uses of `Math.random()` in the provably fair system with `node:crypt
 1. **32 bytes (256 bits) of entropy** — industry standard for cryptographic seeds.
 2. **Hex encoding** — consistent, URL-safe, and easy to hash with SHA-256.
 3. **No fallback to Math.random** — if `node:crypto` is unavailable, the app should fail loudly rather than silently degrade.
+
+---
+
+## Phase 1 Mainnet Safety Guards (2026-02-10)
+
+### Decision
+Implement defensive safety guards that distinguish testnet (permissive) from mainnet (strict) behavior across all critical code paths.
+
+### Why
+A mainnet readiness audit identified 50 findings (7 CRITICAL, 19 HIGH). The core issue: code designed for fast testnet iteration had silent fallbacks that would be catastrophic with real money. Phase 1 addresses the highest-severity items.
+
+### Implementation
+
+**1. Startup Validator (`src/lib/startup-validator.ts`)**
+- Validates environment configuration at server boot
+- Fatal errors on mainnet: DEMO_MODE=true, missing house address, weak credentials, no FORCE_HTTPS
+- Warnings on testnet for same issues
+- Wired into `instrumentation.ts` → runs on every Node.js startup
+
+**2. Mock Commitment Blocking (`src/lib/provably-fair/blockchain.ts`)**
+- On mainnet: all 4 fallback paths return `{ success: false }` instead of mock commitments
+- Games cannot start without real on-chain proofs on mainnet
+- On testnet: behavior unchanged (mocks still allowed for development)
+
+**3. Atomic Commitment Claims (`src/lib/provably-fair/commitment-pool.ts`)**
+- `prisma.$transaction()` with `updateMany` + status guard prevents double-claim
+- Pattern: find → updateMany where status='available' → check count → return null if 0
+
+**4. Atomic Balance Deduction (`src/app/api/game/route.ts`)**
+- `balance: { decrement: totalBet }` replaces read-compute-write pattern
+- Negative balance rollback as safety net
+
+**5. Fake Address Blocking (`session/route.ts` + `wallet/route.ts`)**
+- Mainnet + node offline → throw error (not generate fake address)
+- Testnet only: `tmDemo...` placeholder allowed
+
+**6. House Balance Verification (`src/app/api/wallet/route.ts`)**
+- `getAddressBalance()` check before `sendZec()` in withdrawal handler
+- Insufficient funds → refund user immediately
+
+**7. Background Services (`src/instrumentation.ts`)**
+- Startup validator + commitment pool manager wired into Next.js `register()`
+- Pool manager: 5-min refill interval, 1-hour cleanup interval
+
+**8. Rate Limiting on GET Endpoints**
+- Added `checkPublicRateLimit()` to GET /api/game, GET /api/session, GET /api/wallet
+
+### Key Technical Choices
+1. **Fail-closed on mainnet, fail-open on testnet.** Every safety check uses `if (isMainnet)` to determine behavior. Testnet preserves developer experience.
+2. **Atomic Prisma operations over application-level locks.** Database-level atomicity is more reliable than in-process mutexes, especially under concurrent requests.
+3. **Refund-first error handling for withdrawals.** Any failure after balance deduction triggers immediate refund, not manual recovery.
+
+---
+
+## Phase 2 Mainnet Hardening (2026-02-10)
+
+### Decision
+Implement five operational safety features for mainnet readiness: platform kill switch, float precision defense, atomic game completion, deposit sweep service, and withdrawal approval threshold.
+
+### Why
+Phase 1 addressed safety guards (fail-closed on mainnet, atomic operations). Phase 2 addresses operational concerns that arise when running a real-money casino: emergency shutdown capability, float precision bugs in payout math, double-payout race conditions, fund consolidation from deposit addresses, and human oversight for large withdrawals.
+
+### Implementation
+
+**1. Platform Kill Switch (`src/lib/kill-switch.ts`)**
+- Runtime in-memory flag + `KILL_SWITCH` env var for persistence across restarts
+- Blocks new game starts (POST /api/game) and withdrawals (POST /api/wallet)
+- Allows in-progress games to complete naturally (no mid-hand interruption)
+- Deposit detection continues working (don't lose user funds during maintenance)
+- Admin toggle in dashboard with confirmation dialog
+- Session GET returns `maintenanceMode` flag for frontend maintenance banner
+
+**2. Float Precision Defense (`roundZec()` in `src/lib/wallet/index.ts`)**
+- `Math.round(amount * 1e8) / 1e8` applied at every DB write boundary
+- Covers: blackjack payouts, perfect pairs side bet, insurance payouts, balance updates, deposit amounts, withdrawal amounts, processGameCompletion crediting
+- Prevents accumulation of IEEE 754 floating-point artifacts in balance records
+
+**3. Atomic Game Completion (double-payout fix in `src/app/api/game/route.ts`)**
+- `processGameCompletion()` uses `updateMany where status='active'` to atomically transition game status
+- If 0 rows updated, another call path already credited the payout (idempotent)
+- Fixes race where both `handleStartGame` (auto-dealing next hand) and `handleGameAction` (completing current hand) could call `processGameCompletion` for the same game
+
+**4. Deposit Sweep Service (`src/lib/services/deposit-sweep.ts`)**
+- Background service running every 10 minutes (configurable)
+- Consolidates transparent deposit address balances into the house shielded z-address
+- Min sweep threshold: 0.001 ZEC (avoids sweeping dust that costs more in fees than it's worth)
+- Tracks sweep history via `SweepLog` Prisma model and `lastSweptAt`/`totalSwept` on `DepositWallet`
+- Admin can trigger manual sweep from dashboard
+- Reserves API includes `totalSweptToHouseWallet` for public transparency
+- Wired into `instrumentation.ts` alongside commitment pool manager
+
+**5. Withdrawal Approval Threshold**
+- Configurable via `WITHDRAWAL_APPROVAL_THRESHOLD` env var (default: 0, meaning disabled)
+- Withdrawals >= threshold get `status: 'pending_approval'` instead of immediate z_sendmany
+- Admin approve: triggers z_sendmany, transitions to `pending` (normal async flow)
+- Admin reject: refunds user balance atomically, marks transaction `failed`
+- Admin dashboard shows approve/reject buttons for pending_approval withdrawals
+- WithdrawalModal shows "Awaiting Admin Approval" step in the progress flow
+
+### Key Technical Choices
+1. **`roundZec()` over integer zatoshi migration.** IEEE 754 Float64 has 53 bits of mantissa, which represents integers exactly up to 2^53. Since 90M ZEC = 9e15 zatoshi < 2^53 = ~9.007e15, Float64 can represent every possible zatoshi amount without precision loss. A full integer migration would touch every API, DB column, and UI format string for zero practical benefit.
+2. **`updateMany` for idempotent game completion.** The `where: { id, status: 'active' }` clause acts as a compare-and-swap. If another code path already completed the game, the update matches 0 rows and the caller knows to skip payout. This is simpler and more reliable than distributed locking.
+3. **In-memory kill switch with env var fallback.** The in-memory flag gives instant toggle without restart. The `KILL_SWITCH` env var ensures the switch survives container restarts. Both are checked — either one being set activates maintenance mode.
+4. **Sweep service as a background interval, not triggered by deposits.** Running on a fixed interval is simpler to reason about, doesn't add latency to deposit processing, and naturally batches multiple deposits into one sweep transaction (saving fees).
+5. **Withdrawal threshold defaults to 0 (disabled).** Zero means all withdrawals are auto-approved, preserving the current UX. Operators set a non-zero value when they want human oversight for large amounts.

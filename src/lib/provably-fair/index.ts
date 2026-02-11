@@ -1,5 +1,11 @@
-import type { ProvablyFairData, VerificationResult } from '@/types'
+import type { ProvablyFairData, VerificationResult, BlackjackAction } from '@/types'
 import { generateShuffleOrder } from '@/lib/game/deck'
+import {
+  createInitialState,
+  startRound,
+  executeAction,
+  takeInsurance
+} from '@/lib/game/blackjack'
 import { randomBytes, createHash } from 'node:crypto'
 
 /**
@@ -94,6 +100,73 @@ export async function createProvablyFairSession(
     serverSeedHash,
     clientSeed: finalClientSeed,
     nonce
+  }
+}
+
+/**
+ * Replay a completed game from its seeds and action history.
+ * Returns the replayed game state so the verify endpoint can compare
+ * the dealt cards and outcome against what was stored in the database.
+ */
+export function replayGame(params: {
+  serverSeed: string
+  serverSeedHash: string
+  clientSeed: string
+  nonce: number
+  mainBet: number
+  perfectPairsBet: number
+  insuranceBet: number
+  actionHistory: BlackjackAction[]
+}): {
+  playerCards: string[][]
+  dealerCards: string[]
+  outcome: string
+  payout: number
+} {
+  // Reconstruct game state using the same seed → same deck
+  const initialState = createInitialState(1000) // Balance doesn't affect card dealing
+  let gameState = startRound(
+    initialState,
+    params.mainBet,
+    params.perfectPairsBet,
+    params.serverSeed,
+    params.serverSeedHash,
+    params.clientSeed,
+    params.nonce
+  )
+
+  // Restore insurance if taken
+  if (params.insuranceBet > 0) {
+    gameState = takeInsurance(gameState, params.insuranceBet)
+  }
+
+  // Replay all player actions
+  for (const action of params.actionHistory) {
+    gameState = executeAction(gameState, action)
+  }
+
+  // Extract dealt cards as readable strings for comparison
+  const playerCards = gameState.playerHands.map(hand =>
+    hand.cards.map(c => `${c.rank}${c.suit}`)
+  )
+  const dealerCards = gameState.dealerHand.cards.map(c => `${c.rank}${c.suit}`)
+
+  // Determine outcome from final state
+  let outcome = 'unknown'
+  if (gameState.phase === 'complete') {
+    if (gameState.lastPayout > 0) {
+      const totalBet = gameState.playerHands.reduce((sum, h) => sum + h.bet, 0)
+      outcome = gameState.lastPayout === totalBet ? 'push' : 'win'
+    } else {
+      outcome = 'lose'
+    }
+  }
+
+  return {
+    playerCards,
+    dealerCards,
+    outcome,
+    payout: gameState.lastPayout
   }
 }
 

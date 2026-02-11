@@ -46,14 +46,24 @@ export interface CommitmentVerification {
  *
  * Creates a shielded transaction with the hash stored in the encrypted memo field.
  * The tx is sent from house wallet to itself (funds cycle back, only fee consumed).
+ *
+ * SAFETY: On mainnet, mock commitments are NEVER created. If the node is
+ * unavailable, this returns { success: false } so games cannot start without
+ * real on-chain provably fair proofs.
  */
 export async function commitServerSeedHash(
   serverSeedHash: string,
   network: ZcashNetwork = DEFAULT_NETWORK
 ): Promise<CommitmentResult> {
+  const isMainnet = network === 'mainnet'
+
   try {
     // In demo mode, skip RPC entirely and use mock commitments immediately
+    // SAFETY: Demo mode is blocked on mainnet by startup validator
     if (process.env.DEMO_MODE === 'true') {
+      if (isMainnet) {
+        return { success: false, error: 'DEMO_MODE is forbidden on mainnet' }
+      }
       console.log('[Blockchain] DEMO_MODE enabled, using mock commitment')
       return createMockCommitment(serverSeedHash)
     }
@@ -61,20 +71,30 @@ export async function commitServerSeedHash(
     // Check node status first
     const nodeStatus = await checkNodeStatus(network)
     if (!nodeStatus.connected) {
-      // When node unavailable, use mock commitments for demo/development
-      console.log('[Blockchain] Node not connected, using mock commitment for demo mode')
+      if (isMainnet) {
+        console.error('[Blockchain] MAINNET: Node not connected — refusing to create mock commitment')
+        return { success: false, error: 'Zcash node not connected. Cannot create on-chain commitment.' }
+      }
+      console.log('[Blockchain] Node not connected, using mock commitment for development')
       return createMockCommitment(serverSeedHash)
     }
 
     const houseAddress = HOUSE_ADDRESSES[network]
     if (!houseAddress || houseAddress === 'ztestsapling1...') {
-      // House address not configured yet - use mock commitment
+      if (isMainnet) {
+        console.error('[Blockchain] MAINNET: House address not configured — refusing to create mock commitment')
+        return { success: false, error: 'House wallet address not configured.' }
+      }
       console.log('[Blockchain] House address not configured, using mock commitment')
       return createMockCommitment(serverSeedHash)
     }
 
-    // If node is connected but not synced, use mock commitments
+    // If node is connected but not synced, fail on mainnet
     if (!nodeStatus.synced) {
+      if (isMainnet) {
+        console.error(`[Blockchain] MAINNET: Node syncing (block ${nodeStatus.blockHeight}) — refusing mock commitment`)
+        return { success: false, error: 'Zcash node is still syncing. Cannot create on-chain commitment.' }
+      }
       console.log(`[Blockchain] Node syncing (block ${nodeStatus.blockHeight}), using mock commitment`)
       return createMockCommitment(serverSeedHash)
     }

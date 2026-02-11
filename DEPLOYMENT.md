@@ -228,36 +228,280 @@ No hosted RPC provider supports the wallet methods we need (`z_sendmany`, `z_get
 - **CSP + Next.js**: `script-src` must include `'unsafe-inline'` — Next.js uses inline scripts for hydration that CSP blocks otherwise
 - **Firewall**: Only expose ports 22 (SSH) and 3000 (app). Block zcashd RPC port (18232/8232) externally
 
+## Mainnet Deployment
+
+### Prerequisites
+
+- VPS with 16 GB RAM, 6 CPU, 420 GB+ disk (zcashd mainnet chain is ~300 GB)
+- Docker & Docker Compose v2
+- Nginx with TLS (Let's Encrypt)
+- UFW firewall: only ports 22, 80, 443
+
+### Step-by-Step
+
+```bash
+# 1. Copy mainnet config
+cp .env.mainnet.example .env.mainnet
+# Edit .env.mainnet with real values (see file for generation instructions)
+
+# 2. Start zcashd first (sync takes 15-24h)
+docker compose -f docker-compose.mainnet.yml up -d zcashd
+
+# 3. Monitor sync progress
+docker compose -f docker-compose.mainnet.yml exec zcashd zcash-cli getblockchaininfo
+# Wait until verificationprogress >= 0.9999
+
+# 4. Generate house wallet addresses
+docker compose -f docker-compose.mainnet.yml exec zcashd zcash-cli z_getnewaddress sapling
+# → zs1... (set as HOUSE_ZADDR_MAINNET in .env.mainnet)
+docker compose -f docker-compose.mainnet.yml exec zcashd zcash-cli getnewaddress
+# → t1... (house transparent address for deposit sweeps)
+
+# 5. IMMEDIATELY back up the wallet
+docker compose -f docker-compose.mainnet.yml exec zcashd \
+  zcash-cli z_exportwallet /srv/zcashd/.zcash/wallet-export.txt
+docker cp $(docker compose -f docker-compose.mainnet.yml ps -q zcashd):/srv/zcashd/.zcash/wallet.dat ./wallet.dat
+gpg --symmetric --cipher-algo AES256 wallet.dat
+# Store encrypted copy in 2+ geographically separate locations
+rm wallet.dat  # Remove unencrypted copy
+
+# 6. Fund house wallet with initial bankroll
+
+# 7. Start the app
+docker compose -f docker-compose.mainnet.yml up -d
+
+# 8. Verify health
+curl https://cypherjester.com/api/health
+
+# 9. Install monitoring cron jobs (see Monitoring section)
+
+# 10. Smoke test: deposit small amount, play one hand, withdraw
+```
+
+### Mainnet vs Testnet Differences
+
+| Aspect | Testnet | Mainnet |
+|--------|---------|---------|
+| Compose file | `docker-compose.yml` | `docker-compose.mainnet.yml` |
+| Env file | `.env` | `.env.mainnet` |
+| zcashd flag | `-testnet` | (none) |
+| RPC port | 18232 | 8232 |
+| zcashd image | `:latest` | `:v6.1.0` (pinned) |
+| RPC exposure | Host-mapped | Docker-internal only |
+| `rpcallowip` | `0.0.0.0/0` | `172.16.0.0/12` |
+| App port | `3000:3000` | `127.0.0.1:3000:3000` |
+| Fake addresses | Allowed (testnet) | Blocked (fail-closed) |
+| Mock commitments | Allowed | Blocked |
+| Disk | ~60 GB | ~300+ GB |
+| RAM (zcashd) | 8 GB | 12 GB limit |
+
 ## Monitoring
 
-- **Health check**: `GET /api/health` returns database, node, and pool status
+### Health Endpoint
+
+`GET /api/health` returns:
+- Database connectivity
+- zcashd node status (connected, synced, block height)
+- Commitment pool count and warning threshold
+- House wallet balance (confirmed/pending)
+- Pending withdrawal count
+- Kill switch status
+- Overall severity: `ok`, `warning`, or `critical`
+
+### Monitoring Scripts
+
+All scripts are in `scripts/`. Configure credentials in `.env.monitoring`:
+
+```bash
+# .env.monitoring
+TELEGRAM_BOT_TOKEN=your-bot-token
+TELEGRAM_CHAT_ID=your-chat-id
+BACKUP_PASSPHRASE=your-gpg-passphrase
+MIN_HOUSE_BALANCE=0.5
+DISK_THRESHOLD=85
+```
+
+Install cron jobs:
+
+```bash
+# Edit crontab
+crontab -e
+
+# Add these entries:
+*/5 * * * *  /opt/zcashino/scripts/check-node.sh    >> /var/log/zcashino-monitor.log 2>&1
+*/15 * * * * /opt/zcashino/scripts/check-balance.sh  >> /var/log/zcashino-monitor.log 2>&1
+0 * * * *    /opt/zcashino/scripts/check-disk.sh     >> /var/log/zcashino-monitor.log 2>&1
+0 3 * * *    /opt/zcashino/scripts/backup-db.sh      >> /var/log/zcashino-backup.log 2>&1
+0 4 * * 0    /opt/zcashino/scripts/backup-wallet.sh  >> /var/log/zcashino-backup.log 2>&1
+```
+
+| Script | Schedule | What it checks |
+|--------|----------|----------------|
+| `check-node.sh` | Every 5 min | zcashd running, synced, block age < 10 min |
+| `check-balance.sh` | Every 15 min | House balance above threshold |
+| `check-disk.sh` | Hourly | Disk usage below 85% |
+| `backup-db.sh` | Daily 3am | SQLite backup, gzipped, 30-day retention |
+| `backup-wallet.sh` | Weekly Sun 4am | wallet.dat backup, GPG encrypted, 4-copy retention |
+| `send-alert.sh` | (shared) | Telegram notification delivery |
+
+### External Monitoring
+
 - **Uptime**: Point UptimeRobot or similar at `https://yourdomain.com/api/health`
 - **Errors**: Configure `NEXT_PUBLIC_SENTRY_DSN` for Sentry error tracking
 - **Admin dashboard**: `https://yourdomain.com/admin` for operational oversight
 
-## Database Backups
+## Backups
 
-For SQLite (MVP):
+### Database (SQLite)
+
+Automated via `scripts/backup-db.sh` (daily, 30-day retention):
 
 ```bash
 # Manual backup
-cp /app/data/zcashino.db /backups/zcashino-$(date +%Y%m%d).db
+scripts/backup-db.sh
 
-# Cron job (daily at 3am)
-0 3 * * * cp /app/data/zcashino.db /backups/zcashino-$(date +\%Y\%m\%d).db
+# Restore from backup
+gunzip /opt/zcashino/backups/db/zcashino-YYYYMMDD-HHMMSS.db.gz
+cp zcashino-YYYYMMDD-HHMMSS.db /opt/zcashino/data/zcashino.db
+chown 1001:1001 /opt/zcashino/data/zcashino.db
+docker compose restart app
 ```
 
-For production, migrate to Turso or PostgreSQL.
+### Wallet (zcashd)
+
+Automated via `scripts/backup-wallet.sh` (weekly, 4-copy retention):
+
+```bash
+# Manual backup
+scripts/backup-wallet.sh
+
+# Restore from encrypted backup
+gpg --decrypt wallet-YYYYMMDD.dat.gpg > wallet.dat
+# Stop zcashd, replace wallet.dat in volume, restart
+```
+
+### Backup Verification
+
+Run a restore drill at least once during the first 30 days of mainnet operation.
+
+## Incident Runbooks
+
+### Node Falls Behind (Not Synced)
+
+**Symptoms**: `check-node.sh` alerts, health endpoint shows `synced: false`
+
+1. Check zcashd logs: `docker compose logs --tail 100 zcashd`
+2. Check disk space: `df -h`
+3. Check memory: `free -h`
+4. If disk full: expand volume or clean Docker images (`docker system prune`)
+5. If OOM: increase zcashd memory limit in compose file
+6. Restart: `docker compose restart zcashd`
+7. Wait for resync (monitor with `zcash-cli getblockchaininfo`)
+8. If stuck: stop, delete `~/.zcash/blocks/` in volume, restart (full resync ~24h)
+
+### House Balance Low
+
+**Symptoms**: `check-balance.sh` alerts, health shows `warning` severity
+
+1. Activate kill switch (admin dashboard or API) to pause withdrawals
+2. Check pending withdrawals in admin dashboard
+3. Transfer ZEC from cold wallet to house z-address
+4. Verify balance recovered: `zcash-cli z_getbalance <house-addr>`
+5. Deactivate kill switch once balance is healthy
+
+### Stuck Withdrawal (z_sendmany Pending)
+
+**Symptoms**: Withdrawal stuck in `pending` status, user complaining
+
+1. Get the operation ID from the transaction record
+2. Check status: `zcash-cli z_getoperationstatus '["opid-xxx"]'`
+3. If `failed`: note the error, refund user balance via admin dashboard
+4. If `executing` for > 30 min: check node sync status
+5. If node is synced but op stuck: restart zcashd (safe — pending ops resume)
+6. Check result after restart: `zcash-cli z_getoperationresult '["opid-xxx"]'`
+
+### Commitment Pool Depleted
+
+**Symptoms**: Health shows pool count = 0, new games fail
+
+1. Check house wallet balance (pool refill requires on-chain tx)
+2. If balance sufficient: trigger manual refill from admin dashboard
+3. If balance insufficient: fund house wallet first
+4. Monitor pool count in admin dashboard until restored
+5. If node is down: activate kill switch until node recovers
+
+### Database Corruption
+
+**Symptoms**: App crashes, Prisma errors, health endpoint returns 500
+
+1. Stop the app: `docker compose stop app`
+2. Check SQLite integrity: `sqlite3 /opt/zcashino/data/zcashino.db "PRAGMA integrity_check;"`
+3. If corrupt: restore from latest daily backup
+4. Verify restored DB: `sqlite3 restored.db "PRAGMA integrity_check;"`
+5. Replace: `cp restored.db /opt/zcashino/data/zcashino.db && chown 1001:1001 /opt/zcashino/data/zcashino.db`
+6. Restart: `docker compose start app`
+7. Reconcile: compare session balances vs on-chain state
+
+### VPS Outage / Server Migration
+
+1. Provision new VPS (16 GB RAM, 420 GB disk minimum)
+2. Install Docker, Nginx, certbot
+3. Restore wallet from encrypted backup (GPG decrypt)
+4. Restore database from latest backup
+5. Copy `.env.mainnet` and `docker-compose.mainnet.yml`
+6. Update DNS to point to new IP
+7. Start services: `docker compose -f docker-compose.mainnet.yml up -d`
+8. Wait for zcashd to sync (can take 24h for full resync)
+9. Verify: `curl https://cypherjester.com/api/health`
+10. Install monitoring cron jobs
+
+## Kill Switch
+
+The kill switch blocks new games and withdrawals while allowing in-progress games to complete.
+
+```bash
+# Activate via API (from server)
+curl -X POST http://127.0.0.1:3000/api/admin/kill-switch \
+  -H "Cookie: zcashino_admin_session=<token>" \
+  -H "Content-Type: application/json" \
+  -d '{"active": true}'
+
+# Or use admin dashboard: https://cypherjester.com/admin
+```
+
+State persists across container restarts (stored in `/app/data/kill-switch.json`). The `KILL_SWITCH` env var takes precedence over file state.
 
 ## Pre-Launch Checklist
 
-- [ ] Strong credentials set in `.env`
+### Security
+- [ ] Strong credentials set in `.env.mainnet` (all generated with `openssl rand`)
 - [ ] `DEMO_MODE=false`
-- [ ] Zcash node synced and connected
-- [ ] House wallet funded with ZEC
+- [ ] UFW firewall: only ports 22, 80, 443 (no direct app/RPC access)
+- [ ] SSH key-only auth (`PasswordAuthentication no`)
+- [ ] Nginx rate limiting on `/api/` routes
+- [ ] `FORCE_HTTPS=true`
+
+### Infrastructure
+- [ ] Zcash node fully synced (`verificationprogress >= 0.9999`)
+- [ ] House wallet funded with initial bankroll
+- [ ] Wallet backed up (GPG encrypted, 2+ locations)
 - [ ] Commitment pool populated (check admin dashboard)
-- [ ] Health check returns `ok`
-- [ ] TLS/HTTPS configured
-- [ ] Monitoring alerts configured
-- [ ] Backup strategy in place
+- [ ] Health check returns `severity: ok`
+- [ ] TLS/HTTPS configured and cert not expiring soon
+- [ ] Monitoring cron jobs installed and tested
+- [ ] Backup scripts tested (DB + wallet)
+
+### Application
+- [ ] `WITHDRAWAL_APPROVAL_THRESHOLD` set (recommend 1.0 ZEC initially)
+- [ ] Sentry DSN configured
+- [ ] Admin dashboard accessible
 - [ ] Legal pages reviewed (/terms, /privacy, /responsible-gambling)
+- [ ] Smoke test: deposit, play, withdraw with real ZEC
+
+### Post-Launch (First 30 Days)
+- [ ] Daily reconciliation: `sum(session.balance)` vs on-chain house balance
+- [ ] Weekly dependency/security patch review
+- [ ] Backup restore drill completed at least once
+- [ ] Credential rotation at 90 days
+- [ ] Let's Encrypt cert renewal verified
+- [ ] zcashd version check (v6.1.0 support window ~16 weeks)

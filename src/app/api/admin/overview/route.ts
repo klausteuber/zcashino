@@ -9,6 +9,7 @@ import {
   createRateLimitResponse,
 } from '@/lib/admin/rate-limit'
 import { logAdminEvent } from '@/lib/admin/audit'
+import { getKillSwitchStatus } from '@/lib/kill-switch'
 
 /**
  * GET /api/admin/overview
@@ -72,7 +73,7 @@ export async function GET(request: NextRequest) {
       prisma.session.count({ where: { isAuthenticated: true } }),
       prisma.blackjackGame.count({ where: { status: 'active' } }),
       prisma.transaction.count({
-        where: { type: 'withdrawal', status: 'pending' },
+        where: { type: 'withdrawal', status: { in: ['pending', 'pending_approval'] } },
       }),
       prisma.transaction.count({
         where: { type: 'withdrawal', status: 'failed' },
@@ -92,7 +93,7 @@ export async function GET(request: NextRequest) {
         _sum: { amount: true },
       }),
       prisma.transaction.findMany({
-        where: { type: 'withdrawal', status: 'pending' },
+        where: { type: 'withdrawal', status: { in: ['pending', 'pending_approval'] } },
         orderBy: { createdAt: 'desc' },
         take: 25,
         select: {
@@ -102,6 +103,7 @@ export async function GET(request: NextRequest) {
           fee: true,
           address: true,
           operationId: true,
+          status: true,
           createdAt: true,
           session: {
             select: {
@@ -186,6 +188,7 @@ export async function GET(request: NextRequest) {
         fee: tx.fee,
         address: tx.address,
         operationId: tx.operationId,
+        status: tx.status,
         createdAt: tx.createdAt,
         sessionWallet: tx.session.walletAddress,
         sessionBalance: tx.session.balance,
@@ -203,6 +206,7 @@ export async function GET(request: NextRequest) {
         rateLimitedEvents24h,
       },
       auditLogs: recentAuditLogs,
+      killSwitch: getKillSwitchStatus(),
     })
   } catch (error) {
     console.error('Admin overview error:', error)

@@ -108,6 +108,15 @@ export async function GET() {
       _count: true,
     })
 
+    // Get sweep totals (funds consolidated to house wallet)
+    const sweepStats = await prisma.sweepLog.aggregate({
+      where: { status: 'confirmed' },
+      _sum: { amount: true, fee: true },
+      _count: true,
+    })
+
+    const totalSwept = sweepStats._sum.amount || 0
+
     return NextResponse.json({
       // Reserve proof
       reserves: {
@@ -115,6 +124,9 @@ export async function GET() {
         totalUserLiabilities,
         reserveRatio,
         isFullyBacked: reserveRatio >= 1,
+        // Swept funds are held in house shielded address (not publicly verifiable)
+        totalSweptToHouseWallet: totalSwept,
+        sweepCount: sweepStats._count,
       },
 
       // Aggregate statistics

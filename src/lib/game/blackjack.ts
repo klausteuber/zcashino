@@ -16,6 +16,7 @@ import {
   canDouble,
   getPerfectPairsOutcome
 } from './deck'
+import { roundZec } from '@/lib/wallet'
 
 // Game constants - Vegas Strip Rules
 export const BLACKJACK_PAYOUT = 1.5  // 3:2 for blackjack
@@ -123,7 +124,7 @@ export function startRound(
   let perfectPairsResult: BlackjackGameState['perfectPairsResult'] = undefined
   if (perfectPairsBet > 0) {
     const ppResult = getPerfectPairsOutcome(playerCards)
-    perfectPairsPayout = perfectPairsBet * ppResult.multiplier
+    perfectPairsPayout = roundZec(perfectPairsBet * ppResult.multiplier)
     perfectPairsResult = {
       outcome: ppResult.outcome,
       payout: perfectPairsPayout
@@ -157,7 +158,7 @@ export function startRound(
     dealerHand,
     currentHandIndex: 0,
     deck: remainingDeck,
-    balance: state.balance - totalBet + perfectPairsPayout,
+    balance: roundZec(state.balance - totalBet + perfectPairsPayout),
     currentBet: mainBet,
     perfectPairsBet,
     insuranceBet: 0,
@@ -477,7 +478,7 @@ function resolveRound(state: BlackjackGameState): BlackjackGameState {
 
   // Process insurance bet
   if (state.insuranceBet > 0 && dealerBlackjack) {
-    const insurancePayout = state.insuranceBet * (1 + INSURANCE_PAYOUT)
+    const insurancePayout = roundZec(state.insuranceBet * (1 + INSURANCE_PAYOUT))
     totalPayout += insurancePayout
   }
 
@@ -500,16 +501,16 @@ function resolveRound(state: BlackjackGameState): BlackjackGameState {
         reason = 'Both blackjack - push'
       } else {
         outcome = 'blackjack'
-        payout = hand.bet * (1 + BLACKJACK_PAYOUT)
+        payout = roundZec(hand.bet * (1 + BLACKJACK_PAYOUT))
         reason = 'Blackjack pays 3:2'
       }
     } else if (dealerBusted) {
       outcome = 'win'
-      payout = hand.bet * 2
+      payout = roundZec(hand.bet * 2)
       reason = 'Dealer busted'
     } else if (playerValue > dealerValue) {
       outcome = 'win'
-      payout = hand.bet * 2
+      payout = roundZec(hand.bet * 2)
       reason = `Player ${playerValue} beats dealer ${dealerValue}`
     } else if (playerValue < dealerValue) {
       outcome = 'lose'
@@ -540,8 +541,8 @@ function resolveRound(state: BlackjackGameState): BlackjackGameState {
   return {
     ...state,
     phase: 'complete',
-    balance: state.balance + totalPayout,
-    lastPayout: totalPayout,
+    balance: roundZec(state.balance + totalPayout),
+    lastPayout: roundZec(totalPayout),
     message
   }
 }

@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react'
 
-type WithdrawalStep = 'form' | 'confirm' | 'processing' | 'success' | 'error'
+type WithdrawalStep = 'form' | 'confirm' | 'processing' | 'pending_approval' | 'success' | 'error'
 
 interface WithdrawalModalProps {
   isOpen: boolean
@@ -98,6 +98,11 @@ export function WithdrawalModal({
         setTxHash(data.transaction.txHash)
         setStep('success')
         onBalanceUpdate(balance - totalDeducted)
+      } else if (data.transaction?.status === 'pending_approval') {
+        // Large withdrawal — held for admin approval
+        setTransactionId(data.transaction.id)
+        onBalanceUpdate(balance - totalDeducted)
+        setStep('pending_approval')
       } else {
         // Real mode — poll for status
         setTransactionId(data.transaction.id)
@@ -134,6 +139,12 @@ export function WithdrawalModal({
         if (tx?.status === 'confirmed') {
           setTxHash(tx.txHash)
           setStep('success')
+          if (pollRef.current) {
+            clearInterval(pollRef.current)
+            pollRef.current = null
+          }
+        } else if (tx?.status === 'pending_approval') {
+          setStep('pending_approval')
           if (pollRef.current) {
             clearInterval(pollRef.current)
             pollRef.current = null
@@ -329,6 +340,28 @@ export function WithdrawalModal({
             <p className="text-sm text-venetian-gold/50">
               This may take a few minutes for shielded transactions.
             </p>
+          </div>
+        )}
+
+        {step === 'pending_approval' && (
+          <div className="p-8 text-center">
+            <div className="text-5xl mb-4">&#9200;</div>
+            <h2 className="text-xl font-display font-bold text-bone-white mb-2">Awaiting Admin Approval</h2>
+            <p className="text-3xl font-bold text-masque-gold mb-4 font-mono">
+              {parsedAmount.toFixed(4)} ZEC
+            </p>
+            <p className="text-sm text-venetian-gold/50 mb-4">
+              Your withdrawal requires manual approval due to its size. Your balance has been reserved.
+            </p>
+            <p className="text-xs text-venetian-gold/40 mb-6">
+              You will receive funds once an admin approves the withdrawal. If rejected, your balance will be refunded.
+            </p>
+            <button
+              onClick={onClose}
+              className="w-full py-3 btn-gold-shimmer text-midnight-black font-semibold rounded-lg"
+            >
+              Close
+            </button>
           </div>
         )}
 

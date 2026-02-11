@@ -195,3 +195,159 @@ A naive find-and-replace of "Zcashino" → "CypherJester" won't catch this patte
 cp public/images/pepe-tuxedo.jpg public/images/jester-mask.png
 ```
 Replace with the real asset when available.
+
+---
+
+## Mainnet Safety — Race Conditions (2026-02-10)
+
+### Double-bet exploit via non-atomic balance deduction
+
+**Symptom:** Two concurrent "start game" requests both succeed even though balance only covers one bet.
+
+**Root Cause:** Reading balance, computing `newBalance = balance - bet`, then writing `balance: newBalance` is not atomic. Two requests read the same balance simultaneously and both write their own deducted value — the second request's write overwrites the first, effectively giving a free bet.
+
+**Fix:** Use Prisma's atomic `balance: { decrement: totalBet }` instead of `balance: newBalance`. Add a post-decrement negative balance check with rollback:
+```typescript
+const updated = await prisma.session.update({
+  where: { id: session.id },
+  data: { balance: { decrement: totalBet } }
+})
+if (updated.balance < 0) {
+  // Rollback — another request beat us
+  await prisma.session.update({
+    where: { id: session.id },
+    data: { balance: { increment: totalBet } }
+  })
+  return error('Insufficient balance')
+}
+```
+**File:** `src/app/api/game/route.ts` → `handleStartGame()`
+
+### Double-claim of commitment pool entries
+
+**Symptom:** Two concurrent game starts could both claim the same server seed, violating provable fairness (same seed used for different games).
+
+**Root Cause:** `findFirst()` + `update()` is not atomic. Two requests both find the same "available" commitment, both update it.
+
+**Fix:** Wrap in `prisma.$transaction()` and use `updateMany` with `status: 'available'` guard:
+```typescript
+const claimed = await tx.seedCommitment.updateMany({
+  where: { id: found.id, status: 'available' }, // ← guard
+  data: { status: 'claimed' }
+})
+if (claimed.count === 0) return null // Another request claimed it first
+```
+**File:** `src/lib/provably-fair/commitment-pool.ts` → `getAvailableCommitment()`
+
+---
+
+## Mainnet Safety — Silent Fallbacks (2026-02-10)
+
+### Mock commitments created silently on mainnet
+
+**Symptom:** Games start successfully but with fake `mock_*` txHashes that aren't on the blockchain. Players can't verify provable fairness, but the UI shows everything as normal.
+
+**Root Cause:** `commitServerSeedHash()` had fallback paths for when the node is down/syncing/unconfigured that created mock commitments. On testnet this is fine for development, but on mainnet it breaks the core provable fairness guarantee.
+
+**Fix:** Check `const isMainnet = network === 'mainnet'`. On mainnet, return `{ success: false, error: '...' }` instead of mock. This causes game start to fail with 503 — correct behavior.
+
+**File:** `src/lib/provably-fair/blockchain.ts`
+
+### Fake deposit addresses generated on mainnet
+
+**Symptom:** User gets a `t1Demo...` deposit address. If they send real ZEC to it, funds are permanently lost (no private key exists for that address).
+
+**Root Cause:** When zcashd is offline, the code generated placeholder addresses for both testnet and mainnet.
+
+**Fix:** On mainnet with node offline → `throw new Error(...)`. Only allow `tmDemo...` addresses on testnet.
+
+**IMPORTANT:** There are TWO copies of `createWalletForSession()` — one in `src/app/api/session/route.ts` and one in `src/app/api/wallet/route.ts`. Both must be patched. TODO: consolidate into a shared function.
+
+### Withdrawal sent without checking house balance
+
+**Symptom:** Withdrawal RPC call fails because house wallet is empty. User's balance was already deducted, requiring manual refund.
+
+**Fix:** Call `getAddressBalance(houseAddress)` before `sendZec()`. If insufficient, refund immediately.
+
+**File:** `src/app/api/wallet/route.ts` → `handleWithdraw()`
+
+---
+
+## Refactoring — Stale Variable References (2026-02-10)
+
+### Ghost reference to removed variable
+
+**Symptom:** TypeScript build error: "Cannot find name 'newBalance'"
+
+**Root Cause:** After switching from `const newBalance = session.balance - totalBet` to atomic `balance: { decrement }`, a response fallback line still referenced `newBalance`.
+
+**Lesson:** When removing a variable during refactoring, **always search for ALL references** across the entire file before considering the change done. A simple `grep` or Find would have caught this instantly.
+
+---
+
+## Phase 2 Mainnet Hardening — Gotchas (2026-02-10)
+
+### Prisma generate required after schema changes
+
+**Symptom:** TypeScript errors like "Property 'sweepLog' does not exist on type 'PrismaClient'" or "Property 'lastSweptAt' does not exist" even though the field is clearly in `schema.prisma`.
+
+**Root Cause:** Prisma generates TypeScript types from the schema file. Adding a new model (`SweepLog`) or new fields (`lastSweptAt`, `totalSwept` on `DepositWallet`) to `schema.prisma` does NOT automatically update the generated types.
+
+**Fix:** Always run both commands after schema changes:
+```bash
+npx prisma generate   # Regenerate TypeScript types
+npx prisma db push    # Apply schema to database
+```
+
+**Lesson:** If you see "property does not exist" errors after adding fields to `schema.prisma`, check whether you ran `prisma generate` before suspecting a code bug.
+
+### processGameCompletion double-payout race condition
+
+**Symptom:** Player receives 2x the correct payout on a winning hand. Balance credited twice for the same game.
+
+**Root Cause:** `processGameCompletion()` can be called from two code paths in the same request cycle:
+1. `handleGameAction()` — player action (stand, bust, etc.) completes the hand
+2. `handleStartGame()` — auto-dealing a new hand first completes the previous game
+
+If both paths call `processGameCompletion()` for the same game ID, and the function uses a simple `update` to mark the game completed and credit the payout, both calls succeed — the payout is credited twice.
+
+**Fix:** Use `updateMany` with a status guard as a compare-and-swap:
+```typescript
+const result = await prisma.game.updateMany({
+  where: { id: gameId, status: 'active' },  // Only match if STILL active
+  data: { status: 'completed' }
+})
+if (result.count === 0) {
+  // Another call already completed this game — skip payout
+  return
+}
+// Safe to credit payout — we won the race
+```
+
+**Lesson:** Any function that credits money and can be reached from multiple code paths MUST use an atomic status transition. Check the return count — if 0 rows were updated, someone else already handled it.
+
+### updateMany returns count, not the record
+
+**Symptom:** Trying to access fields on the result of `updateMany()` returns undefined.
+
+**Root Cause:** `prisma.model.updateMany()` returns `{ count: number }`, not the updated record(s). This is different from `prisma.model.update()` which returns the full updated record.
+
+**Fix:** If you need the updated record after an `updateMany`, fetch it separately:
+```typescript
+const result = await prisma.game.updateMany({
+  where: { id: gameId, status: 'active' },
+  data: { status: 'completed' }
+})
+if (result.count > 0) {
+  const game = await prisma.game.findUnique({ where: { id: gameId } })
+  // Now you have the full record
+}
+```
+
+### Kill switch must not block deposit detection
+
+**Symptom:** During maintenance mode, user deposits arrive on-chain but are never credited to their session balance.
+
+**Root Cause:** A naive kill switch implementation that blocks all POST /api/wallet requests also blocks the deposit polling/detection flow.
+
+**Fix:** The kill switch should only gate specific actions (`action === 'start'` for games, `action === 'withdraw'` for wallet), not entire endpoints. Deposit detection (`action === 'deposit-status'` or similar) must continue working during maintenance.

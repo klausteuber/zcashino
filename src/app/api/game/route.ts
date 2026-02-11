@@ -18,6 +18,8 @@ import {
 } from '@/lib/provably-fair/commitment-pool'
 import { getExplorerUrl } from '@/lib/provably-fair/blockchain'
 import { checkPublicRateLimit, createRateLimitResponse } from '@/lib/admin/rate-limit'
+import { isKillSwitchActive } from '@/lib/kill-switch'
+import { roundZec } from '@/lib/wallet'
 import type { BlackjackAction, BlackjackGameState, BlockchainCommitment } from '@/types'
 
 // Check if this is a demo session
@@ -69,6 +71,13 @@ export async function POST(request: NextRequest) {
 
     switch (action) {
       case 'start':
+        // Kill switch blocks NEW games but allows in-progress games to complete
+        if (isKillSwitchActive()) {
+          return NextResponse.json({
+            error: 'Platform is under maintenance. New games are temporarily paused.',
+            maintenanceMode: true,
+          }, { status: 503 })
+        }
         return handleStartGame(session, bet, perfectPairsBet, clientSeed)
 
       case 'hit':
@@ -138,8 +147,29 @@ async function handleStartGame(
     nonce
   )
 
-  // Deduct bet from balance
-  const newBalance = session.balance - totalBet
+  // ATOMIC: Deduct bet from balance using decrement (not direct set)
+  // This prevents double-bet exploits from concurrent requests.
+  // The WHERE clause implicitly fails if balance went negative from another request.
+  const updatedSessionForBet = await prisma.session.update({
+    where: { id: session.id },
+    data: {
+      balance: { decrement: totalBet },
+      totalWagered: { increment: totalBet }
+    }
+  })
+
+  // Verify balance didn't go negative (race condition safeguard)
+  if (updatedSessionForBet.balance < 0) {
+    // Rollback: restore balance and reject
+    await prisma.session.update({
+      where: { id: session.id },
+      data: {
+        balance: { increment: totalBet },
+        totalWagered: { decrement: totalBet }
+      }
+    })
+    return NextResponse.json({ error: 'Insufficient balance' }, { status: 400 })
+  }
 
   // Save game to database with blockchain commitment data
   const game = await prisma.blackjackGame.create({
@@ -160,7 +190,8 @@ async function handleStartGame(
         playerCards: gameState.playerHands[0]?.cards,
         dealerCards: gameState.dealerHand.cards
       }),
-      status: gameState.phase === 'complete' ? 'completed' : 'active'
+      // Always create as 'active' — processGameCompletion will atomically transition to 'completed'
+      status: 'active'
     }
   })
 
@@ -170,16 +201,7 @@ async function handleStartGame(
   // Trigger pool refill check in background (non-blocking)
   checkAndRefillPool().catch(err => console.error('Pool refill error:', err))
 
-  // Update session balance
-  await prisma.session.update({
-    where: { id: session.id },
-    data: {
-      balance: newBalance,
-      totalWagered: { increment: totalBet }
-    }
-  })
-
-  // If game completed immediately (blackjack), process payout
+  // If game completed immediately (blackjack), process payout atomically
   if (gameState.phase === 'complete') {
     await processGameCompletion(game.id, session.id, gameState)
   }
@@ -200,7 +222,7 @@ async function handleStartGame(
   return NextResponse.json({
     gameId: game.id,
     gameState: sanitizeGameState(gameState),
-    balance: updatedSession?.balance ?? (newBalance + (gameState.lastPayout || 0)),
+    balance: updatedSession?.balance ?? (updatedSessionForBet.balance + (gameState.lastPayout || 0)),
     totalWagered: updatedSession?.totalWagered ?? totalBet,
     totalWon: updatedSession?.totalWon ?? 0,
     commitment: blockchainCommitment
@@ -297,13 +319,12 @@ async function handleGameAction(
   }
 
   if (gameState.phase === 'complete') {
-    updateData.status = 'completed'
-    updateData.completedAt = new Date()
-    updateData.payout = gameState.lastPayout
-    updateData.outcome = determineOutcome(gameState)
-
-    // Process payout
+    // processGameCompletion atomically transitions status 'active' → 'completed'
+    // and credits payout. It also sets status, completedAt, and payout on the game row.
     await processGameCompletion(gameId, session.id, gameState)
+
+    // Set remaining fields that processGameCompletion doesn't handle
+    updateData.outcome = determineOutcome(gameState)
   }
 
   await prisma.blackjackGame.update({
@@ -426,12 +447,28 @@ async function processGameCompletion(
   sessionId: string,
   gameState: BlackjackGameState
 ) {
-  if (gameState.lastPayout > 0) {
+  const payout = roundZec(gameState.lastPayout)
+
+  // ATOMIC: Only complete if game transitions from active → completed
+  // This prevents double-payout if processGameCompletion is called twice
+  // (e.g. from both handleStartGame and handleGameAction on immediate blackjack)
+  const result = await prisma.blackjackGame.updateMany({
+    where: { id: gameId, status: 'active' },
+    data: { status: 'completed', completedAt: new Date(), payout }
+  })
+
+  // If no rows updated, game was already completed — skip
+  if (result.count === 0) {
+    return
+  }
+
+  // Credit payout to session balance (only when player wins)
+  if (payout > 0) {
     await prisma.session.update({
       where: { id: sessionId },
       data: {
-        balance: { increment: gameState.lastPayout },
-        totalWon: { increment: gameState.lastPayout }
+        balance: { increment: payout },
+        totalWon: { increment: payout }
       }
     })
   }
@@ -469,6 +506,11 @@ function sanitizeGameState(state: BlackjackGameState): Partial<BlackjackGameStat
 
 // GET /api/game - Get active game or game history
 export async function GET(request: NextRequest) {
+  const rateLimit = checkPublicRateLimit(request, 'game-action')
+  if (!rateLimit.allowed) {
+    return createRateLimitResponse(rateLimit)
+  }
+
   const sessionId = request.nextUrl.searchParams.get('sessionId')
   const gameId = request.nextUrl.searchParams.get('gameId')
 

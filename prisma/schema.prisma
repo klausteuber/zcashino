@@ -69,9 +69,16 @@ model DepositWallet {
   cachedBalance   Float    @default(0)
   balanceUpdatedAt DateTime?
 
+  // Sweep tracking (funds consolidated to house wallet)
+  lastSweptAt     DateTime?
+  totalSwept      Float    @default(0)
+
   // Timestamps
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+
+  // Relations
+  sweepLogs       SweepLog[]
 
   @@index([transparentAddr])
 }
@@ -180,6 +187,34 @@ model Transaction {
   @@index([txHash])
   @@index([status])
   @@index([operationId])
+}
+
+// Sweep logs — tracks consolidation of deposit address funds → house wallet
+model SweepLog {
+  id              String   @id @default(cuid())
+  depositWalletId String
+  depositWallet   DepositWallet @relation(fields: [depositWalletId], references: [id])
+
+  fromAddress     String   // Transparent deposit address
+  toAddress       String   // House z-address
+  amount          Float
+  fee             Float    @default(0)
+
+  // Zcash operation tracking
+  operationId     String?  // z_sendmany operation ID
+  txHash          String?  // Final transaction hash once confirmed
+
+  // Status
+  status          String   @default("pending") // pending, confirmed, failed
+  failReason      String?
+
+  // Timestamps
+  createdAt       DateTime @default(now())
+  confirmedAt     DateTime?
+
+  @@index([status])
+  @@index([depositWalletId])
+  @@index([createdAt])
 }
 
 // Geo-blocking log (30-day retention)

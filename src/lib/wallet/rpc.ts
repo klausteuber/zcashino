@@ -418,6 +418,38 @@ export async function waitForOperation(
 }
 
 /**
+ * Validate an address via zcashd RPC (checksum + network check).
+ * More reliable than prefix-only validation — catches invalid checksums.
+ * Falls back to true if RPC is unavailable (testnet) to avoid blocking.
+ */
+export async function validateAddressViaRPC(
+  address: string,
+  network: ZcashNetwork = DEFAULT_NETWORK
+): Promise<{ isvalid: boolean; type?: string; error?: string }> {
+  try {
+    // Use z_validateaddress for shielded addresses, validateaddress for transparent
+    const isShielded = address.startsWith('zs') || address.startsWith('ztestsapling') ||
+      address.startsWith('u1') || address.startsWith('utest')
+
+    if (isShielded) {
+      const result = await rpcCall<{ isvalid: boolean; type?: string }>(
+        'z_validateaddress', [address], network
+      )
+      return { isvalid: result.isvalid, type: result.type }
+    } else {
+      const result = await rpcCall<{ isvalid: boolean }>(
+        'validateaddress', [address], network
+      )
+      return { isvalid: result.isvalid, type: 'transparent' }
+    }
+  } catch (err) {
+    // If RPC fails, don't block the operation — log and return uncertain
+    console.error('[RPC] Address validation failed:', err)
+    return { isvalid: true, error: 'RPC validation unavailable' }
+  }
+}
+
+/**
  * Estimate the fee for a transaction
  * Returns fee in ZEC
  */

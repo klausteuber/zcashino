@@ -7,23 +7,31 @@ import {
   validateAddress,
   WITHDRAWAL_FEE,
   MIN_WITHDRAWAL,
+  roundZec,
 } from '@/lib/wallet'
 import {
   checkNodeStatus,
-  generateTransparentAddress,
   getAddressBalance,
   sendZec,
   getOperationStatus,
   listAddressTransactions,
+  validateAddressViaRPC,
 } from '@/lib/wallet/rpc'
 import { getDepositInfo } from '@/lib/wallet/addresses'
+import { createDepositWalletForSession } from '@/lib/wallet/session-wallet'
 import { checkPublicRateLimit, createRateLimitResponse } from '@/lib/admin/rate-limit'
+import { isKillSwitchActive } from '@/lib/kill-switch'
 
 /**
  * GET /api/wallet
  * Get wallet info for a session including deposit address
  */
 export async function GET(request: NextRequest) {
+  const rateLimit = checkPublicRateLimit(request, 'wallet-action')
+  if (!rateLimit.allowed) {
+    return createRateLimitResponse(rateLimit)
+  }
+
   const sessionId = request.nextUrl.searchParams.get('sessionId')
 
   if (!sessionId) {
@@ -44,7 +52,7 @@ export async function GET(request: NextRequest) {
     // If no wallet exists, create one
     let wallet = session.wallet
     if (!wallet) {
-      wallet = await createWalletForSession(sessionId)
+      wallet = await createDepositWalletForSession(sessionId)
     }
 
     // Get deposit info (transparent only for proof of reserves)
@@ -132,6 +140,13 @@ export async function POST(request: NextRequest) {
         })
 
       case 'withdraw': {
+        // Kill switch blocks withdrawals
+        if (isKillSwitchActive()) {
+          return NextResponse.json({
+            error: 'Withdrawals are temporarily paused for maintenance.',
+            maintenanceMode: true,
+          }, { status: 503 })
+        }
         const withdrawLimit = checkPublicRateLimit(request, 'wallet-withdraw')
         if (!withdrawLimit.allowed) {
           return createRateLimitResponse(withdrawLimit)
@@ -159,50 +174,6 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * Create a new wallet for a session
- * Only generates transparent address for proof of reserves
- */
-async function createWalletForSession(sessionId: string) {
-  const network = DEFAULT_NETWORK
-
-  // Only generate transparent address (for proof of reserves)
-  let transparentAddr: string
-
-  // Check if we have RPC connection
-  const nodeStatus = await checkNodeStatus(network)
-
-  if (nodeStatus.connected) {
-    // Generate real address via RPC
-    transparentAddr = await generateTransparentAddress(network)
-  } else {
-    // Generate demo placeholder address
-    const timestamp = Date.now().toString(36)
-    const random = Math.random().toString(36).substring(2, 10)
-    transparentAddr = network === 'testnet'
-      ? `tmDemo${timestamp}${random}`.substring(0, 35)
-      : `t1Demo${timestamp}${random}`.substring(0, 35)
-  }
-
-  // Get next address index
-  const lastWallet = await prisma.depositWallet.findFirst({
-    orderBy: { addressIndex: 'desc' },
-  })
-  const addressIndex = (lastWallet?.addressIndex ?? -1) + 1
-
-  // Create wallet record (transparent only)
-  const wallet = await prisma.depositWallet.create({
-    data: {
-      sessionId,
-      transparentAddr,
-      network,
-      addressIndex,
-    },
-  })
-
-  return wallet
-}
-
-/**
  * Handle wallet creation request
  */
 async function handleCreateWallet(session: { id: string; wallet: unknown }) {
@@ -212,7 +183,7 @@ async function handleCreateWallet(session: { id: string; wallet: unknown }) {
     }, { status: 400 })
   }
 
-  const wallet = await createWalletForSession(session.id)
+  const wallet = await createDepositWalletForSession(session.id)
 
   return NextResponse.json({
     success: true,
@@ -291,7 +262,7 @@ async function handleCheckDeposits(session: {
     })
 
     const previouslyDeposited = existingDeposits._sum.amount || 0
-    const newDepositAmount = totalConfirmed - previouslyDeposited
+    const newDepositAmount = roundZec(totalConfirmed - previouslyDeposited)
 
     if (newDepositAmount >= MIN_DEPOSIT) {
       // Get real txHash from RPC if available, fall back to generated hash
@@ -427,6 +398,16 @@ async function handleWithdraw(
         error: `Invalid withdrawal address: ${validation.error}`,
       }, { status: 400 })
     }
+
+    // On mainnet, also validate via RPC to catch invalid checksums
+    if (DEFAULT_NETWORK === 'mainnet') {
+      const rpcValidation = await validateAddressViaRPC(destinationAddress, DEFAULT_NETWORK)
+      if (!rpcValidation.isvalid && !rpcValidation.error) {
+        return NextResponse.json({
+          error: 'Withdrawal address failed checksum validation. Please verify the address.',
+        }, { status: 400 })
+      }
+    }
   }
 
   // Validate amount
@@ -436,7 +417,7 @@ async function handleWithdraw(
     }, { status: 400 })
   }
 
-  const totalAmount = amount + WITHDRAWAL_FEE
+  const totalAmount = roundZec(amount + WITHDRAWAL_FEE)
   if (totalAmount > session.balance) {
     return NextResponse.json({
       error: `Insufficient balance. Need ${totalAmount} ZEC (including ${WITHDRAWAL_FEE} ZEC fee)`,
@@ -465,6 +446,30 @@ async function handleWithdraw(
       totalWithdrawn: { increment: amount },
     },
   })
+
+  // Check withdrawal approval threshold
+  const approvalThreshold = parseFloat(process.env.WITHDRAWAL_APPROVAL_THRESHOLD || '0')
+  if (approvalThreshold > 0 && amount >= approvalThreshold && !isDemo) {
+    // Large withdrawal: hold for admin approval instead of processing immediately
+    await prisma.transaction.update({
+      where: { id: transaction.id },
+      data: { status: 'pending_approval' },
+    })
+    console.log(
+      `[Withdrawal] Amount ${amount} ZEC >= threshold ${approvalThreshold} ZEC — held for admin approval (tx: ${transaction.id})`
+    )
+    return NextResponse.json({
+      success: true,
+      transaction: {
+        id: transaction.id,
+        amount,
+        fee: WITHDRAWAL_FEE,
+        destinationAddress,
+        status: 'pending_approval',
+      },
+      message: `Withdrawal of ${amount} ZEC requires admin approval. Your balance has been reserved.`,
+    })
+  }
 
   // Demo mode: instant confirmation
   if (isDemo) {
@@ -512,6 +517,27 @@ async function handleWithdraw(
     await refundWithdrawal(session.id, transaction.id, totalAmount, amount, 'House wallet not configured')
     return NextResponse.json({
       error: 'Withdrawal service unavailable. Balance has been refunded.',
+    }, { status: 503 })
+  }
+
+  // SAFETY: Check house wallet has sufficient balance before sending
+  try {
+    const houseBalance = await getAddressBalance(houseAddress, network)
+    if (houseBalance.confirmed < amount) {
+      console.error(
+        `[Withdrawal] House wallet insufficient balance: ${houseBalance.confirmed} ZEC available, ` +
+        `${amount} ZEC requested. House address: ${houseAddress.substring(0, 16)}...`
+      )
+      await refundWithdrawal(session.id, transaction.id, totalAmount, amount, 'Insufficient house funds')
+      return NextResponse.json({
+        error: 'Withdrawal temporarily unavailable. Balance has been refunded.',
+      }, { status: 503 })
+    }
+  } catch (balanceErr) {
+    console.error('[Withdrawal] Failed to check house balance:', balanceErr)
+    await refundWithdrawal(session.id, transaction.id, totalAmount, amount, 'Failed to verify house balance')
+    return NextResponse.json({
+      error: 'Unable to verify withdrawal availability. Balance has been refunded.',
     }, { status: 503 })
   }
 
@@ -589,8 +615,8 @@ async function handleWithdrawalStatus(sessionId: string, transactionId: string) 
     return NextResponse.json({ error: 'Transaction not found' }, { status: 404 })
   }
 
-  // Already finalized
-  if (transaction.status === 'confirmed' || transaction.status === 'failed') {
+  // Already finalized or awaiting approval
+  if (transaction.status === 'confirmed' || transaction.status === 'failed' || transaction.status === 'pending_approval') {
     return NextResponse.json({
       success: true,
       transaction: {

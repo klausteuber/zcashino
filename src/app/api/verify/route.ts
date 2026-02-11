@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
-import { hashServerSeed, verifyGame } from '@/lib/provably-fair'
+import { hashServerSeed, verifyGame, replayGame } from '@/lib/provably-fair'
+import type { BlackjackAction } from '@/types'
 import { verifyCommitment, getExplorerUrl } from '@/lib/provably-fair/blockchain'
 import type {
   GameVerificationData,
@@ -194,6 +195,36 @@ async function verifyGameById(gameId: string) {
     errors.push(replayResult.message)
   }
 
+  // Step 5: Full game action replay — replay actions against the deterministic deck
+  // and verify the dealt cards and payout match what was stored
+  let replayData: ReturnType<typeof replayGame> | undefined
+  const actionHistory: BlackjackAction[] = JSON.parse(game.actionHistory || '[]')
+  try {
+    replayData = replayGame({
+      serverSeed: game.serverSeed,
+      serverSeedHash: game.serverSeedHash,
+      clientSeed: game.clientSeed,
+      nonce: game.nonce,
+      mainBet: game.mainBet,
+      perfectPairsBet: game.perfectPairsBet,
+      insuranceBet: game.insuranceBet,
+      actionHistory
+    })
+
+    // Compare replayed payout against stored payout
+    const storedPayout = game.payout ?? 0
+    if (Math.abs(replayData.payout - storedPayout) > 0.000001) {
+      errors.push(
+        `Payout mismatch: replayed ${replayData.payout}, stored ${storedPayout}`
+      )
+      steps.outcomeValid = false
+    }
+  } catch (replayError) {
+    errors.push(
+      `Game replay failed: ${replayError instanceof Error ? replayError.message : 'Unknown error'}`
+    )
+  }
+
   // Build commitment data
   const commitment: BlockchainCommitment | undefined = game.commitmentTxHash
     ? {
@@ -232,7 +263,16 @@ async function verifyGameById(gameId: string) {
     })
   }
 
-  return NextResponse.json(result)
+  return NextResponse.json({
+    ...result,
+    // Include replay data so users can see the exact cards dealt
+    replay: replayData ? {
+      playerCards: replayData.playerCards,
+      dealerCards: replayData.dealerCards,
+      replayedOutcome: replayData.outcome,
+      replayedPayout: replayData.payout
+    } : undefined
+  })
 }
 
 /**

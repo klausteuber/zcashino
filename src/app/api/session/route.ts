@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
-import { validateAddress, DEFAULT_NETWORK, generateTransparentAddress, checkNodeStatus } from '@/lib/wallet'
+import { validateAddress, DEFAULT_NETWORK } from '@/lib/wallet'
+import { createDepositWalletForSession } from '@/lib/wallet/session-wallet'
 import { checkPublicRateLimit, createRateLimitResponse } from '@/lib/admin/rate-limit'
+import { isKillSwitchActive } from '@/lib/kill-switch'
 
 // Demo mode: Generate a fake wallet address for testing
 function generateDemoWallet(): string {
@@ -18,62 +20,40 @@ function isDemoSession(walletAddress: string): boolean {
   return walletAddress.startsWith('demo_')
 }
 
-// Create a deposit wallet for a session
-async function createDepositWalletForSession(sessionId: string) {
-  const network = DEFAULT_NETWORK
-
-  // Generate transparent address
-  let transparentAddr: string
-
-  // Check if we have RPC connection
-  const nodeStatus = await checkNodeStatus(network)
-
-  if (nodeStatus.connected) {
-    // Generate real address via RPC
-    transparentAddr = await generateTransparentAddress(network)
-  } else {
-    // Generate demo placeholder address
-    const timestamp = Date.now().toString(36)
-    const random = Math.random().toString(36).substring(2, 10)
-    transparentAddr = network === 'testnet'
-      ? `tmDemo${timestamp}${random}`.substring(0, 35)
-      : `t1Demo${timestamp}${random}`.substring(0, 35)
-  }
-
-  // Get next address index
-  const lastWallet = await prisma.depositWallet.findFirst({
-    orderBy: { addressIndex: 'desc' },
-  })
-  const addressIndex = (lastWallet?.addressIndex ?? -1) + 1
-
-  // Create wallet record
-  const wallet = await prisma.depositWallet.create({
-    data: {
-      sessionId,
-      transparentAddr,
-      network,
-      addressIndex,
-    },
-  })
-
-  return wallet
-}
-
 // GET /api/session - Get or create session
 export async function GET(request: NextRequest) {
+  const rateLimit = checkPublicRateLimit(request, 'session-create')
+  if (!rateLimit.allowed) {
+    return createRateLimitResponse(rateLimit)
+  }
+
   try {
-    // Get wallet address from header or query param
+    // Try to restore session by ID first (returning user with localStorage)
+    const requestedSessionId = request.nextUrl.searchParams.get('sessionId')
+    // Also accept wallet address for direct lookups
     const walletAddress = request.headers.get('x-wallet-address') ||
       request.nextUrl.searchParams.get('wallet')
 
-    // If no wallet provided, create a demo session
-    const address = walletAddress || generateDemoWallet()
+    let session = null
 
-    // Find or create session
-    let session = await prisma.session.findUnique({
-      where: { walletAddress: address },
-      include: { wallet: true }
-    })
+    // Priority 1: Restore by session ID (most common for returning users)
+    if (requestedSessionId) {
+      session = await prisma.session.findUnique({
+        where: { id: requestedSessionId },
+        include: { wallet: true }
+      })
+    }
+
+    // Priority 2: Find by wallet address
+    if (!session && walletAddress) {
+      session = await prisma.session.findUnique({
+        where: { walletAddress },
+        include: { wallet: true }
+      })
+    }
+
+    // Priority 3: Create new demo session
+    const address = walletAddress || generateDemoWallet()
 
     if (!session) {
       // Create new session
@@ -120,6 +100,8 @@ export async function GET(request: NextRequest) {
       // Deposit address (if wallet exists)
       depositAddress: session.wallet?.transparentAddr,
       isDemo: isDemoSession(session.walletAddress),
+      // Platform status
+      maintenanceMode: isKillSwitchActive(),
     })
   } catch (error) {
     console.error('Session error:', error)

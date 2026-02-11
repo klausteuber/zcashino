@@ -121,6 +121,16 @@ export function isShieldedAddress(address: string, network: ZcashNetwork = DEFAU
 }
 
 /**
+ * Round a ZEC amount to 8 decimal places (zatoshi precision).
+ * Prevents floating-point dust from accumulating in database writes.
+ *
+ * Example: 0.1 + 0.2 = 0.30000000000000004 → roundZec → 0.3
+ */
+export function roundZec(amount: number): number {
+  return Math.round(amount * 1e8) / 1e8
+}
+
+/**
  * Format ZEC amount for display
  */
 export function formatZec(amount: number, decimals: number = 8): string {
@@ -151,6 +161,16 @@ export function zecToZatoshi(zec: number): bigint {
  */
 export function zatoshiToZec(zatoshi: bigint): number {
   return Number(zatoshi) / 1e8
+}
+
+/**
+ * Get the house wallet z-address for the given network.
+ * Returns null if not configured.
+ */
+export function getHouseAddress(network: ZcashNetwork): string | null {
+  return network === 'mainnet'
+    ? process.env.HOUSE_ZADDR_MAINNET || null
+    : process.env.HOUSE_ZADDR_TESTNET || null
 }
 
 // Re-export sub-modules

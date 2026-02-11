@@ -107,6 +107,55 @@ In-memory limits and remote font fetches are acceptable in dev, but must be call
 7. **Hero image placeholder prevents broken deploys.**
    The AI-generated hero image wasn't ready at deploy time. Copying the old image as a placeholder (`cp pepe-tuxedo.jpg jester-mask.png`) prevented a broken `<img>` on the live site. Replace with real asset when available.
 
+## Mainnet Readiness Audit Learnings (2026-02-10)
+
+1. **A 50-finding mainnet audit is normal for a first pass.**
+   Running a systematic audit against mainnet criteria (not just "does it work on testnet") surfaced 7 CRITICAL, 19 HIGH, 18 MEDIUM, 6 LOW findings. Most were silent fallbacks that work fine in dev but are dangerous with real money.
+
+2. **"Works on testnet" ≠ "safe for mainnet".**
+   Mock commitments, fake addresses, and silent fallbacks are fine for development iteration speed. But every single fallback path must be audited for mainnet — the question is always "what happens if this runs with real ZEC?"
+
+3. **Atomic database operations are non-negotiable for financial apps.**
+   Prisma's `{ decrement: amount }` and `$transaction()` with optimistic locking (`updateMany` with status guard) are the right patterns. Read-compute-write is always a race condition when money is involved.
+
+4. **Startup validation catches config drift before it causes damage.**
+   A startup validator that checks env vars, credential strength, and feature flags at boot time prevents deploying to mainnet with testnet config. Fatal on mainnet, warnings on testnet.
+
+5. **Rate limit ALL endpoints, not just POST.**
+   GET endpoints for session, wallet, and game were initially unprotected. A scraper could enumerate sessions or DoS the node with balance queries. Rate limiting reads is cheap insurance.
+
+6. **House balance check before withdrawal is a MUST.**
+   Without checking if the house wallet actually has funds before calling `sendZec()`, the user's balance gets deducted, the RPC fails, and manual intervention is needed. Always verify funds before sending.
+
+7. **Duplicate code is a mainnet safety hazard.**
+   `createWalletForSession()` exists in both `session/route.ts` and `wallet/route.ts`. When patching the fake address bug, both copies needed the same fix. Consolidate into a shared module.
+
+8. **`instrumentation.ts` is the right place for startup hooks in Next.js.**
+   The `register()` function runs once on server startup — ideal for startup validation and background service initialization (commitment pool manager).
+
+## Phase 2 Mainnet Hardening Learnings (2026-02-10)
+
+1. **Float64 is exact for ZEC amounts — integer migration is unnecessary.**
+   IEEE 754 Float64 has 53 bits of mantissa, representing integers exactly up to 2^53 (~9.007e15). Since the ZEC supply cap is 21M ZEC = 2.1e15 zatoshi, every possible zatoshi amount is represented exactly. A `roundZec()` wrapper (`Math.round(amount * 1e8) / 1e8`) at DB write boundaries eliminates arithmetic drift from intermediate calculations without the cost of a full integer migration across every API, DB column, and UI formatter.
+
+2. **Double-payout is a real race condition, not theoretical.**
+   `processGameCompletion()` can be called from two code paths: `handleStartGame` (auto-dealing the next hand after completing the current one) and `handleGameAction` (player action that ends the hand). Without atomic status transition, both paths credit the payout. The fix is `updateMany where status='active'` — if 0 rows match, the payout was already credited. This pattern (compare-and-swap via WHERE clause) is the standard solution for idempotent state transitions.
+
+3. **Kill switches need to be surgical, not total.**
+   A naive kill switch that blocks all API endpoints breaks in-progress games (players can't finish their hand) and stops deposit detection (funds arrive but aren't credited). The correct design: block only new game starts and new withdrawals. Let everything else flow — in-progress games complete, deposits detect, session reads work, admin operates.
+
+4. **Deposit sweep is a background concern, not an inline concern.**
+   Sweeping transparent deposit balances to the house shielded address should not happen synchronously during deposit detection. A fixed-interval background service (every 10 min) is simpler, doesn't add latency, and naturally batches multiple deposits into a single sweep transaction (saving on-chain fees).
+
+5. **Withdrawal approval is a policy knob, not a binary feature.**
+   Defaulting `WITHDRAWAL_APPROVAL_THRESHOLD` to 0 (disabled) preserves the auto-approve UX. Operators increase it when they want human review for large amounts. This is better than a boolean enable/disable because it allows granular control — small withdrawals stay instant, only large ones queue for review.
+
+6. **Prisma schema changes require `prisma generate` before the app compiles.**
+   After adding the `SweepLog` model and new fields to `DepositWallet`, the TypeScript types aren't updated until `npx prisma generate` runs. Forgetting this step produces confusing "property does not exist" errors that look like code bugs rather than schema sync issues.
+
+7. **`updateMany` returns a count, not the updated record.**
+   Unlike `update()` which returns the full record, `updateMany()` returns `{ count: number }`. When using it for atomic status transitions, you check `count === 0` to detect that another caller already transitioned the record. You cannot access the updated fields from the return value — fetch separately if needed.
+
 ## Next Hardening Learnings To Capture
 
 1. Add Redis-backed shared rate limiting for multi-instance deploys.
@@ -114,3 +163,4 @@ In-memory limits and remote font fetches are acceptable in dev, but must be call
 3. Add automated alerts on abnormal admin audit patterns (failed logins, repeated 429s).
 4. Abstract RPC interface for future Zallet migration.
 5. Add E2E tests that run against a real testnet node.
+6. Consolidate duplicate `createWalletForSession()` into shared module.

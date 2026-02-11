@@ -37,6 +37,7 @@ interface AdminOverview {
     fee: number
     address: string | null
     operationId: string | null
+    status: string
     createdAt: string
     sessionWallet: string
     sessionBalance: number
@@ -123,6 +124,11 @@ export default function AdminPage() {
   const [overviewError, setOverviewError] = useState<string | null>(null)
   const [runningAction, setRunningAction] = useState<AdminAction | null>(null)
   const [actionMessage, setActionMessage] = useState<string | null>(null)
+  const [killSwitchActive, setKillSwitchActive] = useState(false)
+  const [killSwitchLoading, setKillSwitchLoading] = useState(false)
+  const [sweepLoading, setSweepLoading] = useState(false)
+  const [sweepResult, setSweepResult] = useState<string | null>(null)
+  const [withdrawalActionLoading, setWithdrawalActionLoading] = useState<string | null>(null)
 
   const fetchOverview = useCallback(async () => {
     setIsLoadingOverview(true)
@@ -145,6 +151,10 @@ export default function AdminPage() {
       setOverview(data)
       if (data.admin?.username) {
         setCurrentAdmin(data.admin.username)
+      }
+      // Sync kill switch status from server
+      if (data.killSwitch) {
+        setKillSwitchActive(data.killSwitch.active)
       }
     } catch (err) {
       setOverviewError(err instanceof Error ? err.message : 'Failed to load admin overview.')
@@ -278,6 +288,80 @@ export default function AdminPage() {
       setActionMessage(err instanceof Error ? err.message : 'Admin action failed.')
     } finally {
       setRunningAction(null)
+    }
+  }
+
+  const toggleKillSwitch = async () => {
+    const newState = !killSwitchActive
+    const confirmMsg = newState
+      ? 'ACTIVATE kill switch? This will block new games and withdrawals.'
+      : 'Deactivate kill switch? This will resume normal operations.'
+    if (!window.confirm(confirmMsg)) return
+
+    setKillSwitchLoading(true)
+    try {
+      const res = await fetch('/api/admin/pool', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'toggle-kill-switch', enabled: newState }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to toggle kill switch')
+      setKillSwitchActive(data.killSwitch?.active ?? newState)
+      setActionMessage(newState ? 'Kill switch ACTIVATED — platform in maintenance mode.' : 'Kill switch deactivated — normal operations resumed.')
+    } catch (err) {
+      setActionMessage(err instanceof Error ? err.message : 'Failed to toggle kill switch')
+    } finally {
+      setKillSwitchLoading(false)
+    }
+  }
+
+  const triggerSweep = async () => {
+    if (!window.confirm('Sweep all deposit addresses? This consolidates funds to the house wallet.')) return
+    setSweepLoading(true)
+    setSweepResult(null)
+    try {
+      const res = await fetch('/api/admin/pool', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'sweep' }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Sweep failed')
+      setSweepResult(`Swept: ${data.swept}, Skipped: ${data.skipped}, Errors: ${data.errors}`)
+    } catch (err) {
+      setSweepResult(err instanceof Error ? err.message : 'Sweep failed')
+    } finally {
+      setSweepLoading(false)
+    }
+  }
+
+  const handleWithdrawalAction = async (transactionId: string, approve: boolean) => {
+    const action = approve ? 'approve-withdrawal' : 'reject-withdrawal'
+    const msg = approve
+      ? 'Approve this withdrawal? This will send funds from the house wallet.'
+      : 'Reject this withdrawal? The user\'s balance will be refunded.'
+    if (!window.confirm(msg)) return
+
+    setWithdrawalActionLoading(transactionId)
+    try {
+      const bodyData: Record<string, string> = { action, transactionId }
+      if (!approve) {
+        bodyData.reason = 'Rejected by admin'
+      }
+      const res = await fetch('/api/admin/pool', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(bodyData),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || `${action} failed`)
+      setActionMessage(approve ? `Withdrawal approved (${transactionId.substring(0, 8)}...)` : `Withdrawal rejected and refunded (${transactionId.substring(0, 8)}...)`)
+      await fetchOverview()
+    } catch (err) {
+      setActionMessage(err instanceof Error ? err.message : `${action} failed`)
+    } finally {
+      setWithdrawalActionLoading(null)
     }
   }
 
@@ -522,6 +606,33 @@ export default function AdminPage() {
               </div>
             </section>
 
+            {/* Kill Switch */}
+            <section className={`border rounded-xl p-4 ${killSwitchActive ? 'bg-crimson-mask/10 border-crimson-mask/40' : 'bg-midnight-black/50 border-masque-gold/20'}`}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold text-bone-white">
+                    Platform Kill Switch
+                  </h2>
+                  <p className="text-xs text-venetian-gold/60 mt-1">
+                    {killSwitchActive
+                      ? 'ACTIVE — New games and withdrawals are blocked. In-progress games can still complete.'
+                      : 'Inactive — Platform operating normally.'}
+                  </p>
+                </div>
+                <button
+                  onClick={toggleKillSwitch}
+                  disabled={killSwitchLoading}
+                  className={`px-4 py-2 rounded-lg font-bold text-sm transition-colors ${
+                    killSwitchActive
+                      ? 'bg-green-700 hover:bg-green-600 text-white'
+                      : 'bg-crimson-mask hover:bg-crimson-mask/80 text-white'
+                  } disabled:opacity-60`}
+                >
+                  {killSwitchLoading ? '...' : killSwitchActive ? 'Deactivate' : 'Activate'}
+                </button>
+              </div>
+            </section>
+
             <section className="bg-midnight-black/50 border border-masque-gold/20 rounded-xl p-4">
               <h2 className="text-lg font-semibold text-bone-white mb-3">Admin Actions</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -544,6 +655,30 @@ export default function AdminPage() {
               </div>
             </section>
 
+            {/* Deposit Sweep */}
+            <section className="bg-midnight-black/50 border border-masque-gold/20 rounded-xl p-4">
+              <div className="flex items-center justify-between mb-2">
+                <div>
+                  <h2 className="text-lg font-semibold text-bone-white">Deposit Sweep</h2>
+                  <p className="text-xs text-venetian-gold/60 mt-1">
+                    Consolidate transparent deposit address funds → house shielded wallet.
+                  </p>
+                </div>
+                <button
+                  onClick={triggerSweep}
+                  disabled={sweepLoading}
+                  className="px-4 py-2 rounded-lg font-bold text-sm bg-masque-gold/20 border border-masque-gold/40 text-masque-gold hover:bg-masque-gold/30 disabled:opacity-60 transition-colors"
+                >
+                  {sweepLoading ? 'Sweeping...' : 'Sweep Now'}
+                </button>
+              </div>
+              {sweepResult && (
+                <div className="mt-2 text-sm text-venetian-gold/80 bg-midnight-black/40 px-3 py-2 rounded-lg">
+                  {sweepResult}
+                </div>
+              )}
+            </section>
+
             <section className="bg-midnight-black/50 border border-masque-gold/20 rounded-xl p-4">
               <h2 className="text-lg font-semibold text-bone-white mb-3">Pending Withdrawals</h2>
 
@@ -557,8 +692,9 @@ export default function AdminPage() {
                         <th className="text-left py-2 px-1">Transaction</th>
                         <th className="text-left py-2 px-1">Session</th>
                         <th className="text-right py-2 px-1">Amount</th>
-                        <th className="text-left py-2 px-1">Operation</th>
+                        <th className="text-left py-2 px-1">Status</th>
                         <th className="text-right py-2 px-1">Created</th>
+                        <th className="text-right py-2 px-1">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -579,12 +715,40 @@ export default function AdminPage() {
                             {formatZec(withdrawal.amount)}
                           </td>
                           <td className="py-2 px-1">
-                            <span className="font-mono text-xs text-venetian-gold/70">
-                              {withdrawal.operationId ? shortId(withdrawal.operationId) : 'n/a'}
-                            </span>
+                            {withdrawal.status === 'pending_approval' ? (
+                              <span className="text-xs px-2 py-0.5 rounded bg-masque-gold/20 text-masque-gold font-bold">
+                                NEEDS APPROVAL
+                              </span>
+                            ) : (
+                              <span className="text-xs font-mono text-venetian-gold/70">
+                                {withdrawal.operationId ? shortId(withdrawal.operationId) : 'pending'}
+                              </span>
+                            )}
                           </td>
                           <td className="py-2 px-1 text-right text-venetian-gold/50">
                             {new Date(withdrawal.createdAt).toLocaleString()}
+                          </td>
+                          <td className="py-2 px-1 text-right">
+                            {withdrawal.status === 'pending_approval' ? (
+                              <div className="flex gap-1 justify-end">
+                                <button
+                                  onClick={() => handleWithdrawalAction(withdrawal.id, true)}
+                                  disabled={withdrawalActionLoading === withdrawal.id}
+                                  className="text-xs px-2 py-1 rounded bg-green-700/80 hover:bg-green-600 text-white disabled:opacity-60"
+                                >
+                                  {withdrawalActionLoading === withdrawal.id ? '...' : 'Approve'}
+                                </button>
+                                <button
+                                  onClick={() => handleWithdrawalAction(withdrawal.id, false)}
+                                  disabled={withdrawalActionLoading === withdrawal.id}
+                                  className="text-xs px-2 py-1 rounded bg-crimson-mask/80 hover:bg-crimson-mask text-white disabled:opacity-60"
+                                >
+                                  Reject
+                                </button>
+                              </div>
+                            ) : (
+                              <span className="text-xs text-venetian-gold/40">—</span>
+                            )}
                           </td>
                         </tr>
                       ))}

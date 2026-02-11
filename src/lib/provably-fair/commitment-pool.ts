@@ -44,18 +44,45 @@ export interface PoolStatus {
 }
 
 /**
- * Get an available commitment from the pool
+ * Get an available commitment from the pool (ATOMIC)
+ *
+ * Uses a Prisma interactive transaction to atomically find AND claim
+ * a commitment. This prevents race conditions where two concurrent
+ * game starts could claim the same commitment (which would reuse the
+ * same server seed — a provably fair violation).
+ *
  * Returns null if pool is empty (should trigger refill)
  */
 export async function getAvailableCommitment(): Promise<PooledCommitment | null> {
   try {
-    // Find and claim an available commitment atomically
-    const commitment = await prisma.seedCommitment.findFirst({
-      where: {
-        status: 'available',
-        expiresAt: { gt: new Date() }
-      },
-      orderBy: { createdAt: 'asc' } // Use oldest first (FIFO)
+    const commitment = await prisma.$transaction(async (tx) => {
+      // Find oldest available commitment
+      const found = await tx.seedCommitment.findFirst({
+        where: {
+          status: 'available',
+          expiresAt: { gt: new Date() }
+        },
+        orderBy: { createdAt: 'asc' } // FIFO
+      })
+
+      if (!found) return null
+
+      // Atomically claim it — only succeeds if status is still 'available'
+      const claimed = await tx.seedCommitment.updateMany({
+        where: {
+          id: found.id,
+          status: 'available' // Guard: another request may have claimed it
+        },
+        data: {
+          status: 'claimed',
+          usedAt: new Date()
+        }
+      })
+
+      // If 0 rows updated, another concurrent request won the race
+      if (claimed.count === 0) return null
+
+      return found
     })
 
     if (!commitment) {
@@ -79,6 +106,7 @@ export async function getAvailableCommitment(): Promise<PooledCommitment | null>
 
 /**
  * Mark a commitment as used by a game
+ * Transitions from 'claimed' → 'used' (set by getAvailableCommitment)
  */
 export async function markCommitmentUsed(
   commitmentId: string,
