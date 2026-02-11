@@ -166,14 +166,34 @@ export async function getAddressBalance(
   network: ZcashNetwork = DEFAULT_NETWORK
 ): Promise<WalletBalance> {
   try {
-    // For z-addresses, use z_getbalance
+    // For z-addresses, use z_gettotalbalance (z_getbalance is deprecated in zcashd 6.x)
+    // z_gettotalbalance returns the entire wallet balance, which is correct since
+    // the zcashd wallet IS the house wallet
     if (address.startsWith('z') || address.startsWith('u')) {
-      const confirmed = await rpcCall<number>('z_getbalance', [address, 3], network)
-      const total = await rpcCall<number>('z_getbalance', [address, 0], network)
-      return {
-        confirmed,
-        pending: total - confirmed,
-        total,
+      try {
+        const totals = await rpcCall<{ transparent: string; private: string; total: string }>(
+          'z_gettotalbalance', [3], network
+        )
+        const confirmed = parseFloat(totals.private) + parseFloat(totals.transparent)
+        const totalsUnconfirmed = await rpcCall<{ transparent: string; private: string; total: string }>(
+          'z_gettotalbalance', [0], network
+        )
+        const total = parseFloat(totalsUnconfirmed.total)
+        return {
+          confirmed,
+          pending: total - confirmed,
+          total,
+        }
+      } catch (e) {
+        console.error('[RPC] z_gettotalbalance failed, trying deprecated z_getbalance:', e)
+        // Fallback to z_getbalance with -allowdeprecated flag
+        const confirmed = await rpcCall<number>('z_getbalance', [address, 3], network)
+        const total = await rpcCall<number>('z_getbalance', [address, 0], network)
+        return {
+          confirmed,
+          pending: total - confirmed,
+          total,
+        }
       }
     }
 
