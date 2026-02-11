@@ -21,6 +21,7 @@ services:
     image: electriccoinco/zcashd:latest
     command:
       - -testnet
+      - -par=6
       - -rpcuser=${ZCASH_RPC_USER:-zcashrpc}
       - -rpcpassword=${ZCASH_RPC_PASSWORD:-changeme}
       - -rpcallowip=0.0.0.0/0
