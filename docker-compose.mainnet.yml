@@ -52,8 +52,9 @@ services:
         max-file: "5"
 
   zcashd:
-    image: electriccoinco/zcashd:v6.1.0  # Pinned version — update every 12 weeks
+    image: electriccoinco/zcashd:latest  # v6.11.0 — protocol 170140 required for peer connectivity
     command:
+      - -par=6
       - -rpcuser=${ZCASH_RPC_USER:-zcashrpc}
       - -rpcpassword=${ZCASH_RPC_PASSWORD:?ZCASH_RPC_PASSWORD is required}
       - -rpcallowip=172.16.0.0/12    # Docker internal network only
