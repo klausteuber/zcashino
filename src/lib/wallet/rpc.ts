@@ -118,12 +118,48 @@ export async function checkNodeStatus(
 }
 
 /**
- * Generate a new transparent address
+ * Generate a new transparent address via unified account system.
+ * zcashd 6.x deprecates getnewaddress — must use z_getaddressforaccount
+ * with p2pkh+sapling receivers, then extract the transparent component.
  */
 export async function generateTransparentAddress(
   network: ZcashNetwork = DEFAULT_NETWORK
 ): Promise<string> {
-  return rpcCall<string>('getnewaddress', [], network)
+  // Use account 0 for all deposit addresses (created once on first call)
+  let account = 0
+  try {
+    const accounts = await rpcCall<{ account: number }[]>('z_listaccounts', [], network)
+    if (accounts.length === 0) {
+      const newAccount = await rpcCall<{ account: number }>('z_getnewaccount', [], network)
+      account = newAccount.account
+    } else {
+      account = accounts[0].account
+    }
+  } catch {
+    // If z_listaccounts fails, try creating account 0
+    const newAccount = await rpcCall<{ account: number }>('z_getnewaccount', [], network)
+    account = newAccount.account
+  }
+
+  // Generate unified address with p2pkh (transparent) + sapling receivers
+  const ua = await rpcCall<{ address: string }>(
+    'z_getaddressforaccount',
+    [account, ['p2pkh', 'sapling']],
+    network
+  )
+
+  // Extract the raw transparent (p2pkh) address from the unified address
+  const receivers = await rpcCall<{ p2pkh?: string; sapling?: string }>(
+    'z_listunifiedreceivers',
+    [ua.address],
+    network
+  )
+
+  if (!receivers.p2pkh) {
+    throw new Error('Failed to extract transparent address from unified address')
+  }
+
+  return receivers.p2pkh
 }
 
 /**
