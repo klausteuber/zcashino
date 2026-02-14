@@ -40,37 +40,51 @@ export default function Card({ card, size = 'md', className = '', dealDelay = 0,
 
   // Handle deal animation
   useEffect(() => {
-    if (isNew && !isDealt) {
-      const timer = setTimeout(() => {
-        setIsDealt(true)
-        // Mark animation complete after the animation duration
-        const animTimer = setTimeout(() => {
-          setAnimationComplete(true)
-        }, 400) // Match animation duration
-        return () => clearTimeout(animTimer)
-      }, dealDelay)
-      return () => clearTimeout(timer)
+    if (!isNew) return
+
+    let animTimer: ReturnType<typeof setTimeout> | null = null
+    const timer = setTimeout(() => {
+      setIsDealt(true)
+      // Mark animation complete after the animation duration.
+      animTimer = setTimeout(() => {
+        setAnimationComplete(true)
+      }, 400) // Match animation duration
+    }, dealDelay)
+
+    return () => {
+      clearTimeout(timer)
+      if (animTimer) clearTimeout(animTimer)
     }
-  }, [isNew, isDealt, dealDelay])
+  }, [isNew, dealDelay])
 
   // Handle flip animation when card changes from face-down to face-up
   useEffect(() => {
     if (card.faceUp && !showFace) {
-      setIsFlipping(true)
-      // At halfway through flip, show the face
+      const startFlipTimer = setTimeout(() => {
+        setIsFlipping(true)
+      }, 0)
+      // At halfway through flip, show the face.
       const flipTimer = setTimeout(() => {
         setShowFace(true)
       }, 150)
-      // End flip animation
+      // End flip animation.
       const endTimer = setTimeout(() => {
         setIsFlipping(false)
       }, 300)
       return () => {
+        clearTimeout(startFlipTimer)
         clearTimeout(flipTimer)
         clearTimeout(endTimer)
       }
     } else if (!card.faceUp && showFace) {
-      setShowFace(false)
+      const hideFaceTimer = setTimeout(() => {
+        setIsFlipping(false)
+        setShowFace(false)
+      }, 0)
+
+      return () => {
+        clearTimeout(hideFaceTimer)
+      }
     }
   }, [card.faceUp, showFace])
 

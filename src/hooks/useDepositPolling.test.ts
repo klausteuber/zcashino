@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { renderHook, act } from '@testing-library/react'
+import { renderHook, act, waitFor } from '@testing-library/react'
 import { useDepositPolling } from './useDepositPolling'
 
 describe('useDepositPolling', () => {
@@ -37,7 +37,7 @@ describe('useDepositPolling', () => {
     expect(result.current.isPolling).toBe(true)
 
     // Wait for the initial fetch to complete
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(mockFetch).toHaveBeenCalledWith('/api/wallet', expect.any(Object))
     })
   })
@@ -72,7 +72,7 @@ describe('useDepositPolling', () => {
       useDepositPolling('session-123', true, { onDeposit })
     )
 
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(onDeposit).toHaveBeenCalledWith(0.5, 'tx123')
     })
   })
@@ -93,7 +93,7 @@ describe('useDepositPolling', () => {
       useDepositPolling('session-123', true, { onConfirmed })
     )
 
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(onConfirmed).toHaveBeenCalled()
     })
   })
@@ -110,7 +110,7 @@ describe('useDepositPolling', () => {
       useDepositPolling('session-123', true, { onError })
     )
 
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(result.current.status).toBe('error')
       expect(onError).toHaveBeenCalled()
     })
@@ -150,7 +150,7 @@ describe('useDepositPolling', () => {
     )
 
     // Wait for deposit to be detected or confirming (both indicate it's been seen)
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(['detected', 'confirming']).toContain(result.current.status)
     })
 
@@ -181,9 +181,9 @@ describe('useDepositPolling', () => {
       result.current.refresh()
     })
 
-    // Manual refresh should not call fetch when sessionId is provided but not waiting
-    // Actually, looking at the implementation, refresh() calls checkForDeposits which does check sessionId
-    // Let's verify the behavior
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledWith('/api/wallet', expect.any(Object))
+    })
   })
 
   it('should include correct request body in fetch call', async () => {
@@ -197,7 +197,7 @@ describe('useDepositPolling', () => {
       useDepositPolling('session-123', true)
     )
 
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(mockFetch).toHaveBeenCalledWith('/api/wallet', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

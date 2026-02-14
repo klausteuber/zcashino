@@ -1,6 +1,6 @@
 # Project Learnings
 
-Last updated: 2026-02-08
+Last updated: 2026-02-14
 
 ## Launch-Critical Learnings
 
@@ -164,3 +164,17 @@ In-memory limits and remote font fetches are acceptable in dev, but must be call
 4. Abstract RPC interface for future Zallet migration.
 5. Add E2E tests that run against a real testnet node.
 6. Consolidate duplicate `createWalletForSession()` into shared module.
+
+## Frontend Reliability Learnings (2026-02-14)
+
+1. **Nested timers in effects can self-cancel on dependency changes.**
+   If an effect schedules timer B from timer A, and timer A updates a dependency, cleanup can run before timer B fires. Keep dependency arrays minimal and test the full lifecycle (`start -> intermediate -> settled`) with fake timers.
+
+2. **Animation bugs need dedicated regression tests.**
+   Adding `src/components/game/Card.test.tsx` caught a real issue where `deal-from-shoe` never cleared. UI animation paths are easy to break silently without explicit timer-based tests.
+
+3. **Use Testing Library `waitFor`, not `vi.waitFor`, for React state assertions.**
+   `waitFor` from Testing Library wraps React `act`, removing warning noise and making async state tests align with React’s update semantics.
+
+4. **Build hangs can be environment artifacts, not code defects.**
+   A stale `.next/lock` can mimic a hanging build. Clear lock files before deeper diagnosis and then rerun build with deterministic env (`CI=1`, telemetry disabled) to get a clean pass/fail signal.

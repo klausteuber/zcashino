@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import Link from 'next/link'
 import JesterLogo from '@/components/ui/JesterLogo'
 
 interface ReservesData {
@@ -72,26 +73,26 @@ export default function ReservesPage() {
       {/* Header */}
       <header className="border-b border-masque-gold/20 bg-midnight-black/30 backdrop-blur-sm">
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-          <a href="/" className="flex items-center gap-3">
+          <Link href="/" className="flex items-center gap-3">
             <JesterLogo size="md" className="text-jester-purple-light" />
             <span className="text-xl font-display font-bold tracking-tight">
               <span className="text-masque-gold">Cypher</span>
               <span className="text-bone-white">Jester</span>
             </span>
-          </a>
+          </Link>
           <div className="flex items-center gap-4">
-            <a
+            <Link
               href="/verify"
               className="text-venetian-gold/60 hover:text-masque-gold transition-colors"
             >
               Verify Game
-            </a>
-            <a
+            </Link>
+            <Link
               href="/blackjack"
               className="text-venetian-gold/60 hover:text-masque-gold transition-colors"
             >
               Play
-            </a>
+            </Link>
           </div>
         </div>
       </header>

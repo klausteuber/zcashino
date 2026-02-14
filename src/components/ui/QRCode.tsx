@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 interface QRCodeProps {
   value: string
@@ -20,53 +20,54 @@ export function QRCode({
   className = ''
 }: QRCodeProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const [error, setError] = useState<string | null>(null)
+  const matrix = useMemo(() => {
+    if (!value) return null
+
+    try {
+      return generateQRMatrix(value)
+    } catch (err) {
+      console.error('QR generation error:', err)
+      return null
+    }
+  }, [value])
 
   useEffect(() => {
     const canvas = canvasRef.current
-    if (!canvas || !value) return
+    if (!canvas || !matrix) return
 
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    try {
-      // Generate QR code matrix
-      const matrix = generateQRMatrix(value)
-      const moduleCount = matrix.length
-      const moduleSize = size / moduleCount
+    const moduleCount = matrix.length
+    const moduleSize = size / moduleCount
 
-      // Clear canvas
-      ctx.fillStyle = bgColor
-      ctx.fillRect(0, 0, size, size)
+    // Clear canvas
+    ctx.fillStyle = bgColor
+    ctx.fillRect(0, 0, size, size)
 
-      // Draw modules
-      ctx.fillStyle = fgColor
-      for (let row = 0; row < moduleCount; row++) {
-        for (let col = 0; col < moduleCount; col++) {
-          if (matrix[row][col]) {
-            ctx.fillRect(
-              col * moduleSize,
-              row * moduleSize,
-              moduleSize,
-              moduleSize
-            )
-          }
+    // Draw modules
+    ctx.fillStyle = fgColor
+    for (let row = 0; row < moduleCount; row++) {
+      for (let col = 0; col < moduleCount; col++) {
+        if (matrix[row][col]) {
+          ctx.fillRect(
+            col * moduleSize,
+            row * moduleSize,
+            moduleSize,
+            moduleSize
+          )
         }
       }
-      setError(null)
-    } catch (err) {
-      setError('Failed to generate QR code')
-      console.error('QR generation error:', err)
     }
-  }, [value, size, bgColor, fgColor])
+  }, [matrix, size, bgColor, fgColor])
 
-  if (error) {
+  if (value && !matrix) {
     return (
       <div
         className={`flex items-center justify-center bg-zinc-800 text-zinc-400 text-sm ${className}`}
         style={{ width: size, height: size }}
       >
-        {error}
+        Failed to generate QR code
       </div>
     )
   }

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
+import Link from 'next/link'
 import type { BlackjackGameState, BlackjackAction, BlockchainCommitment, HandHistoryEntry } from '@/types'
 import { Hand } from '@/components/game/Card'
 import { ChipStack } from '@/components/game/Chip'
@@ -119,6 +120,58 @@ export default function BlackjackGame() {
     gameIdRef.current = gameId
   }, [gameId])
 
+  const initSession = useCallback(async (existingSessionId?: string) => {
+    try {
+      setIsLoading(true)
+      const url = existingSessionId
+        ? `/api/session?sessionId=${existingSessionId}`
+        : '/api/session'
+      const res = await fetch(url)
+      if (!res.ok) throw new Error('Failed to get session')
+      const data = await res.json()
+      if (data.error) throw new Error(data.error)
+      setSession(data)
+      setDepositAddress(data.depositAddress || null)
+
+      // Store session ID for persistence
+      if (data.id) {
+        localStorage.setItem('zcashino_session_id', data.id)
+
+        // Fetch game history for this session
+        fetch(`/api/game?sessionId=${data.id}`)
+          .then(res => res.json())
+          .then(historyData => {
+            if (historyData.games) {
+              setHandHistory(
+                historyData.games
+                  .filter((g: { status: string }) => g.status === 'completed')
+                  .slice(0, 10)
+                  .map((g: { id: string; outcome?: string; mainBet: number; payout?: number; createdAt: string }) => ({
+                    id: g.id,
+                    outcome: (g.outcome || 'lose') as HandHistoryEntry['outcome'],
+                    mainBet: g.mainBet,
+                    payout: g.payout || 0,
+                    createdAt: g.createdAt,
+                  }))
+              )
+            }
+          })
+          .catch(() => {}) // History is non-critical
+      }
+    } catch (err) {
+      console.error('Session init failed:', err)
+      // Clear invalid session and retry with fresh session
+      localStorage.removeItem('zcashino_session_id')
+      if (existingSessionId) {
+        // Retry without stale session ID
+        return initSession()
+      }
+      setError('Failed to initialize session')
+    } finally {
+      setIsLoading(false)
+    }
+  }, [])
+
   // Initialize session on mount
   useEffect(() => {
     // Check if returning user with existing session
@@ -132,7 +185,7 @@ export default function BlackjackGame() {
     } else {
       initSession()
     }
-  }, [hasSeenOnboarding])
+  }, [hasSeenOnboarding, initSession])
 
   // Balance animation effect
   useEffect(() => {
@@ -152,7 +205,7 @@ export default function BlackjackGame() {
       }
     }
     prevBalanceRef.current = session?.balance ?? null
-  }, [session?.balance])
+  }, [session])
 
   // Game phase change effects
   useEffect(() => {
@@ -238,58 +291,6 @@ export default function BlackjackGame() {
       setTimeout(() => setCopiedField(null), 2000)
     } catch {
       console.error('Failed to copy')
-    }
-  }
-
-  const initSession = async (existingSessionId?: string) => {
-    try {
-      setIsLoading(true)
-      const url = existingSessionId
-        ? `/api/session?sessionId=${existingSessionId}`
-        : '/api/session'
-      const res = await fetch(url)
-      if (!res.ok) throw new Error('Failed to get session')
-      const data = await res.json()
-      if (data.error) throw new Error(data.error)
-      setSession(data)
-      setDepositAddress(data.depositAddress || null)
-
-      // Store session ID for persistence
-      if (data.id) {
-        localStorage.setItem('zcashino_session_id', data.id)
-
-        // Fetch game history for this session
-        fetch(`/api/game?sessionId=${data.id}`)
-          .then(res => res.json())
-          .then(historyData => {
-            if (historyData.games) {
-              setHandHistory(
-                historyData.games
-                  .filter((g: { status: string }) => g.status === 'completed')
-                  .slice(0, 10)
-                  .map((g: { id: string; outcome?: string; mainBet: number; payout?: number; createdAt: string }) => ({
-                    id: g.id,
-                    outcome: (g.outcome || 'lose') as HandHistoryEntry['outcome'],
-                    mainBet: g.mainBet,
-                    payout: g.payout || 0,
-                    createdAt: g.createdAt,
-                  }))
-              )
-            }
-          })
-          .catch(() => {}) // History is non-critical
-      }
-    } catch (err) {
-      console.error('Session init failed:', err)
-      // Clear invalid session and retry with fresh session
-      localStorage.removeItem('zcashino_session_id')
-      if (existingSessionId) {
-        // Retry without stale session ID
-        return initSession()
-      }
-      setError('Failed to initialize session')
-    } finally {
-      setIsLoading(false)
     }
   }
 
@@ -680,7 +681,6 @@ export default function BlackjackGame() {
         setAutoBetCountdown(null)
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     isAutoBetEnabled,
     gameState?.phase,
@@ -778,13 +778,13 @@ export default function BlackjackGame() {
       {/* Header */}
       <header className="border-b border-masque-gold/20 bg-midnight-black/30 backdrop-blur-sm">
         <div className="container mx-auto px-2 sm:px-4 py-3 sm:py-4 flex justify-between items-center">
-          <a href="/" className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+          <Link href="/" className="flex items-center gap-1.5 sm:gap-3 shrink-0">
             <JesterLogo size="md" className="text-jester-purple-light" />
             <span className="text-base sm:text-xl font-display font-bold tracking-tight">
               <span className="text-masque-gold">Cypher</span>
               <span className="text-bone-white">Jester</span>
             </span>
-          </a>
+          </Link>
 
           <div className="flex items-center gap-1 sm:gap-4">
             {/* Sound toggle */}

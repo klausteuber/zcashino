@@ -510,13 +510,9 @@ export async function validateAddressViaRPC(
  * Returns fee in ZEC
  */
 export async function estimateFee(
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _fromAddress: string,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _toAddress: string,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _amount: number,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _network: ZcashNetwork = DEFAULT_NETWORK
 ): Promise<number> {
   // Zcash has a fixed minimum fee

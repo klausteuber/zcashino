@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import Link from 'next/link'
 import JesterLogo from '@/components/ui/JesterLogo'
 
 export const metadata: Metadata = {
@@ -16,16 +17,16 @@ export default function TermsPage() {
     <main className="min-h-screen felt-texture">
       <header className="border-b border-masque-gold/20 bg-midnight-black/30 backdrop-blur-sm">
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-          <a href="/" className="flex items-center gap-3">
+          <Link href="/" className="flex items-center gap-3">
             <JesterLogo size="md" className="text-jester-purple-light" />
             <span className="text-xl font-display font-bold tracking-tight">
               <span className="text-masque-gold">Cypher</span>
               <span className="text-bone-white">Jester</span>
             </span>
-          </a>
-          <a href="/blackjack" className="btn-gold-shimmer text-midnight-black px-4 py-2 rounded-lg font-semibold">
+          </Link>
+          <Link href="/blackjack" className="btn-gold-shimmer text-midnight-black px-4 py-2 rounded-lg font-semibold">
             Play Now
-          </a>
+          </Link>
         </div>
       </header>
 
@@ -68,7 +69,7 @@ export default function TermsPage() {
 
           <section>
             <h2 className="text-2xl font-display font-semibold text-bone-white mb-3">5. Provably Fair Gaming</h2>
-            <p>All game outcomes are determined using a provably fair algorithm. Server seeds are committed to the Zcash blockchain before bets are placed. After each game, you can verify the outcome using the verification page at <a href="/verify" className="text-masque-gold hover:underline">/verify</a>. Game rules, including house edges, are disclosed on our homepage.</p>
+            <p>All game outcomes are determined using a provably fair algorithm. Server seeds are committed to the Zcash blockchain before bets are placed. After each game, you can verify the outcome using the verification page at <Link href="/verify" className="text-masque-gold hover:underline">/verify</Link>. Game rules, including house edges, are disclosed on our homepage.</p>
           </section>
 
           <section>
@@ -105,7 +106,7 @@ export default function TermsPage() {
 
           <section>
             <h2 className="text-2xl font-display font-semibold text-bone-white mb-3">10. Responsible Gambling</h2>
-            <p>We encourage responsible gambling. You can set deposit limits, loss limits, and self-exclusion periods through the platform. For more information, visit our <a href="/responsible-gambling" className="text-masque-gold hover:underline">Responsible Gambling</a> page.</p>
+            <p>We encourage responsible gambling. You can set deposit limits, loss limits, and self-exclusion periods through the platform. For more information, visit our <Link href="/responsible-gambling" className="text-masque-gold hover:underline">Responsible Gambling</Link> page.</p>
           </section>
 
           <section>

@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import Link from 'next/link'
 import JesterLogo from '@/components/ui/JesterLogo'
 
 export const metadata: Metadata = {
@@ -16,16 +17,16 @@ export default function ResponsibleGamblingPage() {
     <main className="min-h-screen felt-texture">
       <header className="border-b border-masque-gold/20 bg-midnight-black/30 backdrop-blur-sm">
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-          <a href="/" className="flex items-center gap-3">
+          <Link href="/" className="flex items-center gap-3">
             <JesterLogo size="md" className="text-jester-purple-light" />
             <span className="text-xl font-display font-bold tracking-tight">
               <span className="text-masque-gold">Cypher</span>
               <span className="text-bone-white">Jester</span>
             </span>
-          </a>
-          <a href="/blackjack" className="btn-gold-shimmer text-midnight-black px-4 py-2 rounded-lg font-semibold">
+          </Link>
+          <Link href="/blackjack" className="btn-gold-shimmer text-midnight-black px-4 py-2 rounded-lg font-semibold">
             Play Now
-          </a>
+          </Link>
         </div>
       </header>
 

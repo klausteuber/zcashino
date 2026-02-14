@@ -94,7 +94,6 @@ export function parseDepositMemo(memo: string): string | null {
  */
 export async function isOurAddress(
   address: string,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _network: ZcashNetwork = DEFAULT_NETWORK
 ): Promise<boolean> {
   // For MVP: Check against database of generated addresses

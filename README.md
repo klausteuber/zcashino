@@ -38,7 +38,7 @@ The blackjack game is fully playable with server-side game logic and database pe
 - ✅ **Zcash Node Connection** - Full RPC integration (testnet/mainnet), env-configurable, graceful fallback to demo mode
 - ✅ **Admin Withdrawal Recovery** - `/api/admin/pool` `process-withdrawals` action for stuck pending withdrawals
 - ✅ **Proof of Reserves** - `/reserves` dashboard with on-chain balance verification
-- ✅ **Test Suite** - 255 tests across 10 files (game logic, wallet, provably fair, admin security, UI components)
+- ✅ **Test Suite** - 286 tests across 13 files (game logic, wallet, provably fair, admin security, UI components, hook/animation regressions)
 - ✅ **Cryptographically Secure RNG** - `node:crypto.randomBytes` for all seed/nonce generation (fixed from Math.random)
 - ✅ **Security Headers** - CSP, HSTS, X-Frame-Options, X-Content-Type-Options, Permissions-Policy
 - ✅ **Public API Rate Limiting** - Bucket-based per-IP rate limits on `/api/game`, `/api/session`, `/api/wallet`
@@ -124,7 +124,7 @@ npx vitest run
 npx vitest run --coverage
 ```
 
-**255 tests** across 10 test files:
+**286 tests** across 13 test files:
 
 | Module | File | Tests | Coverage |
 |--------|------|-------|----------|
@@ -135,9 +135,12 @@ npx vitest run --coverage
 | Provably Fair | `src/lib/provably-fair/index.test.ts` | 25 | Seed generation, SHA-256 hashing, verification |
 | Admin Auth | `src/lib/admin/auth.test.ts` | 4 | Signed session token validity, tamper/expiry rejection |
 | Admin Rate Limit | `src/lib/admin/rate-limit.test.ts` | 2 | Bucket cap enforcement and retry header behavior |
+| Card Animations | `src/components/game/Card.test.tsx` | 3 | Deal timing, flip reveal timing, timer cleanup on unmount |
 | QR Code | `src/components/ui/QRCode.test.tsx` | 15 | Canvas rendering, copy button |
+| Hand History UI | `src/components/game/HandHistory.test.tsx` | 12 | Result badges, layout, history rendering |
 | Onboarding | `src/components/onboarding/OnboardingModal.test.tsx` | 13 | Flow navigation, address validation |
 | Deposit Polling | `src/hooks/useDepositPolling.test.ts` | 10 | Polling lifecycle, callbacks |
+| Keyboard Shortcuts | `src/hooks/useKeyboardShortcuts.test.ts` | 16 | Action shortcuts and insurance keyboard flow |
 
 ## Deployment
 
@@ -161,7 +164,7 @@ The Dockerfile uses multi-stage builds with Next.js standalone output for minima
 GitHub Actions workflow (`.github/workflows/ci.yml`) runs on every push and PR:
 1. **Lint** - ESLint
 2. **Typecheck** - `tsc --noEmit`
-3. **Test** - `vitest run` (255 tests)
+3. **Test** - `vitest run` (286 tests)
 4. **Build** - Production build verification
 
 ### Production Database

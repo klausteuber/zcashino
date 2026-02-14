@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, Suspense } from 'react'
+import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import JesterLogo from '@/components/ui/JesterLogo'
 import type { FullVerificationResult, GameVerificationData } from '@/types'
@@ -104,19 +105,19 @@ function VerifyPageContent() {
       {/* Header */}
       <header className="border-b border-masque-gold/20 bg-midnight-black/30 backdrop-blur-sm">
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-          <a href="/" className="flex items-center gap-3">
+          <Link href="/" className="flex items-center gap-3">
             <JesterLogo size="md" className="text-jester-purple-light" />
             <span className="text-xl font-display font-bold tracking-tight">
               <span className="text-masque-gold">Cypher</span>
               <span className="text-bone-white">Jester</span>
             </span>
-          </a>
-          <a
+          </Link>
+          <Link
             href="/blackjack"
             className="text-venetian-gold/60 hover:text-masque-gold transition-colors"
           >
             Back to Game
-          </a>
+          </Link>
         </div>
       </header>
 

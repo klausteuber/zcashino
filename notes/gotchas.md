@@ -68,6 +68,20 @@ useEffect(() => {
 }, [deps])
 ```
 
+### Nested Timer Cleanup Cancels Follow-Up Animation (2026-02-14)
+
+**Symptom:** New cards keep the `deal-from-shoe` class indefinitely and never transition into the settled state.
+
+**Root Cause:**
+The deal effect scheduled a second timer (`animTimer`) inside the first timeout callback, but the effect depended on `isDealt`. When `setIsDealt(true)` fired, React re-ran the effect and executed cleanup, which cleared `animTimer` before it could set `animationComplete`.
+
+**Fix:**
+- Make the deal effect depend on `isNew` and `dealDelay` only.
+- Keep both timeout IDs in effect scope.
+- Clear both timers in cleanup for unmount/prop changes.
+
+**Regression test:** `src/components/game/Card.test.tsx` verifies deal timing and cleanup behavior.
+
 ### React Strict Mode Double-Renders
 
 **Symptom:** Effects run twice in development, timers behave erratically.
@@ -155,6 +169,22 @@ npx prisma generate   # Regenerate client
 **Fix options:**
 - Build in an environment with outbound network access, or
 - switch to local/self-hosted fonts for fully offline builds.
+
+### Stale `.next/lock` Causes False "Build Hang" (2026-02-14)
+
+**Symptom:** `next build` appears stuck or immediately fails with:
+`Unable to acquire lock at .../.next/lock`.
+
+**Root Cause:**
+A previous interrupted build left the lock file behind, so subsequent builds were blocked even though code was fine.
+
+**Fix:**
+```bash
+rm -f .next/lock
+npm run build
+```
+
+**Verification note:** After clearing the lock, production build completed successfully with Sentry warning-only output (no auth token for release upload).
 
 ---
 

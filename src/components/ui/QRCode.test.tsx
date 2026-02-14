@@ -80,7 +80,7 @@ describe('CopyButton', () => {
     const button = screen.getByText('Copy')
     fireEvent.click(button)
 
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(navigator.clipboard.writeText).toHaveBeenCalledWith('test-address-123')
     })
   })
@@ -91,7 +91,7 @@ describe('CopyButton', () => {
     const button = screen.getByText('Copy')
     fireEvent.click(button)
 
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(screen.getByText('Copied!')).toBeInTheDocument()
     })
   })
@@ -102,13 +102,13 @@ describe('CopyButton', () => {
     fireEvent.click(screen.getByText('Copy'))
 
     // Wait for the copied state
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(screen.getByText('Copied!')).toBeInTheDocument()
     })
 
     // After 2 seconds it should revert to "Copy"
     // Use a longer timeout since we're waiting for real 2 seconds
-    await vi.waitFor(
+    await waitFor(
       () => {
         expect(screen.getByText('Copy')).toBeInTheDocument()
       },
@@ -138,7 +138,7 @@ describe('CopyButton', () => {
 
     fireEvent.click(button)
 
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(button).toHaveClass('bg-green-500/20')
       expect(button).toHaveClass('text-green-400')
     })
@@ -152,7 +152,7 @@ describe('CopyButton', () => {
 
     fireEvent.click(screen.getByText('Copy'))
 
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(consoleError).toHaveBeenCalledWith('Failed to copy:', expect.any(Error))
     })
 

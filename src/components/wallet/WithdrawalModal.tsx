@@ -68,7 +68,7 @@ export function WithdrawalModal({
     setStep('confirm')
   }, [isValidAmount])
 
-  const handleSubmit = useCallback(async () => {
+  const handleSubmit = async () => {
     if (!sessionId || !isValidAmount) return
 
     setIsSubmitting(true)
@@ -116,7 +116,7 @@ export function WithdrawalModal({
     } finally {
       setIsSubmitting(false)
     }
-  }, [sessionId, isValidAmount, parsedAmount, balance, totalDeducted, onBalanceUpdate])
+  }
 
   const startPolling = useCallback((txId: string) => {
     if (pollRef.current) clearInterval(pollRef.current)

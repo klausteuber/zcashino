@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react'
 import * as Sentry from '@sentry/nextjs'
+import Link from 'next/link'
 import JesterLogo from '@/components/ui/JesterLogo'
 
 export default function BlackjackError({
@@ -38,12 +39,12 @@ export default function BlackjackError({
           >
             Resume Game
           </button>
-          <a
+          <Link
             href="/"
             className="px-6 py-3 border border-masque-gold/30 text-venetian-gold font-semibold rounded-lg hover:bg-masque-gold/10 transition-colors"
           >
             Return to Lobby
-          </a>
+          </Link>
         </div>
       </div>
     </div>

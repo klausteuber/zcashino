@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import Image from 'next/image'
+import Link from 'next/link'
 
 export const metadata: Metadata = {
   title: 'Page Not Found',
@@ -27,18 +28,18 @@ export default function NotFound() {
           This page does not exist. Perhaps the hand was folded.
         </p>
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
-          <a
+          <Link
             href="/"
             className="btn-gold-shimmer px-6 py-3 text-midnight-black font-semibold rounded-lg"
           >
             Back to Home
-          </a>
-          <a
+          </Link>
+          <Link
             href="/blackjack"
             className="px-6 py-3 border border-masque-gold/30 text-venetian-gold font-semibold rounded-lg hover:bg-masque-gold/10 transition-colors"
           >
             Play Blackjack
-          </a>
+          </Link>
         </div>
       </div>
     </main>

@@ -458,7 +458,7 @@ function ReadyScreen({ amount }: { amount: number }) {
   return (
     <div className="p-8 text-center animate-success-bounce">
       <div className="text-6xl mb-4">🎰</div>
-      <h2 className="text-2xl font-display font-bold text-bone-white mb-2">You're Ready!</h2>
+      <h2 className="text-2xl font-display font-bold text-bone-white mb-2">You&apos;re Ready!</h2>
       <p className="text-lg text-venetian-gold/50 mb-2">Your balance has been credited</p>
       <p className="text-4xl font-bold text-jester-purple-light mb-6">
         +{amount.toFixed(4)} ZEC

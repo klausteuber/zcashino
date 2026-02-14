@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import Link from 'next/link'
 import JesterLogo from '@/components/ui/JesterLogo'
 import { FAQJsonLd, BreadcrumbJsonLd } from '@/components/seo/JsonLd'
 
@@ -56,17 +57,17 @@ export default function ProvablyFairPage() {
       {/* Header */}
       <header className="border-b border-masque-gold/20 bg-midnight-black/30 backdrop-blur-sm">
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-          <a href="/" className="flex items-center gap-3">
+          <Link href="/" className="flex items-center gap-3">
             <JesterLogo size="md" className="text-jester-purple-light" />
             <span className="text-xl font-display font-bold tracking-tight">
               <span className="text-masque-gold">Cypher</span>
               <span className="text-bone-white">Jester</span>
             </span>
-          </a>
+          </Link>
           <nav className="flex items-center gap-6 text-sm">
-            <a href="/blackjack" className="text-venetian-gold/70 hover:text-masque-gold transition-colors">Blackjack</a>
-            <a href="/verify" className="text-venetian-gold/70 hover:text-masque-gold transition-colors">Verify a Game</a>
-            <a href="/reserves" className="text-venetian-gold/70 hover:text-masque-gold transition-colors">Reserves</a>
+            <Link href="/blackjack" className="text-venetian-gold/70 hover:text-masque-gold transition-colors">Blackjack</Link>
+            <Link href="/verify" className="text-venetian-gold/70 hover:text-masque-gold transition-colors">Verify a Game</Link>
+            <Link href="/reserves" className="text-venetian-gold/70 hover:text-masque-gold transition-colors">Reserves</Link>
           </nav>
         </div>
       </header>
@@ -129,7 +130,7 @@ export default function ProvablyFairPage() {
             </li>
             <li className="flex gap-3">
               <span className="text-masque-gold mt-0.5 shrink-0">&#10003;</span>
-              <span><strong className="text-bone-white">Independent verification</strong> &mdash; You don't need to trust our software. The math is open and can be checked with any SHA-256 tool.</span>
+              <span><strong className="text-bone-white">Independent verification</strong> &mdash; You don&apos;t need to trust our software. The math is open and can be checked with any SHA-256 tool.</span>
             </li>
           </ul>
         </section>
@@ -159,7 +160,7 @@ export default function ProvablyFairPage() {
             <div className="p-4 bg-midnight-black/60 rounded-lg border border-masque-gold/20">
               <h3 className="text-lg font-semibold text-bone-white mb-2">Proof of Reserves</h3>
               <p className="text-sm text-venetian-gold/70">
-                Transparent deposit addresses let anyone verify the house holds enough funds to cover all player balances. <a href="/reserves" className="text-masque-gold hover:text-venetian-gold underline">View reserves</a>.
+                Transparent deposit addresses let anyone verify the house holds enough funds to cover all player balances. <Link href="/reserves" className="text-masque-gold hover:text-venetian-gold underline">View reserves</Link>.
               </p>
             </div>
           </div>
@@ -199,18 +200,18 @@ export default function ProvablyFairPage() {
             Every completed game gives you the seeds and hash needed to independently verify the outcome.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <a
+            <Link
               href="/verify"
               className="btn-gold-shimmer px-6 py-3 text-midnight-black font-semibold rounded-lg inline-block"
             >
               Verify a Game
-            </a>
-            <a
+            </Link>
+            <Link
               href="/blackjack"
               className="px-6 py-3 border border-masque-gold/30 text-venetian-gold font-semibold rounded-lg hover:bg-masque-gold/10 transition-colors inline-block"
             >
               Play Blackjack
-            </a>
+            </Link>
           </div>
         </section>
 
@@ -246,9 +247,9 @@ export default function ProvablyFairPage() {
       <footer className="border-t border-masque-gold/20 bg-midnight-black/30 py-8">
         <div className="container mx-auto px-4 text-center text-sm text-venetian-gold/50">
           <div className="flex justify-center gap-6 mb-4">
-            <a href="/terms" className="hover:text-masque-gold transition-colors">Terms</a>
-            <a href="/privacy" className="hover:text-masque-gold transition-colors">Privacy</a>
-            <a href="/responsible-gambling" className="hover:text-masque-gold transition-colors">Responsible Gambling</a>
+            <Link href="/terms" className="hover:text-masque-gold transition-colors">Terms</Link>
+            <Link href="/privacy" className="hover:text-masque-gold transition-colors">Privacy</Link>
+            <Link href="/responsible-gambling" className="hover:text-masque-gold transition-colors">Responsible Gambling</Link>
           </div>
           <p>CypherJester &mdash; Play in Private. Verify in Public.</p>
         </div>
