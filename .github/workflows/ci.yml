@@ -30,6 +30,13 @@ jobs:
       - name: Test
         run: npm run test:run
 
+      - name: Guard stale Next build lock
+        run: |
+          if [ -f .next/lock ]; then
+            echo "::error::.next/lock exists before build. A stale lock can mask real build regressions."
+            exit 1
+          fi
+
       - name: Build
         run: npm run build
         env:
