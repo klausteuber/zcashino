@@ -62,9 +62,12 @@ export async function GET() {
         confirmed: balance.confirmed,
         pending: balance.pending,
       }
-      if (balance.confirmed < BALANCE_WARN_THRESHOLD) {
+      // Use total (confirmed + pending) for the warning, since pending change
+      // from self-send commitment txs is still fully under our control
+      const totalBalance = balance.confirmed + balance.pending
+      if (totalBalance < BALANCE_WARN_THRESHOLD) {
         if (severity === 'ok') severity = 'warning'
-        checks.houseBalanceWarning = `House balance low: ${balance.confirmed} ZEC`
+        checks.houseBalanceWarning = `House balance low: ${totalBalance} ZEC (${balance.confirmed} confirmed)`
       }
     }
   } catch {
