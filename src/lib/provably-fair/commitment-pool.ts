@@ -18,6 +18,7 @@ import { generateServerSeed, hashServerSeed } from './index'
 import { commitServerSeedHash, isBlockchainAvailable } from './blockchain'
 import type { ZcashNetwork } from '@/types'
 import { DEFAULT_NETWORK } from '@/lib/wallet'
+import type { Prisma } from '@prisma/client'
 
 // Configuration
 const POOL_MIN_SIZE = 5 // Minimum available commitments before refill
@@ -110,10 +111,12 @@ export async function getAvailableCommitment(): Promise<PooledCommitment | null>
  */
 export async function markCommitmentUsed(
   commitmentId: string,
-  gameId: string
+  gameId: string,
+  tx?: Prisma.TransactionClient
 ): Promise<boolean> {
   try {
-    await prisma.seedCommitment.update({
+    const client = tx ?? prisma
+    await client.seedCommitment.update({
       where: { id: commitmentId },
       data: {
         status: 'used',
@@ -129,6 +132,26 @@ export async function markCommitmentUsed(
 }
 
 /**
+ * Release a claimed commitment back to available if a game could not start.
+ */
+export async function releaseClaimedCommitment(
+  commitmentId: string,
+  tx?: Prisma.TransactionClient
+): Promise<void> {
+  const client = tx ?? prisma
+  await client.seedCommitment.updateMany({
+    where: {
+      id: commitmentId,
+      status: 'claimed',
+    },
+    data: {
+      status: 'available',
+      usedAt: null,
+    },
+  })
+}
+
+/**
  * Generate new commitments and add to pool
  */
 export async function refillPool(
@@ -138,9 +161,15 @@ export async function refillPool(
   let success = 0
   let failed = 0
 
-  console.log(`[CommitmentPool] Refilling pool with ${count} commitments...`)
+  // On mainnet, Sapling notes can only be spent after their witness is anchored
+  // in a block. Each commitment tx creates change that won't be spendable until
+  // the next block (~75s). So we only create ONE commitment per refill cycle
+  // and rely on the pool manager's periodic checks to build up the pool gradually.
+  const effectiveCount = Math.min(count, 1)
 
-  for (let i = 0; i < count; i++) {
+  console.log(`[CommitmentPool] Refilling pool (creating ${effectiveCount} of ${count} needed)...`)
+
+  for (let i = 0; i < effectiveCount; i++) {
     try {
       // Generate seed and hash
       const serverSeed = generateServerSeed()
@@ -150,7 +179,17 @@ export async function refillPool(
       const result = await commitServerSeedHash(serverSeedHash, network)
 
       if (!result.success || !result.txHash) {
-        console.error(`[CommitmentPool] Commitment ${i + 1}/${count} failed:`, result.error)
+        const errorMsg = result.error || 'Unknown error'
+        console.error(`[CommitmentPool] Commitment ${i + 1} failed:`, errorMsg)
+
+        // "Missing witness" means all balance is in unconfirmed Sapling notes.
+        // No point retrying — must wait for the next block to anchor the witness.
+        if (errorMsg.includes('Missing witness')) {
+          console.log('[CommitmentPool] Waiting for Sapling note confirmation before next attempt')
+          failed += (count - i)
+          break
+        }
+
         failed++
         continue
       }
@@ -172,9 +211,26 @@ export async function refillPool(
       })
 
       success++
-      console.log(`[CommitmentPool] Commitment ${i + 1}/${count} created: ${result.txHash.substring(0, 16)}...`)
+      console.log(`[CommitmentPool] Commitment created: ${result.txHash.substring(0, 16)}...`)
+
+      // After a successful commitment, stop — the change output won't be
+      // spendable until the next block confirms it. The pool manager will
+      // call refillPool again on its next cycle.
+      if (i + 1 < effectiveCount) {
+        console.log('[CommitmentPool] Pausing refill — waiting for change to confirm')
+        break
+      }
     } catch (error) {
-      console.error(`[CommitmentPool] Error creating commitment ${i + 1}/${count}:`, error)
+      const errorMsg = error instanceof Error ? error.message : String(error)
+      console.error(`[CommitmentPool] Error creating commitment:`, errorMsg)
+
+      // Stop on witness errors
+      if (errorMsg.includes('Missing witness')) {
+        console.log('[CommitmentPool] Waiting for Sapling note confirmation before next attempt')
+        failed += (count - i)
+        break
+      }
+
       failed++
     }
   }
