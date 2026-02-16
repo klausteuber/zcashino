@@ -29,7 +29,7 @@ const faqItems = [
   {
     question: 'Can I change my client seed?',
     answer:
-      'Yes. You can set a custom client seed before any game. This gives you direct influence over the randomness.',
+      'Yes. In session mode, you can set a custom client seed until the first hand of the active seed session. After that, rotate seed to start a new session and set a new client seed.',
   },
   {
     question: 'What happens in demo mode?',
@@ -89,7 +89,7 @@ export default function ProvablyFairPage() {
             <Step
               number={1}
               title="We Commit First"
-              description="Before you place your bet, the server generates a secret seed and publishes its SHA-256 hash. This hash is your receipt &mdash; it locks the server into a specific outcome before you act."
+              description="Before a seed session starts, the server generates a secret seed and publishes its SHA-256 hash. This hash is your receipt &mdash; it locks the server into a specific randomness stream before you act."
             />
 
             <Step
@@ -107,7 +107,7 @@ export default function ProvablyFairPage() {
             <Step
               number={4}
               title="After the Game, We Reveal"
-              description="Once the hand is complete, we reveal the server seed. You can now verify that it hashes to the committed value, and that the deck shuffle matches the expected output."
+              description="Legacy games reveal at hand completion. Session-mode games reveal when you rotate seed. You can then verify that the revealed seed hashes to the committed value and reproduces the same outcomes."
             />
           </div>
         </section>

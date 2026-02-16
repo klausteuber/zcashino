@@ -6,6 +6,8 @@ import { checkPublicRateLimit, createRateLimitResponse } from '@/lib/admin/rate-
 import { isKillSwitchActive } from '@/lib/kill-switch'
 import { requirePlayerSession, setPlayerSessionCookie } from '@/lib/auth/player-session'
 import { parseWithSchema, sessionBodySchema } from '@/lib/validation/api-schemas'
+import { getProvablyFairMode, LEGACY_PER_GAME_MODE } from '@/lib/provably-fair/mode'
+import { getPublicFairnessState } from '@/lib/provably-fair/session-fairness'
 
 // Demo mode: Generate a fake wallet address for testing
 function generateDemoWallet(): string {
@@ -34,7 +36,7 @@ function getPreferredDepositAddress(wallet: SessionDepositWallet) {
   return { depositAddress, depositAddressType, transparentAddress }
 }
 
-function createSessionResponse(session: {
+async function createSessionResponse(session: {
   id: string
   walletAddress: string
   balance: number
@@ -49,6 +51,46 @@ function createSessionResponse(session: {
   wallet: SessionDepositWallet
 }) {
   const { depositAddress, depositAddressType, transparentAddress } = getPreferredDepositAddress(session.wallet)
+  const fairnessMode = getProvablyFairMode()
+
+  let fairness: {
+    mode: string
+    serverSeedHash: string | null
+    commitmentTxHash: string | null
+    commitmentBlock: number | null
+    commitmentTimestamp: string | Date | null
+    clientSeed: string | null
+    nextNonce: number | null
+    canEditClientSeed: boolean
+    fairnessVersion?: string
+  } = {
+    mode: LEGACY_PER_GAME_MODE,
+    serverSeedHash: null,
+    commitmentTxHash: null,
+    commitmentBlock: null,
+    commitmentTimestamp: null,
+    clientSeed: null,
+    nextNonce: null,
+    canEditClientSeed: false,
+  }
+
+  if (fairnessMode === 'session_nonce_v1') {
+    try {
+      fairness = await getPublicFairnessState(session.id)
+    } catch (error) {
+      console.error('[SessionAPI] Failed to load session fairness state:', error)
+      fairness = {
+        mode: fairnessMode,
+        serverSeedHash: null,
+        commitmentTxHash: null,
+        commitmentBlock: null,
+        commitmentTimestamp: null,
+        clientSeed: null,
+        nextNonce: null,
+        canEditClientSeed: false,
+      }
+    }
+  }
 
   const response = NextResponse.json({
     id: session.id,
@@ -67,6 +109,7 @@ function createSessionResponse(session: {
     transparentAddress,
     isDemo: isDemoSession(session.walletAddress),
     maintenanceMode: isKillSwitchActive(),
+    fairness,
   })
 
   setPlayerSessionCookie(response, session.id, session.walletAddress)
@@ -137,7 +180,7 @@ export async function GET(request: NextRequest) {
       }, { status: 403 })
     }
 
-    return createSessionResponse(session)
+    return await createSessionResponse(session)
   } catch (error) {
     console.error('Session error:', error)
     return NextResponse.json(

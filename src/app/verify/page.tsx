@@ -10,6 +10,7 @@ type VerificationMode = 'gameId' | 'manual'
 type GameType = 'blackjack' | 'video_poker'
 
 interface VerificationResponse extends FullVerificationResult {
+  pendingReveal?: boolean
   replay?: {
     playerCards?: string[][]
     dealerCards?: string[]
@@ -333,15 +334,23 @@ function VerifyPageContent() {
           <div className="space-y-6">
             {/* Overall Status */}
             <div className={`rounded-lg p-6 border ${
-              result.valid
+              result.pendingReveal
+                ? 'bg-amber-500/10 border-amber-400'
+                : result.valid
                 ? 'bg-jester-purple/10 border-jester-purple'
                 : 'bg-blood-ruby/10 border-blood-ruby'
             }`}>
               <div className="flex items-center gap-3 mb-4">
                 <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                  result.valid ? 'bg-jester-purple' : 'bg-blood-ruby'
+                  result.pendingReveal
+                    ? 'bg-amber-400'
+                    : result.valid ? 'bg-jester-purple' : 'bg-blood-ruby'
                 }`}>
-                  {result.valid ? (
+                  {result.pendingReveal ? (
+                    <svg className="w-6 h-6 text-midnight-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M5.07 19h13.86c1.54 0 2.5-1.67 1.73-3L13.73 4c-.77-1.33-2.69-1.33-3.46 0L3.34 16c-.77 1.33.19 3 1.73 3z" />
+                    </svg>
+                  ) : result.valid ? (
                     <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
@@ -353,10 +362,14 @@ function VerifyPageContent() {
                 </div>
                 <div>
                   <h2 className="text-xl font-bold text-bone-white">
-                    {result.valid ? 'Verification Successful' : 'Verification Failed'}
+                    {result.pendingReveal
+                      ? 'Awaiting Seed Rotation'
+                      : result.valid ? 'Verification Successful' : 'Verification Failed'}
                   </h2>
                   <p className="text-venetian-gold/60">
-                    {result.valid
+                    {result.pendingReveal
+                      ? 'This game is committed on-chain, but server seed reveal is pending.'
+                      : result.valid
                       ? 'This game was provably fair.'
                       : 'Some verification steps failed.'}
                   </p>
@@ -364,31 +377,33 @@ function VerifyPageContent() {
               </div>
 
               {/* Verification Steps */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <VerificationStep
-                  label="Hash Match"
-                  passed={result.steps.hashMatches}
-                  description="Server seed hashes to committed hash"
-                />
-                <VerificationStep
-                  label="On-Chain"
-                  passed={result.steps.onChainConfirmed}
-                  description="Commitment found on Zcash blockchain"
-                />
-                <VerificationStep
-                  label="Timestamp"
-                  passed={result.steps.timestampValid}
-                  description="Committed before game started"
-                />
-                <VerificationStep
-                  label="Outcome"
-                  passed={result.steps.outcomeValid}
-                  description="Game replay matches original"
-                />
-              </div>
+              {!result.pendingReveal && (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <VerificationStep
+                    label="Hash Match"
+                    passed={result.steps.hashMatches}
+                    description="Server seed hashes to committed hash"
+                  />
+                  <VerificationStep
+                    label="On-Chain"
+                    passed={result.steps.onChainConfirmed}
+                    description="Commitment found on Zcash blockchain"
+                  />
+                  <VerificationStep
+                    label="Timestamp"
+                    passed={result.steps.timestampValid}
+                    description="Committed before game started"
+                  />
+                  <VerificationStep
+                    label="Outcome"
+                    passed={result.steps.outcomeValid}
+                    description="Game replay matches original"
+                  />
+                </div>
+              )}
 
               {/* Errors */}
-              {result.errors.length > 0 && (
+              {result.errors.length > 0 && !result.pendingReveal && (
                 <div className="mt-4 p-4 bg-midnight-black/40 rounded-lg">
                   <h3 className="text-sm font-medium text-blood-ruby mb-2">Issues Found:</h3>
                   <ul className="list-disc list-inside text-sm text-venetian-gold/60 space-y-1">
@@ -505,8 +520,8 @@ function VerifyPageContent() {
             <div>
               <h4 className="text-bone-white font-medium mb-2">4. Verification</h4>
               <p>
-                After the game, we reveal the server seed. You can verify: (a) it hashes to the
-                pre-committed hash, (b) the commitment is on the blockchain, (c) the outcome matches.
+                Legacy games reveal immediately after completion. Session-mode games reveal when you
+                rotate seed. After reveal, you can verify hash, on-chain commitment, and outcome replay.
               </p>
             </div>
           </div>

@@ -2,7 +2,14 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
-import type { VideoPokerVariant, VideoPokerGameState, VideoPokerHandRank, BlockchainCommitment, VideoPokerHandHistoryEntry } from '@/types'
+import type {
+  VideoPokerVariant,
+  VideoPokerGameState,
+  VideoPokerHandRank,
+  BlockchainCommitment,
+  VideoPokerHandHistoryEntry,
+  SessionFairnessSummary
+} from '@/types'
 import VideoPokerHand from '@/components/game/VideoPokerHand'
 import PaytableDisplay from '@/components/game/PaytableDisplay'
 import { ChipStack } from '@/components/game/Chip'
@@ -14,12 +21,23 @@ import { useGameSounds } from '@/hooks/useGameSounds'
 
 const CHIP_VALUES = [0.01, 0.05, 0.1, 0.25, 0.5, 1]
 
+function generateClientSeedHex(bytes: number = 16): string {
+  const cryptoApi = globalThis.crypto
+  if (!cryptoApi?.getRandomValues) {
+    return `${Date.now().toString(16)}${Math.random().toString(16).slice(2)}`
+  }
+  const random = new Uint8Array(bytes)
+  cryptoApi.getRandomValues(random)
+  return Array.from(random).map((value) => value.toString(16).padStart(2, '0')).join('')
+}
+
 interface SessionData {
   id: string
   walletAddress: string
   balance: number
   totalWagered: number
   totalWon: number
+  fairness?: SessionFairnessSummary | null
   isDemo?: boolean
   isAuthenticated?: boolean
   depositAddress?: string
@@ -27,11 +45,25 @@ interface SessionData {
   maintenanceMode?: boolean
 }
 
+interface FairnessRevealBundle {
+  mode: 'session_nonce_v1'
+  serverSeed: string
+  serverSeedHash: string
+  clientSeed: string
+  lastNonceUsed: number | null
+  txHash: string
+  blockHeight: number | null
+  blockTimestamp: string | Date | null
+}
+
 export default function VideoPokerGame() {
   const [session, setSession] = useState<SessionData | null>(null)
   const [gameState, setGameState] = useState<Omit<VideoPokerGameState, 'deck'> | null>(null)
   const [gameId, setGameId] = useState<string | null>(null)
   const [commitment, setCommitment] = useState<BlockchainCommitment | null>(null)
+  const [fairness, setFairness] = useState<SessionFairnessSummary | null>(null)
+  const [clientSeedInput, setClientSeedInput] = useState<string>('')
+  const [revealBundle, setRevealBundle] = useState<FairnessRevealBundle | null>(null)
   const [variant, setVariant] = useState<VideoPokerVariant>('jacks_or_better')
   const [selectedBet, setSelectedBet] = useState<number>(0.01)
   const [betMultiplier, setBetMultiplier] = useState<number>(5)
@@ -66,6 +98,25 @@ export default function VideoPokerGame() {
     if (seen) setHasSeenOnboarding(true)
   }, [])
 
+  useEffect(() => {
+    const savedClientSeed = localStorage.getItem('zcashino_client_seed')
+    if (savedClientSeed && savedClientSeed.trim().length > 0) {
+      setClientSeedInput(savedClientSeed)
+      return
+    }
+
+    const generated = generateClientSeedHex()
+    setClientSeedInput(generated)
+    localStorage.setItem('zcashino_client_seed', generated)
+  }, [])
+
+  useEffect(() => {
+    if (fairness?.mode === 'session_nonce_v1' && fairness.clientSeed) {
+      setClientSeedInput(fairness.clientSeed)
+      localStorage.setItem('zcashino_client_seed', fairness.clientSeed)
+    }
+  }, [fairness?.mode, fairness?.clientSeed])
+
   const initSession = useCallback(async (existingSessionId?: string) => {
     try {
       setIsLoading(true)
@@ -77,6 +128,7 @@ export default function VideoPokerGame() {
       const data = await res.json()
       if (data.error) throw new Error(data.error)
       setSession(data)
+      setFairness(data.fairness || null)
       setDepositAddress(data.depositAddress || null)
 
       if (data.id) {
@@ -151,6 +203,9 @@ export default function VideoPokerGame() {
     })
   }, [gameState?.phase, playSound])
 
+  const isSessionFairnessMode = fairness?.mode === 'session_nonce_v1'
+  const canEditSessionClientSeed = !isSessionFairnessMode || fairness?.canEditClientSeed
+
   const handleDeal = useCallback(async () => {
     if (!session || isActing) return
     const totalBet = selectedBet * betMultiplier
@@ -176,6 +231,7 @@ export default function VideoPokerGame() {
           variant,
           baseBet: selectedBet,
           betMultiplier,
+          clientSeed: canEditSessionClientSeed ? (clientSeedInput.trim() || undefined) : undefined,
         }),
       })
 
@@ -185,6 +241,9 @@ export default function VideoPokerGame() {
       setGameId(data.gameId)
       setGameState(data.gameState)
       setCommitment(data.commitment || null)
+      if (data.fairness) {
+        setFairness(data.fairness)
+      }
       setSession(prev => prev ? { ...prev, balance: data.balance, totalWagered: data.totalWagered, totalWon: data.totalWon } : null)
 
       playSound('cardDeal')
@@ -196,7 +255,7 @@ export default function VideoPokerGame() {
     } finally {
       setIsActing(false)
     }
-  }, [session, isActing, selectedBet, betMultiplier, variant, playSound])
+  }, [session, isActing, selectedBet, betMultiplier, variant, playSound, canEditSessionClientSeed, clientSeedInput])
 
   const handleDraw = useCallback(async () => {
     if (!session || !gameId || isActing || gameState?.phase !== 'hold') return
@@ -307,6 +366,7 @@ export default function VideoPokerGame() {
       if (!res.ok) throw new Error('Failed to create demo session')
       const data = await res.json()
       setSession(data)
+      setFairness(data.fairness || null)
       localStorage.setItem('zcashino_session_id', data.id)
       localStorage.setItem('zcashino_onboarding_seen', 'true')
       setHasSeenOnboarding(true)
@@ -325,6 +385,7 @@ export default function VideoPokerGame() {
       if (!res.ok) throw new Error('Failed to create session')
       const data = await res.json()
       setSession(data)
+      setFairness(data.fairness || null)
       localStorage.setItem('zcashino_session_id', data.id)
       return { sessionId: data.id, depositAddress: data.depositAddress || '' }
     } catch (err) {
@@ -366,6 +427,83 @@ export default function VideoPokerGame() {
     localStorage.setItem('zcashino_onboarding_seen', 'true')
     setHasSeenOnboarding(true)
   }, [])
+
+  const refreshFairnessState = useCallback(async (sessionIdOverride?: string) => {
+    const targetSessionId = sessionIdOverride || session?.id
+    if (!targetSessionId) return
+    try {
+      const response = await fetch(`/api/fairness?sessionId=${encodeURIComponent(targetSessionId)}`)
+      if (!response.ok) return
+      const data = await response.json()
+      if (data?.mode === 'session_nonce_v1' || data?.mode === 'legacy_per_game_v1') {
+        setFairness(data)
+      }
+    } catch {
+      // Non-blocking
+    }
+  }, [session?.id])
+
+  const persistClientSeedIfEditable = useCallback(async () => {
+    if (!session?.id || !isSessionFairnessMode || !canEditSessionClientSeed) return
+    const trimmed = clientSeedInput.trim()
+    if (!trimmed) return
+
+    try {
+      const response = await fetch('/api/fairness', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'set-client-seed',
+          sessionId: session.id,
+          clientSeed: trimmed,
+        }),
+      })
+      const data = await response.json()
+      if (response.ok && data?.fairness) {
+        setFairness(data.fairness)
+      }
+    } catch {
+      // Ignore - seed can still be set on deal request.
+    }
+  }, [canEditSessionClientSeed, clientSeedInput, isSessionFairnessMode, session?.id])
+
+  const handleRotateSeed = useCallback(async () => {
+    if (!session?.id || !isSessionFairnessMode || isActing) return
+
+    setIsActing(true)
+    setError(null)
+    try {
+      const response = await fetch('/api/fairness', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'rotate-seed',
+          sessionId: session.id,
+        }),
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to rotate seed')
+      }
+
+      if (data?.fairness) {
+        setFairness(data.fairness)
+      }
+      if (data?.reveal) {
+        setRevealBundle(data.reveal as FairnessRevealBundle)
+      }
+
+      setGameId(null)
+      setGameState(null)
+      setCommitment(null)
+      setLocalHeldCards([false, false, false, false, false])
+      await refreshFairnessState(session.id)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to rotate seed')
+    } finally {
+      setIsActing(false)
+    }
+  }, [isActing, isSessionFairnessMode, refreshFairnessState, session?.id])
 
   const isDeucesWild = variant === 'deuces_wild'
   const phase = gameState?.phase
@@ -605,6 +743,57 @@ export default function VideoPokerGame() {
           />
         </div>
 
+        {isSessionFairnessMode && fairness && (
+          <div className="bg-midnight-black/40 border border-masque-gold/20 rounded-lg p-3 space-y-2 text-xs">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-masque-gold font-semibold uppercase tracking-wide">
+                Seed Session
+              </span>
+              <button
+                onClick={handleRotateSeed}
+                disabled={isActing}
+                className="px-2 py-1 rounded border border-masque-gold/40 text-masque-gold hover:bg-masque-gold/10 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Rotate & Reveal
+              </button>
+            </div>
+            <div className="text-venetian-gold/60 break-all">
+              Commitment: <span className="text-bone-white/70">{fairness.commitmentTxHash || 'Pending'}</span>
+            </div>
+            <div className="text-venetian-gold/60">
+              Next Nonce: <span className="text-bone-white/70">{fairness.nextNonce ?? 0}</span>
+            </div>
+            <div className="space-y-1">
+              <div className="text-venetian-gold/60">Client Seed</div>
+              <input
+                type="text"
+                value={clientSeedInput}
+                onChange={(event) => {
+                  const next = event.target.value.slice(0, 128)
+                  setClientSeedInput(next)
+                  localStorage.setItem('zcashino_client_seed', next)
+                }}
+                onBlur={persistClientSeedIfEditable}
+                disabled={!canEditSessionClientSeed || isActing}
+                maxLength={128}
+                className="w-full bg-midnight-black/60 border border-masque-gold/20 rounded px-2 py-1 text-bone-white font-mono text-xs disabled:opacity-60"
+              />
+              <div className="text-venetian-gold/40">
+                {canEditSessionClientSeed
+                  ? 'Editable until your first hand in this seed session.'
+                  : 'Locked until you rotate seed.'}
+              </div>
+            </div>
+            {revealBundle && (
+              <div className="pt-2 border-t border-masque-gold/20 text-venetian-gold/60 space-y-1">
+                <div className="text-masque-gold">Previous Seed Revealed</div>
+                <div className="break-all">Tx: <span className="text-bone-white/70">{revealBundle.txHash}</span></div>
+                <div>Last Nonce: <span className="text-bone-white/70">{revealBundle.lastNonceUsed ?? 'none'}</span></div>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Action buttons */}
         <div className="flex flex-col items-center gap-2">
           <div className="flex justify-center gap-3">
@@ -658,6 +847,11 @@ export default function VideoPokerGame() {
       {/* Provably fair info */}
       {commitment && gameState && (
         <div className="text-center space-y-1">
+          {isSessionFairnessMode && (
+            <p className="text-xs text-venetian-gold/30">
+              Session mode: rotate seed to reveal and verify completed hands.
+            </p>
+          )}
           <p className="text-xs text-venetian-gold/30">
             Seed Hash: <span className="font-mono">{gameState.serverSeedHash?.slice(0, 16)}...</span>
           </p>

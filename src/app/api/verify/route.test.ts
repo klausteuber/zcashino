@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   replayVideoPokerGameMock: vi.fn(),
   verifyCommitmentMock: vi.fn(),
   getExplorerUrlMock: vi.fn(),
+  getRevealableServerSeedMock: vi.fn(),
 }))
 
 const {
@@ -27,6 +28,7 @@ const {
   replayVideoPokerGameMock,
   verifyCommitmentMock,
   getExplorerUrlMock,
+  getRevealableServerSeedMock,
 } = mocks
 
 vi.mock('@/lib/db', () => ({
@@ -43,6 +45,15 @@ vi.mock('@/lib/provably-fair', () => ({
 vi.mock('@/lib/provably-fair/blockchain', () => ({
   verifyCommitment: mocks.verifyCommitmentMock,
   getExplorerUrl: mocks.getExplorerUrlMock,
+}))
+
+vi.mock('@/lib/provably-fair/mode', () => ({
+  LEGACY_PER_GAME_MODE: 'legacy_per_game_v1',
+  SESSION_NONCE_MODE: 'session_nonce_v1',
+}))
+
+vi.mock('@/lib/provably-fair/session-fairness', () => ({
+  getRevealableServerSeed: mocks.getRevealableServerSeedMock,
 }))
 
 import { POST } from './route'
@@ -65,6 +76,10 @@ describe('/api/verify versioned replay selection', () => {
       message: 'ok',
       expectedDeckOrder: [],
       fairnessVersion: 'legacy_mulberry_v1',
+    })
+    getRevealableServerSeedMock.mockResolvedValue({
+      serverSeed: 'server-seed',
+      isRevealed: true,
     })
     replayGameMock.mockReturnValue({
       playerCards: [['10hearts', 'Qclubs']],

@@ -3,6 +3,8 @@ import prisma from '@/lib/db'
 import { checkNodeStatus, getAddressBalance } from '@/lib/wallet/rpc'
 import { DEFAULT_NETWORK, getHouseAddress } from '@/lib/wallet'
 import { isKillSwitchActive } from '@/lib/kill-switch'
+import { getProvablyFairMode } from '@/lib/provably-fair/mode'
+import { getSessionSeedPoolStatus } from '@/lib/services/session-seed-pool-manager'
 
 // Severity thresholds
 const POOL_LOW_THRESHOLD = 5
@@ -38,16 +40,32 @@ export async function GET() {
 
   // Commitment pool check
   try {
-    const available = await prisma.seedCommitment.count({
-      where: { status: 'available' },
-    })
-    checks.commitmentPool = { available }
-    if (available === 0) {
-      severity = severity === 'critical' ? 'critical' : 'critical'
-      checks.commitmentPoolWarning = 'Pool is empty — games cannot start'
-    } else if (available < POOL_LOW_THRESHOLD) {
-      if (severity === 'ok') severity = 'warning'
-      checks.commitmentPoolWarning = 'Pool is low, games may experience delays'
+    const fairnessMode = getProvablyFairMode()
+    checks.fairnessMode = fairnessMode
+
+    if (fairnessMode === 'session_nonce_v1') {
+      const seedPool = await getSessionSeedPoolStatus()
+      checks.sessionSeedPool = seedPool
+
+      if (seedPool.available === 0) {
+        severity = 'critical'
+        checks.sessionSeedPoolWarning = 'Session seed pool is empty — new seed streams cannot start'
+      } else if (seedPool.available < POOL_LOW_THRESHOLD) {
+        if (severity === 'ok') severity = 'warning'
+        checks.sessionSeedPoolWarning = 'Session seed pool is low, rotations may experience delays'
+      }
+    } else {
+      const available = await prisma.seedCommitment.count({
+        where: { status: 'available' },
+      })
+      checks.commitmentPool = { available }
+      if (available === 0) {
+        severity = 'critical'
+        checks.commitmentPoolWarning = 'Pool is empty — games cannot start'
+      } else if (available < POOL_LOW_THRESHOLD) {
+        if (severity === 'ok') severity = 'warning'
+        checks.commitmentPoolWarning = 'Pool is low, games may experience delays'
+      }
     }
   } catch {
     checks.commitmentPool = { available: 0 }

@@ -7,6 +7,7 @@ const nonNegativeInt = z.number().int().min(0)
 
 const gameTypeSchema = z.enum(['blackjack', 'video_poker'])
 const fairnessVersionSchema = z.enum(['legacy_mulberry_v1', 'hmac_sha256_v1'])
+const provablyFairModeSchema = z.enum(['legacy_per_game_v1', 'session_nonce_v1'])
 
 export const blackjackBodySchema = z.discriminatedUnion('action', [
   z.object({
@@ -115,13 +116,32 @@ export const verifyQuerySchema = z.object({
   gameType: gameTypeSchema.optional(),
 })
 
+export const fairnessQuerySchema = z.object({
+  sessionId: z.string().trim().optional(),
+})
+
+export const fairnessPostSchema = z.discriminatedUnion('action', [
+  z.object({
+    action: z.literal('set-client-seed'),
+    sessionId: nonEmptyString,
+    clientSeed: nonEmptyString.max(128),
+  }).strict(),
+  z.object({
+    action: z.literal('rotate-seed'),
+    sessionId: nonEmptyString,
+    nextClientSeed: z.string().trim().min(1).max(128).optional(),
+  }).strict(),
+])
+
 export const verifyGameTypeSchema = gameTypeSchema
+export const provablyFairModeEnumSchema = provablyFairModeSchema
 
 export type BlackjackBody = z.infer<typeof blackjackBodySchema>
 export type VideoPokerBody = z.infer<typeof videoPokerBodySchema>
 export type WalletBody = z.infer<typeof walletBodySchema>
 export type SessionBody = z.infer<typeof sessionBodySchema>
 export type VerifyPostBody = z.infer<typeof verifyPostSchema>
+export type FairnessPostBody = z.infer<typeof fairnessPostSchema>
 
 export interface ValidationErrorPayload {
   error: string

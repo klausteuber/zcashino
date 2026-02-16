@@ -33,6 +33,15 @@ const mocks = vi.hoisted(() => ({
   logPlayerCounterEventMock: vi.fn(),
   checkWagerAllowedMock: vi.fn(),
   requirePlayerSessionMock: vi.fn(),
+  getProvablyFairModeMock: vi.fn(),
+  allocateNonceMock: vi.fn(),
+  ensureActiveFairnessStateMock: vi.fn(),
+  setClientSeedMock: vi.fn(),
+  getPublicFairnessStateMock: vi.fn(),
+  getRevealableServerSeedMock: vi.fn(),
+  getFairnessSeedByIdMock: vi.fn(),
+  ClientSeedLockedError: class ClientSeedLockedError extends Error {},
+  SessionFairnessUnavailableError: class SessionFairnessUnavailableError extends Error {},
 }))
 
 const {
@@ -55,6 +64,13 @@ const {
   logPlayerCounterEventMock,
   checkWagerAllowedMock,
   requirePlayerSessionMock,
+  getProvablyFairModeMock,
+  allocateNonceMock,
+  ensureActiveFairnessStateMock,
+  setClientSeedMock,
+  getPublicFairnessStateMock,
+  getRevealableServerSeedMock,
+  getFairnessSeedByIdMock,
 } = mocks
 
 vi.mock('@/lib/db', () => ({
@@ -84,6 +100,22 @@ vi.mock('@/lib/provably-fair/commitment-pool', () => ({
 
 vi.mock('@/lib/provably-fair/blockchain', () => ({
   getExplorerUrl: mocks.getExplorerUrlMock,
+}))
+
+vi.mock('@/lib/provably-fair/mode', () => ({
+  SESSION_NONCE_MODE: 'session_nonce_v1',
+  getProvablyFairMode: mocks.getProvablyFairModeMock,
+}))
+
+vi.mock('@/lib/provably-fair/session-fairness', () => ({
+  ClientSeedLockedError: mocks.ClientSeedLockedError,
+  SessionFairnessUnavailableError: mocks.SessionFairnessUnavailableError,
+  allocateNonce: mocks.allocateNonceMock,
+  ensureActiveFairnessState: mocks.ensureActiveFairnessStateMock,
+  setClientSeed: mocks.setClientSeedMock,
+  getPublicFairnessState: mocks.getPublicFairnessStateMock,
+  getRevealableServerSeed: mocks.getRevealableServerSeedMock,
+  getFairnessSeedById: mocks.getFairnessSeedByIdMock,
 }))
 
 vi.mock('@/lib/admin/rate-limit', () => ({
@@ -137,6 +169,13 @@ describe('/api/video-poker POST wager limit gates', () => {
     isKillSwitchActiveMock.mockReturnValue(false)
     requirePlayerSessionMock.mockReturnValue({ ok: true, legacyFallback: false })
     checkWagerAllowedMock.mockReturnValue({ allowed: true })
+    getProvablyFairModeMock.mockReturnValue('legacy_per_game_v1')
+    ensureActiveFairnessStateMock.mockResolvedValue(undefined)
+    allocateNonceMock.mockResolvedValue(undefined)
+    setClientSeedMock.mockResolvedValue(undefined)
+    getPublicFairnessStateMock.mockResolvedValue(null)
+    getRevealableServerSeedMock.mockResolvedValue({ serverSeed: 'server-seed', isRevealed: true })
+    getFairnessSeedByIdMock.mockResolvedValue({ seed: 'server-seed' })
 
     prismaMock.session.findUnique.mockResolvedValue({
       id: 'session-1',

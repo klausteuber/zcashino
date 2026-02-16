@@ -45,6 +45,7 @@ model Session {
   videoPokerGames VideoPokerGame[]
   transactions  Transaction[]
   wallet        DepositWallet?
+  fairnessState SessionFairnessState?
 
   @@index([walletAddress])
   @@index([withdrawalAddress])
@@ -104,11 +105,13 @@ model BlackjackGame {
   actionHistory   String   @default("[]") // JSON array of actions taken (hit, stand, double, split)
 
   // Provably fair data
-  serverSeed      String
+  serverSeed      String?
   serverSeedHash  String
   clientSeed      String
   nonce           Int
   fairnessVersion String   @default("legacy_mulberry_v1")
+  fairnessSeedId  String?
+  fairnessMode    String?
 
   // Blockchain commitment (provably fair on-chain)
   commitmentTxHash    String?   // Zcash tx hash of commitment
@@ -132,6 +135,8 @@ model BlackjackGame {
   @@index([serverSeedHash])
   @@index([status])
   @@index([commitmentTxHash])
+  @@index([fairnessSeedId])
+  @@index([fairnessMode])
 }
 
 // Pre-generated seed commitments for provably fair games
@@ -158,6 +163,39 @@ model SeedCommitment {
   @@index([status])
   @@index([txHash])
   @@index([expiresAt])
+}
+
+model FairnessSeed {
+  id             String   @id @default(cuid())
+  seed           String
+  seedHash       String   @unique
+  txHash         String   @unique
+  blockHeight    Int?
+  blockTimestamp DateTime?
+  status         String   @default("available") // available, assigned, revealed, expired
+  assignedAt     DateTime?
+  revealedAt     DateTime?
+  createdAt      DateTime @default(now())
+
+  sessionStates  SessionFairnessState[]
+
+  @@index([status, createdAt])
+  @@index([seedHash])
+  @@index([txHash])
+}
+
+model SessionFairnessState {
+  sessionId        String   @id
+  session          Session  @relation(fields: [sessionId], references: [id])
+  seedId           String   @unique
+  seed             FairnessSeed @relation(fields: [seedId], references: [id])
+  clientSeed       String
+  nextNonce        Int      @default(0)
+  fairnessVersion  String   @default("hmac_sha256_v1")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([seedId])
 }
 
 // Deposit and withdrawal transactions
@@ -245,11 +283,13 @@ model VideoPokerGame {
   actionHistory   String   @default("[]") // JSON: ["deal", "[0,2,4]"] (held indices)
 
   // Provably fair data
-  serverSeed      String
+  serverSeed      String?
   serverSeedHash  String
   clientSeed      String
   nonce           Int
   fairnessVersion String   @default("legacy_mulberry_v1")
+  fairnessSeedId  String?
+  fairnessMode    String?
 
   // Blockchain commitment
   commitmentTxHash    String?
@@ -270,6 +310,8 @@ model VideoPokerGame {
   @@index([status])
   @@index([serverSeedHash])
   @@index([commitmentTxHash])
+  @@index([fairnessSeedId])
+  @@index([fairnessMode])
 }
 
 // Geo-blocking log (30-day retention)

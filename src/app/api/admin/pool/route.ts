@@ -21,6 +21,12 @@ import {
   getSweepHistory,
   getSweepServiceStatus,
 } from '@/lib/services/deposit-sweep'
+import { getProvablyFairMode, SESSION_NONCE_MODE } from '@/lib/provably-fair/mode'
+import {
+  getSessionSeedPoolStatus,
+  initializeSessionSeedPool,
+  triggerSessionSeedPoolCheck,
+} from '@/lib/services/session-seed-pool-manager'
 
 /**
  * GET /api/admin/pool - Get pool status
@@ -50,7 +56,10 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const status = await getPoolStatus()
+    const fairnessMode = getProvablyFairMode()
+    const status = fairnessMode === SESSION_NONCE_MODE
+      ? await getSessionSeedPoolStatus()
+      : await getPoolStatus()
     await logAdminEvent({
       request,
       action: 'admin.pool.status',
@@ -61,6 +70,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       ...status,
+      fairnessMode,
       killSwitch: getKillSwitchStatus(),
       sweepService: getSweepServiceStatus(),
       timestamp: new Date().toISOString()
@@ -114,12 +124,18 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     const { action } = body
+    const fairnessMode = getProvablyFairMode()
+    const isSessionMode = fairnessMode === SESSION_NONCE_MODE
 
     switch (action) {
       case 'refill': {
         console.log('[Admin] Manual pool refill triggered')
-        await checkAndRefillPool()
-        const status = await getPoolStatus()
+        const status = isSessionMode
+          ? await triggerSessionSeedPoolCheck()
+          : await (async () => {
+            await checkAndRefillPool()
+            return getPoolStatus()
+          })()
         await logAdminEvent({
           request,
           action: 'admin.pool.action',
@@ -128,13 +144,13 @@ export async function POST(request: NextRequest) {
           details: 'Pool refill completed',
           metadata: { adminAction: action },
         })
-        return NextResponse.json({ success: true, action: 'refill', status })
+        return NextResponse.json({ success: true, action: 'refill', fairnessMode, status })
       }
 
       case 'cleanup': {
         console.log('[Admin] Manual cleanup triggered')
-        const cleaned = await cleanupExpiredCommitments()
-        const status = await getPoolStatus()
+        const cleaned = isSessionMode ? 0 : await cleanupExpiredCommitments()
+        const status = isSessionMode ? await getSessionSeedPoolStatus() : await getPoolStatus()
         await logAdminEvent({
           request,
           action: 'admin.pool.action',
@@ -146,6 +162,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({
           success: true,
           action: 'cleanup',
+          fairnessMode,
           cleaned,
           status
         })
@@ -153,8 +170,12 @@ export async function POST(request: NextRequest) {
 
       case 'init': {
         console.log('[Admin] Manual pool initialization triggered')
-        await initializePool()
-        const status = await getPoolStatus()
+        if (isSessionMode) {
+          await initializeSessionSeedPool()
+        } else {
+          await initializePool()
+        }
+        const status = isSessionMode ? await getSessionSeedPoolStatus() : await getPoolStatus()
         await logAdminEvent({
           request,
           action: 'admin.pool.action',
@@ -163,7 +184,7 @@ export async function POST(request: NextRequest) {
           details: 'Pool initialized',
           metadata: { adminAction: action },
         })
-        return NextResponse.json({ success: true, action: 'init', status })
+        return NextResponse.json({ success: true, action: 'init', fairnessMode, status })
       }
 
       case 'process-withdrawals': {

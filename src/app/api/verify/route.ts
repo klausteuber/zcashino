@@ -11,6 +11,50 @@ import type {
 } from '@/types'
 import { parseWithSchema, verifyPostSchema, verifyQuerySchema } from '@/lib/validation/api-schemas'
 import { HMAC_FAIRNESS_VERSION, normalizeFairnessVersion } from '@/lib/game/shuffle'
+import { LEGACY_PER_GAME_MODE, SESSION_NONCE_MODE } from '@/lib/provably-fair/mode'
+import { getRevealableServerSeed } from '@/lib/provably-fair/session-fairness'
+
+function normalizeFairnessMode(mode: string | null | undefined) {
+  return mode === SESSION_NONCE_MODE ? SESSION_NONCE_MODE : LEGACY_PER_GAME_MODE
+}
+
+async function resolveVerificationSeed(
+  fairnessSeedId: string | null,
+  fallbackServerSeed: string | null,
+  fairnessMode: string | null | undefined
+): Promise<{
+  mode: typeof LEGACY_PER_GAME_MODE | typeof SESSION_NONCE_MODE
+  verificationStatus: 'ready' | 'pending_reveal'
+  serverSeed: string | null
+  isRevealed: boolean
+}> {
+  const mode = normalizeFairnessMode(fairnessMode)
+  const revealState = await getRevealableServerSeed(fairnessSeedId, fallbackServerSeed)
+  const pending = mode === SESSION_NONCE_MODE && !revealState.isRevealed
+  return {
+    mode,
+    verificationStatus: pending ? 'pending_reveal' : 'ready',
+    serverSeed: revealState.serverSeed,
+    isRevealed: revealState.isRevealed,
+  }
+}
+
+function buildPendingRevealResponse(data: GameVerificationData) {
+  const steps: VerificationSteps = {
+    hashMatches: false,
+    onChainConfirmed: false,
+    timestampValid: false,
+    outcomeValid: false,
+  }
+
+  return {
+    valid: false,
+    pendingReveal: true,
+    data,
+    steps,
+    errors: ['This game is waiting for seed rotation. Rotate seed to reveal and verify.'],
+  }
+}
 
 /**
  * GET /api/verify - Get verification data for a game
@@ -59,13 +103,25 @@ export async function GET(request: NextRequest) {
           }
         : undefined
 
+      const revealState = await resolveVerificationSeed(
+        game.fairnessSeedId,
+        game.serverSeed,
+        game.fairnessMode
+      )
+      const verificationStatus = isCompleted ? revealState.verificationStatus : 'pending_reveal'
+      const canVerify = isCompleted && verificationStatus === 'ready'
+
       const verificationData: GameVerificationData = {
         gameId: game.id,
-        serverSeed: isCompleted ? game.serverSeed : '[Hidden until game completes]',
+        serverSeed: canVerify
+          ? (revealState.serverSeed || '[Unavailable]')
+          : (isCompleted ? '[Hidden until seed rotation]' : '[Hidden until game completes]'),
         serverSeedHash: game.serverSeedHash,
         clientSeed: game.clientSeed,
         nonce: game.nonce,
         fairnessVersion: normalizeFairnessVersion(game.fairnessVersion),
+        mode: revealState.mode,
+        verificationStatus,
         commitment,
         gameType: 'video_poker',
         outcome: game.handRank || undefined,
@@ -76,7 +132,7 @@ export async function GET(request: NextRequest) {
 
       return NextResponse.json({
         data: verificationData,
-        canVerify: isCompleted,
+        canVerify,
         isOwner
       })
     }
@@ -107,13 +163,25 @@ export async function GET(request: NextRequest) {
         }
       : undefined
 
+    const revealState = await resolveVerificationSeed(
+      game.fairnessSeedId,
+      game.serverSeed,
+      game.fairnessMode
+    )
+    const verificationStatus = isCompleted ? revealState.verificationStatus : 'pending_reveal'
+    const canVerify = isCompleted && verificationStatus === 'ready'
+
     const verificationData: GameVerificationData = {
       gameId: game.id,
-      serverSeed: isCompleted ? game.serverSeed : '[Hidden until game completes]',
+      serverSeed: canVerify
+        ? (revealState.serverSeed || '[Unavailable]')
+        : (isCompleted ? '[Hidden until seed rotation]' : '[Hidden until game completes]'),
       serverSeedHash: game.serverSeedHash,
       clientSeed: game.clientSeed,
       nonce: game.nonce,
       fairnessVersion: normalizeFairnessVersion(game.fairnessVersion),
+      mode: revealState.mode,
+      verificationStatus,
       commitment,
       gameType: 'blackjack',
       outcome: game.outcome || undefined,
@@ -124,7 +192,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       data: verificationData,
-      canVerify: isCompleted,
+      canVerify,
       isOwner
     })
   } catch (error) {
@@ -194,6 +262,42 @@ async function verifyGameById(gameId: string, gameType: 'blackjack' | 'video_pok
       }, { status: 400 })
     }
 
+    const revealState = await resolveVerificationSeed(
+      game.fairnessSeedId,
+      game.serverSeed,
+      game.fairnessMode
+    )
+
+    const commitment: BlockchainCommitment | undefined = game.commitmentTxHash
+      ? {
+          txHash: game.commitmentTxHash,
+          blockHeight: game.commitmentBlock || 0,
+          blockTimestamp: game.commitmentTimestamp || game.createdAt,
+          explorerUrl: getExplorerUrl(game.commitmentTxHash)
+        }
+      : undefined
+
+    const resolvedServerSeed = revealState.serverSeed
+    if (revealState.verificationStatus === 'pending_reveal' || !resolvedServerSeed) {
+      const pendingData: GameVerificationData = {
+        gameId: game.id,
+        serverSeed: '[Hidden until seed rotation]',
+        serverSeedHash: game.serverSeedHash,
+        clientSeed: game.clientSeed,
+        nonce: game.nonce,
+        fairnessVersion: normalizeFairnessVersion(game.fairnessVersion),
+        mode: revealState.mode,
+        verificationStatus: 'pending_reveal',
+        commitment,
+        gameType: 'video_poker',
+        outcome: game.handRank || undefined,
+        payout: game.payout || undefined,
+        createdAt: game.createdAt,
+        completedAt: game.completedAt || undefined,
+      }
+      return NextResponse.json(buildPendingRevealResponse(pendingData))
+    }
+
     const errors: string[] = []
     const steps: VerificationSteps = {
       hashMatches: false,
@@ -202,7 +306,7 @@ async function verifyGameById(gameId: string, gameType: 'blackjack' | 'video_pok
       outcomeValid: false
     }
 
-    const computedHash = await hashServerSeed(game.serverSeed)
+    const computedHash = await hashServerSeed(resolvedServerSeed)
     steps.hashMatches = computedHash === game.serverSeedHash
     if (!steps.hashMatches) {
       errors.push('Server seed hash does not match. The game may have been manipulated.')
@@ -233,7 +337,7 @@ async function verifyGameById(gameId: string, gameType: 'blackjack' | 'video_pok
 
     const fairnessVersion = normalizeFairnessVersion(game.fairnessVersion)
     const replayResult = await verifyGame(
-      game.serverSeed,
+      resolvedServerSeed,
       game.serverSeedHash,
       game.clientSeed,
       game.nonce,
@@ -253,7 +357,7 @@ async function verifyGameById(gameId: string, gameType: 'blackjack' | 'video_pok
         : []
 
       replayData = replayVideoPokerGame({
-        serverSeed: game.serverSeed,
+        serverSeed: resolvedServerSeed,
         serverSeedHash: game.serverSeedHash,
         clientSeed: game.clientSeed,
         nonce: game.nonce,
@@ -287,24 +391,17 @@ async function verifyGameById(gameId: string, gameType: 'blackjack' | 'video_pok
       )
     }
 
-    const commitment: BlockchainCommitment | undefined = game.commitmentTxHash
-      ? {
-          txHash: game.commitmentTxHash,
-          blockHeight: game.commitmentBlock || 0,
-          blockTimestamp: game.commitmentTimestamp || game.createdAt,
-          explorerUrl: getExplorerUrl(game.commitmentTxHash)
-        }
-      : undefined
-
     const result: FullVerificationResult = {
       valid: steps.hashMatches && steps.outcomeValid && (steps.onChainConfirmed || !game.commitmentTxHash),
       data: {
         gameId: game.id,
-        serverSeed: game.serverSeed,
+        serverSeed: resolvedServerSeed,
         serverSeedHash: game.serverSeedHash,
         clientSeed: game.clientSeed,
         nonce: game.nonce,
         fairnessVersion,
+        mode: revealState.mode,
+        verificationStatus: 'ready',
         commitment,
         gameType: 'video_poker',
         outcome: game.handRank || undefined,
@@ -341,6 +438,42 @@ async function verifyGameById(gameId: string, gameType: 'blackjack' | 'video_pok
     }, { status: 400 })
   }
 
+  const revealState = await resolveVerificationSeed(
+    game.fairnessSeedId,
+    game.serverSeed,
+    game.fairnessMode
+  )
+
+  const commitment: BlockchainCommitment | undefined = game.commitmentTxHash
+    ? {
+        txHash: game.commitmentTxHash,
+        blockHeight: game.commitmentBlock || 0,
+        blockTimestamp: game.commitmentTimestamp || game.createdAt,
+        explorerUrl: getExplorerUrl(game.commitmentTxHash)
+      }
+    : undefined
+
+  const resolvedServerSeed = revealState.serverSeed
+  if (revealState.verificationStatus === 'pending_reveal' || !resolvedServerSeed) {
+    const pendingData: GameVerificationData = {
+      gameId: game.id,
+      serverSeed: '[Hidden until seed rotation]',
+      serverSeedHash: game.serverSeedHash,
+      clientSeed: game.clientSeed,
+      nonce: game.nonce,
+      fairnessVersion: normalizeFairnessVersion(game.fairnessVersion),
+      mode: revealState.mode,
+      verificationStatus: 'pending_reveal',
+      commitment,
+      gameType: 'blackjack',
+      outcome: game.outcome || undefined,
+      payout: game.payout || undefined,
+      createdAt: game.createdAt,
+      completedAt: game.completedAt || undefined,
+    }
+    return NextResponse.json(buildPendingRevealResponse(pendingData))
+  }
+
   const errors: string[] = []
   const steps: VerificationSteps = {
     hashMatches: false,
@@ -349,7 +482,7 @@ async function verifyGameById(gameId: string, gameType: 'blackjack' | 'video_pok
     outcomeValid: false
   }
 
-  const computedHash = await hashServerSeed(game.serverSeed)
+  const computedHash = await hashServerSeed(resolvedServerSeed)
   steps.hashMatches = computedHash === game.serverSeedHash
 
   if (!steps.hashMatches) {
@@ -383,7 +516,7 @@ async function verifyGameById(gameId: string, gameType: 'blackjack' | 'video_pok
   const deckSize = 312
   const fairnessVersion = normalizeFairnessVersion(game.fairnessVersion)
   const replayResult = await verifyGame(
-    game.serverSeed,
+    resolvedServerSeed,
     game.serverSeedHash,
     game.clientSeed,
     game.nonce,
@@ -400,7 +533,7 @@ async function verifyGameById(gameId: string, gameType: 'blackjack' | 'video_pok
   const actionHistory: BlackjackAction[] = JSON.parse(game.actionHistory || '[]')
   try {
     replayData = replayGame({
-      serverSeed: game.serverSeed,
+      serverSeed: resolvedServerSeed,
       serverSeedHash: game.serverSeedHash,
       clientSeed: game.clientSeed,
       nonce: game.nonce,
@@ -424,24 +557,17 @@ async function verifyGameById(gameId: string, gameType: 'blackjack' | 'video_pok
     )
   }
 
-  const commitment: BlockchainCommitment | undefined = game.commitmentTxHash
-    ? {
-        txHash: game.commitmentTxHash,
-        blockHeight: game.commitmentBlock || 0,
-        blockTimestamp: game.commitmentTimestamp || game.createdAt,
-        explorerUrl: getExplorerUrl(game.commitmentTxHash)
-      }
-    : undefined
-
   const result: FullVerificationResult = {
     valid: steps.hashMatches && steps.outcomeValid && (steps.onChainConfirmed || !game.commitmentTxHash),
     data: {
       gameId: game.id,
-      serverSeed: game.serverSeed,
+      serverSeed: resolvedServerSeed,
       serverSeedHash: game.serverSeedHash,
       clientSeed: game.clientSeed,
       nonce: game.nonce,
       fairnessVersion,
+      mode: revealState.mode,
+      verificationStatus: 'ready',
       commitment,
       gameType: 'blackjack',
       outcome: game.outcome || undefined,

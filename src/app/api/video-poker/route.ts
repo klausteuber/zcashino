@@ -26,7 +26,18 @@ import { parseWithSchema, videoPokerBodySchema } from '@/lib/validation/api-sche
 import { reserveFunds, creditFunds } from '@/lib/services/ledger'
 import { logPlayerCounterEvent, PLAYER_COUNTER_ACTIONS } from '@/lib/telemetry/player-events'
 import { checkWagerAllowed } from '@/lib/services/responsible-gambling'
-import { getDefaultFairnessVersion, normalizeFairnessVersion } from '@/lib/game/shuffle'
+import { HMAC_FAIRNESS_VERSION, getDefaultFairnessVersion, normalizeFairnessVersion } from '@/lib/game/shuffle'
+import { getProvablyFairMode, SESSION_NONCE_MODE } from '@/lib/provably-fair/mode'
+import {
+  allocateNonce,
+  ClientSeedLockedError,
+  ensureActiveFairnessState,
+  getFairnessSeedById,
+  getPublicFairnessState,
+  getRevealableServerSeed,
+  SessionFairnessUnavailableError,
+  setClientSeed,
+} from '@/lib/provably-fair/session-fairness'
 
 function isDemoSession(walletAddress: string): boolean {
   return walletAddress.startsWith('demo_')
@@ -171,6 +182,18 @@ async function handleStartGame(
     return createWagerLimitResponse(wagerCheck)
   }
 
+  if (getProvablyFairMode() === SESSION_NONCE_MODE) {
+    return handleStartGameSessionNonce(
+      request,
+      session,
+      variant as VideoPokerVariant,
+      baseBet,
+      betMultiplier,
+      totalBet,
+      clientSeedInput
+    )
+  }
+
   // Get pre-committed server seed
   const commitment = await getOrCreateCommitment()
   if (!commitment) {
@@ -303,6 +326,164 @@ async function handleStartGame(
   })
 }
 
+async function handleStartGameSessionNonce(
+  request: NextRequest,
+  session: {
+    id: string
+    balance: number
+    walletAddress: string
+    totalWagered: number
+    totalWon: number
+    lossLimit: number | null
+    sessionLimit: number | null
+    createdAt: Date
+  },
+  variant: VideoPokerVariant,
+  baseBet: number,
+  betMultiplier: number,
+  totalBet: number,
+  clientSeedInput?: string
+) {
+  const requestedClientSeed = clientSeedInput?.trim()
+  let gameId = ''
+  let gameState: VideoPokerGameState | null = null
+  let blockchainCommitment: BlockchainCommitment | null = null
+  let updatedSessionForBet: {
+    balance: number
+    totalWagered: number
+    totalWon: number
+  } | null = null
+
+  try {
+    await ensureActiveFairnessState(session.id)
+  } catch (error) {
+    if (error instanceof SessionFairnessUnavailableError) {
+      return NextResponse.json({
+        error: 'Unable to allocate a session fairness seed. Please try again shortly.',
+      }, { status: 503 })
+    }
+    throw error
+  }
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      const reserved = await reserveFunds(tx, session.id, totalBet, 'totalWagered')
+      if (!reserved) {
+        throw new Error('INSUFFICIENT_BALANCE')
+      }
+
+      await ensureActiveFairnessState(session.id, tx)
+
+      if (requestedClientSeed) {
+        await setClientSeed(session.id, requestedClientSeed, tx)
+      }
+
+      const allocated = await allocateNonce(session.id, tx)
+
+      const initialState = createInitialState(session.balance, variant)
+      const startedGameState = startRound(
+        initialState,
+        baseBet,
+        betMultiplier,
+        allocated.serverSeed,
+        allocated.serverSeedHash,
+        allocated.clientSeed,
+        allocated.nonce,
+        HMAC_FAIRNESS_VERSION
+      )
+      gameState = startedGameState
+
+      const game = await tx.videoPokerGame.create({
+        data: {
+          sessionId: session.id,
+          variant,
+          baseBet,
+          betMultiplier,
+          totalBet,
+          serverSeed: null,
+          serverSeedHash: allocated.serverSeedHash,
+          clientSeed: allocated.clientSeed,
+          nonce: allocated.nonce,
+          fairnessVersion: HMAC_FAIRNESS_VERSION,
+          fairnessSeedId: allocated.seedId,
+          fairnessMode: SESSION_NONCE_MODE,
+          commitmentTxHash: allocated.commitmentTxHash,
+          commitmentBlock: allocated.commitmentBlock,
+          commitmentTimestamp: allocated.commitmentTimestamp,
+          initialState: JSON.stringify({
+            hand: startedGameState.hand.map(c => ({ rank: c.rank, suit: c.suit })),
+          }),
+          status: 'active',
+        },
+      })
+
+      gameId = game.id
+      blockchainCommitment = {
+        txHash: allocated.commitmentTxHash,
+        blockHeight: allocated.commitmentBlock ?? 0,
+        blockTimestamp: allocated.commitmentTimestamp ?? new Date(),
+        explorerUrl: getExplorerUrl(allocated.commitmentTxHash),
+      }
+
+      updatedSessionForBet = await tx.session.findUnique({
+        where: { id: session.id },
+        select: {
+          balance: true,
+          totalWagered: true,
+          totalWon: true,
+        },
+      })
+    })
+  } catch (error) {
+    if (error instanceof ClientSeedLockedError) {
+      return NextResponse.json({
+        error: 'Client seed can only be changed before the first hand in the active seed stream.',
+        code: 'CLIENT_SEED_LOCKED',
+      }, { status: 409 })
+    }
+
+    if (error instanceof SessionFairnessUnavailableError) {
+      return NextResponse.json({
+        error: 'No replacement fairness seed available. Please try again shortly.',
+      }, { status: 503 })
+    }
+
+    if (error instanceof Error && error.message === 'INSUFFICIENT_BALANCE') {
+      await logPlayerCounterEvent({
+        request,
+        action: PLAYER_COUNTER_ACTIONS.VIDEO_POKER_RESERVE_REJECTED,
+        details: 'Conditional video-poker reserve rejected',
+        metadata: {
+          sessionId: session.id,
+          totalBet,
+        },
+      })
+      return NextResponse.json({ error: 'Insufficient balance' }, { status: 400 })
+    }
+
+    throw error
+  }
+
+  if (!gameState || !blockchainCommitment) {
+    throw new Error('Failed to start video poker game with session fairness state')
+  }
+
+  const updatedSession = await prisma.session.findUnique({
+    where: { id: session.id },
+  })
+  const fairness = await getPublicFairnessState(session.id).catch(() => null)
+
+  return NextResponse.json({
+    gameId,
+    gameState: sanitizeStateForClient(gameState),
+    balance: roundZec(updatedSession?.balance ?? (updatedSessionForBet as { balance: number } | null)?.balance ?? 0),
+    totalWagered: roundZec(updatedSession?.totalWagered ?? (updatedSessionForBet as { totalWagered: number } | null)?.totalWagered ?? totalBet),
+    totalWon: roundZec(updatedSession?.totalWon ?? (updatedSessionForBet as { totalWon: number } | null)?.totalWon ?? 0),
+    commitment: blockchainCommitment,
+    fairness,
+  })
+}
+
 async function handleDraw(
   request: NextRequest,
   session: { id: string; balance: number },
@@ -341,6 +522,11 @@ async function handleDraw(
   }
 
   // Reconstruct game state from seeds (action replay pattern)
+  const resolvedServerSeed = await resolveGameServerSeed(game.serverSeed, game.fairnessSeedId)
+  if (!resolvedServerSeed) {
+    return NextResponse.json({ error: 'Server seed unavailable for this game.' }, { status: 503 })
+  }
+
   const initialState = createInitialState(
     session.balance + game.totalBet,
     game.variant as VideoPokerVariant
@@ -349,7 +535,7 @@ async function handleDraw(
     initialState,
     game.baseBet,
     game.betMultiplier,
-    game.serverSeed,
+    resolvedServerSeed,
     game.serverSeedHash,
     game.clientSeed,
     game.nonce,
@@ -416,6 +602,22 @@ async function handleDraw(
   })
 }
 
+async function resolveGameServerSeed(
+  serverSeed: string | null,
+  fairnessSeedId: string | null
+): Promise<string | null> {
+  if (serverSeed) {
+    return serverSeed
+  }
+
+  if (!fairnessSeedId) {
+    return null
+  }
+
+  const fairnessSeed = await getFairnessSeedById(fairnessSeedId)
+  return fairnessSeed?.seed ?? null
+}
+
 // GET /api/video-poker — Game details or history
 export async function GET(request: NextRequest) {
   const rateLimit = checkPublicRateLimit(request, 'game-action')
@@ -448,16 +650,23 @@ export async function GET(request: NextRequest) {
         }
       : undefined
 
+    const revealState = await getRevealableServerSeed(game.fairnessSeedId, game.serverSeed)
+    const canRevealServerSeed = game.fairnessMode === SESSION_NONCE_MODE
+      ? revealState.isRevealed
+      : game.status === 'completed'
+
     return NextResponse.json({
       id: game.id,
       variant: game.variant,
       baseBet: game.baseBet,
       betMultiplier: game.betMultiplier,
       totalBet: game.totalBet,
-      serverSeed: game.status === 'completed' ? game.serverSeed : undefined,
+      serverSeed: canRevealServerSeed ? revealState.serverSeed : undefined,
       serverSeedHash: game.serverSeedHash,
       clientSeed: game.clientSeed,
       nonce: game.nonce,
+      fairnessMode: game.fairnessMode ?? null,
+      verificationStatus: canRevealServerSeed ? 'ready' : 'pending_reveal',
       status: game.status,
       handRank: game.handRank,
       multiplier: game.multiplier,

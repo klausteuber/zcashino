@@ -28,6 +28,8 @@ export type GamePhase =
   | 'complete'     // Round finished
 
 export type FairnessVersion = 'legacy_mulberry_v1' | 'hmac_sha256_v1'
+export type ProvablyFairMode = 'legacy_per_game_v1' | 'session_nonce_v1'
+export type FairnessVerificationStatus = 'ready' | 'pending_reveal'
 
 export interface BlackjackSettlement {
   totalStake: number
@@ -111,6 +113,8 @@ export interface GameVerificationData {
   clientSeed: string
   nonce: number
   fairnessVersion?: FairnessVersion
+  mode?: ProvablyFairMode
+  verificationStatus?: FairnessVerificationStatus
 
   // Blockchain proof
   commitment?: BlockchainCommitment
@@ -135,6 +139,18 @@ export interface FullVerificationResult {
   data: GameVerificationData
   steps: VerificationSteps
   errors: string[]
+}
+
+export interface SessionFairnessSummary {
+  mode: ProvablyFairMode
+  serverSeedHash: string | null
+  commitmentTxHash: string | null
+  commitmentBlock: number | null
+  commitmentTimestamp: Date | string | null
+  clientSeed: string | null
+  nextNonce: number | null
+  canEditClientSeed: boolean
+  fairnessVersion?: FairnessVersion
 }
 
 // Session types (wallet-based)

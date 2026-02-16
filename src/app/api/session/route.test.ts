@@ -17,6 +17,8 @@ const mocks = vi.hoisted(() => ({
   requirePlayerSessionMock: vi.fn(),
   setPlayerSessionCookieMock: vi.fn(),
   logPlayerCounterEventMock: vi.fn(),
+  getProvablyFairModeMock: vi.fn(),
+  getPublicFairnessStateMock: vi.fn(),
 }))
 
 const {
@@ -29,6 +31,8 @@ const {
   requirePlayerSessionMock,
   setPlayerSessionCookieMock,
   logPlayerCounterEventMock,
+  getProvablyFairModeMock,
+  getPublicFairnessStateMock,
 } = mocks
 
 vi.mock('@/lib/db', () => ({
@@ -59,6 +63,15 @@ vi.mock('@/lib/auth/player-session', () => ({
   setPlayerSessionCookie: mocks.setPlayerSessionCookieMock,
 }))
 
+vi.mock('@/lib/provably-fair/mode', () => ({
+  LEGACY_PER_GAME_MODE: 'legacy_per_game_v1',
+  getProvablyFairMode: mocks.getProvablyFairModeMock,
+}))
+
+vi.mock('@/lib/provably-fair/session-fairness', () => ({
+  getPublicFairnessState: mocks.getPublicFairnessStateMock,
+}))
+
 vi.mock('@/lib/telemetry/player-events', () => ({
   PLAYER_COUNTER_ACTIONS: {
     LEGACY_SESSION_FALLBACK: 'player.auth.legacy_fallback',
@@ -77,6 +90,8 @@ describe('/api/session address selection', () => {
     requirePlayerSessionMock.mockReturnValue({ ok: true })
     validateAddressMock.mockReturnValue({ valid: true })
     logPlayerCounterEventMock.mockResolvedValue(undefined)
+    getProvablyFairModeMock.mockReturnValue('legacy_per_game_v1')
+    getPublicFairnessStateMock.mockResolvedValue(null)
     createDepositWalletForSessionMock.mockResolvedValue({
       id: 'wallet-1',
       unifiedAddr: 'utestUnifiedDepositAddress1234567890',

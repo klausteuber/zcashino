@@ -8,9 +8,17 @@ export async function register() {
     const { enforceStartupValidation } = await import('./lib/startup-validator')
     enforceStartupValidation()
 
-    // Start the commitment pool manager (background refill + cleanup)
-    const { initForNextJS } = await import('./lib/services/commitment-pool-manager')
-    await initForNextJS()
+    const { getProvablyFairMode } = await import('./lib/provably-fair/mode')
+    const fairnessMode = getProvablyFairMode()
+
+    if (fairnessMode === 'session_nonce_v1') {
+      const { initSessionSeedPoolForNextJS } = await import('./lib/services/session-seed-pool-manager')
+      await initSessionSeedPoolForNextJS()
+    } else {
+      // Start the legacy commitment pool manager (background refill + cleanup)
+      const { initForNextJS } = await import('./lib/services/commitment-pool-manager')
+      await initForNextJS()
+    }
 
     // Start the deposit sweep service (consolidate deposit funds → house wallet)
     const { initSweepForNextJS } = await import('./lib/services/deposit-sweep')

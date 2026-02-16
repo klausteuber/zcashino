@@ -2,7 +2,13 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
-import type { BlackjackGameState, BlackjackAction, BlockchainCommitment, HandHistoryEntry } from '@/types'
+import type {
+  BlackjackGameState,
+  BlackjackAction,
+  BlockchainCommitment,
+  HandHistoryEntry,
+  SessionFairnessSummary
+} from '@/types'
 import { Hand } from '@/components/game/Card'
 import { ChipStack } from '@/components/game/Chip'
 import { HandHistory } from '@/components/game/HandHistory'
@@ -40,6 +46,7 @@ interface SessionData {
   balance: number
   totalWagered: number
   totalWon: number
+  fairness?: SessionFairnessSummary | null
   isDemo?: boolean
   isAuthenticated?: boolean
   depositAddress?: string
@@ -47,11 +54,24 @@ interface SessionData {
   maintenanceMode?: boolean
 }
 
+interface FairnessRevealBundle {
+  mode: 'session_nonce_v1'
+  serverSeed: string
+  serverSeedHash: string
+  clientSeed: string
+  lastNonceUsed: number | null
+  txHash: string
+  blockHeight: number | null
+  blockTimestamp: string | Date | null
+}
+
 export default function BlackjackGame() {
   const [session, setSession] = useState<SessionData | null>(null)
   const [gameState, setGameState] = useState<Partial<BlackjackGameState> | null>(null)
   const [gameId, setGameId] = useState<string | null>(null)
   const [commitment, setCommitment] = useState<BlockchainCommitment | null>(null)
+  const [fairness, setFairness] = useState<SessionFairnessSummary | null>(null)
+  const [revealBundle, setRevealBundle] = useState<FairnessRevealBundle | null>(null)
   const [selectedBet, setSelectedBet] = useState<number>(0.1)
   const [perfectPairsBet, setPerfectPairsBet] = useState<number>(0)
   const [clientSeedInput, setClientSeedInput] = useState<string>('')
@@ -128,6 +148,13 @@ export default function BlackjackGame() {
     localStorage.setItem('zcashino_client_seed', generatedSeed)
   }, [])
 
+  useEffect(() => {
+    if (fairness?.mode === 'session_nonce_v1' && fairness.clientSeed) {
+      setClientSeedInput(fairness.clientSeed)
+      localStorage.setItem('zcashino_client_seed', fairness.clientSeed)
+    }
+  }, [fairness?.mode, fairness?.clientSeed])
+
   // Keep auto-bet refs in sync with state
   useEffect(() => {
     sessionRef.current = session
@@ -160,6 +187,7 @@ export default function BlackjackGame() {
       const data = await res.json()
       if (data.error) throw new Error(data.error)
       setSession(data)
+      setFairness(data.fairness || null)
       setDepositAddress(data.depositAddress || null)
 
       // Store session ID for persistence
@@ -331,6 +359,7 @@ export default function BlackjackGame() {
       if (!res.ok) throw new Error('Failed to create demo session')
       const data = await res.json()
       setSession(data)
+      setFairness(data.fairness || null)
       localStorage.setItem('zcashino_session_id', data.id)
       localStorage.setItem('zcashino_onboarding_seen', 'true')
       setHasSeenOnboarding(true)
@@ -351,6 +380,7 @@ export default function BlackjackGame() {
       if (!res.ok) throw new Error('Failed to create session')
       const data = await res.json()
       setSession(data)
+      setFairness(data.fairness || null)
       localStorage.setItem('zcashino_session_id', data.id)
       return { sessionId: data.id, depositAddress: data.depositAddress || '' }
     } catch (err) {
@@ -402,6 +432,86 @@ export default function BlackjackGame() {
     setShowOnboarding(true)
   }, [])
 
+  const isSessionFairnessMode = fairness?.mode === 'session_nonce_v1'
+  const canEditSessionClientSeed = !isSessionFairnessMode || fairness?.canEditClientSeed
+
+  const refreshFairnessState = useCallback(async (sessionIdOverride?: string) => {
+    const targetSessionId = sessionIdOverride || session?.id
+    if (!targetSessionId) return
+
+    try {
+      const response = await fetch(`/api/fairness?sessionId=${encodeURIComponent(targetSessionId)}`)
+      if (!response.ok) return
+      const data = await response.json()
+      if (data?.mode === 'session_nonce_v1' || data?.mode === 'legacy_per_game_v1') {
+        setFairness(data)
+      }
+    } catch {
+      // Non-blocking; gameplay should continue even if fairness refresh fails.
+    }
+  }, [session?.id])
+
+  const persistClientSeedIfEditable = useCallback(async () => {
+    if (!session?.id || !isSessionFairnessMode || !canEditSessionClientSeed) return
+    const trimmed = clientSeedInput.trim()
+    if (!trimmed) return
+
+    try {
+      const res = await fetch('/api/fairness', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'set-client-seed',
+          sessionId: session.id,
+          clientSeed: trimmed,
+        }),
+      })
+      const data = await res.json()
+      if (res.ok && data?.fairness) {
+        setFairness(data.fairness)
+      }
+    } catch {
+      // Ignore; seed can still be applied on next game start.
+    }
+  }, [canEditSessionClientSeed, clientSeedInput, isSessionFairnessMode, session?.id])
+
+  const handleRotateSeed = useCallback(async () => {
+    if (!session?.id || !isSessionFairnessMode || isLoading) return
+
+    setIsLoading(true)
+    setError(null)
+    try {
+      const response = await fetch('/api/fairness', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'rotate-seed',
+          sessionId: session.id,
+        }),
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to rotate seed')
+      }
+
+      if (data?.fairness) {
+        setFairness(data.fairness)
+      }
+      if (data?.reveal) {
+        setRevealBundle(data.reveal as FairnessRevealBundle)
+      }
+
+      setGameId(null)
+      setGameState(null)
+      setCommitment(null)
+      await refreshFairnessState(session.id)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to rotate seed')
+    } finally {
+      setIsLoading(false)
+    }
+  }, [isLoading, isSessionFairnessMode, refreshFairnessState, session?.id])
+
   const handlePlaceBet = useCallback(async () => {
     if (!session || isLoading) return
     if (selectedBet < MIN_BET || selectedBet > MAX_BET) return
@@ -414,14 +524,14 @@ export default function BlackjackGame() {
       const res = await fetch('/api/game', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'start',
-          sessionId: session.id,
-          bet: selectedBet,
-          perfectPairsBet,
-          clientSeed: clientSeedInput.trim() || undefined,
+          body: JSON.stringify({
+            action: 'start',
+            sessionId: session.id,
+            bet: selectedBet,
+            perfectPairsBet,
+            clientSeed: canEditSessionClientSeed ? (clientSeedInput.trim() || undefined) : undefined,
+          })
         })
-      })
 
       if (!res.ok) {
         const data = await res.json()
@@ -432,6 +542,9 @@ export default function BlackjackGame() {
       setGameId(data.gameId)
       setGameState(data.gameState)
       setCommitment(data.commitment || null)
+      if (data.fairness) {
+        setFairness(data.fairness)
+      }
       setSession(prev => prev ? {
         ...prev,
         balance: data.balance,
@@ -443,7 +556,7 @@ export default function BlackjackGame() {
     } finally {
       setIsLoading(false)
     }
-  }, [session, selectedBet, perfectPairsBet, clientSeedInput, isLoading])
+  }, [session, selectedBet, perfectPairsBet, clientSeedInput, isLoading, canEditSessionClientSeed])
 
   const handleAction = useCallback(async (action: BlackjackAction) => {
     if (!session || !gameId || isLoading) return
@@ -671,19 +784,22 @@ export default function BlackjackGame() {
           const res = await fetch('/api/game', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              action: 'start',
-              sessionId: capturedSession.id,
-              bet: capturedBet,
-              perfectPairsBet: capturedPerfectPairs,
-              clientSeed: capturedClientSeed || undefined,
+              body: JSON.stringify({
+                action: 'start',
+                sessionId: capturedSession.id,
+                bet: capturedBet,
+                perfectPairsBet: capturedPerfectPairs,
+                clientSeed: canEditSessionClientSeed ? (capturedClientSeed || undefined) : undefined,
+              })
             })
-          })
           const data = await res.json()
           if (res.ok) {
             setGameId(data.gameId)
             setGameState(data.gameState)
             setCommitment(data.commitment || null)
+            if (data.fairness) {
+              setFairness(data.fairness)
+            }
             setSession(prev => prev ? {
               ...prev,
               balance: data.balance,
@@ -722,7 +838,8 @@ export default function BlackjackGame() {
   }, [
     isAutoBetEnabled,
     gameState?.phase,
-    isLoading
+    isLoading,
+    canEditSessionClientSeed
   ])
 
   // Calculate available actions
@@ -1155,6 +1272,7 @@ export default function BlackjackGame() {
                       playSound('buttonClick')
                     }}
                     className="text-xs text-masque-gold hover:text-venetian-gold transition-colors"
+                    disabled={isLoading || !canEditSessionClientSeed}
                   >
                     Randomize
                   </button>
@@ -1167,11 +1285,19 @@ export default function BlackjackGame() {
                     setClientSeedInput(nextValue)
                     localStorage.setItem('zcashino_client_seed', nextValue)
                   }}
+                  onBlur={persistClientSeedIfEditable}
                   placeholder="Enter client seed"
                   className="w-full bg-midnight-black/60 border border-masque-gold/20 rounded-lg px-3 py-2 text-bone-white placeholder-venetian-gold/30 focus:outline-none focus:border-masque-gold font-mono text-xs"
                   maxLength={128}
-                  disabled={isLoading}
+                  disabled={isLoading || !canEditSessionClientSeed}
                 />
+                {isSessionFairnessMode && (
+                  <p className="mt-2 text-[11px] text-venetian-gold/50">
+                    {canEditSessionClientSeed
+                      ? 'Client seed is editable until your first hand in this seed session.'
+                      : 'Client seed is locked for this active seed session. Rotate seed to change it.'}
+                  </p>
+                )}
               </div>
 
               {/* Maintenance Banner */}
@@ -1452,8 +1578,72 @@ export default function BlackjackGame() {
               Blockchain Provably Fair
             </summary>
             <div className="mt-4 text-left text-sm text-venetian-gold/60 space-y-3 font-mono">
+              {isSessionFairnessMode && fairness && (
+                <div className="bg-jester-purple/10 border border-jester-purple/30 rounded-lg p-3 mb-4 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-jester-purple text-xs font-bold uppercase tracking-wide">
+                      Active Seed Session
+                    </span>
+                    <button
+                      onClick={handleRotateSeed}
+                      disabled={isLoading}
+                      className="text-xs px-2 py-1 rounded border border-masque-gold/40 text-masque-gold hover:bg-masque-gold/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Rotate Seed & Reveal
+                    </button>
+                  </div>
+                  <div className="text-xs">
+                    <span className="text-venetian-gold/40">Session Commitment: </span>
+                    {fairness.commitmentTxHash ? (
+                      commitment?.explorerUrl ? (
+                        <a
+                          href={commitment.explorerUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-masque-gold hover:text-venetian-gold underline break-all"
+                        >
+                          {fairness.commitmentTxHash}
+                        </a>
+                      ) : (
+                        <code className="text-bone-white/70 break-all">{fairness.commitmentTxHash}</code>
+                      )
+                    ) : (
+                      <span className="text-bone-white/60">Pending</span>
+                    )}
+                  </div>
+                  <div className="text-xs">
+                    <span className="text-venetian-gold/40">Next Nonce: </span>
+                    <code className="text-bone-white/70">{fairness.nextNonce ?? 0}</code>
+                  </div>
+                  <div className="text-xs">
+                    <span className="text-venetian-gold/40">Client Seed Edit: </span>
+                    <span className="text-bone-white/70">
+                      {fairness.canEditClientSeed ? 'Allowed' : 'Locked'}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {revealBundle && (
+                <div className="bg-midnight-black/50 border border-masque-gold/20 rounded-lg p-3 mb-4 text-xs space-y-1">
+                  <div className="text-masque-gold font-semibold">Previous Seed Revealed</div>
+                  <div>
+                    <span className="text-venetian-gold/40">Tx Hash: </span>
+                    <code className="text-bone-white/70 break-all">{revealBundle.txHash}</code>
+                  </div>
+                  <div>
+                    <span className="text-venetian-gold/40">Last Nonce Used: </span>
+                    <code className="text-bone-white/70">{revealBundle.lastNonceUsed ?? 'none'}</code>
+                  </div>
+                  <div>
+                    <span className="text-venetian-gold/40">Server Seed: </span>
+                    <code className="text-bone-white/70 break-all">{revealBundle.serverSeed}</code>
+                  </div>
+                </div>
+              )}
+
               {/* Blockchain Commitment */}
-              {commitment && (
+              {!isSessionFairnessMode && commitment && (
                 <div className="bg-jester-purple/10 border border-jester-purple/30 rounded-lg p-3 mb-4">
                   <div className="flex items-center gap-2 mb-2">
                     <svg className="w-4 h-4 text-jester-purple" fill="currentColor" viewBox="0 0 20 20">
@@ -1571,8 +1761,9 @@ export default function BlackjackGame() {
 
               <div className="pt-3 border-t border-masque-gold/10 font-body">
                 <p className="text-xs text-venetian-gold/50 mb-3">
-                  The server seed hash is committed to the Zcash blockchain BEFORE you bet.
-                  After the game, you can verify the outcome was fair.
+                  {isSessionFairnessMode
+                    ? 'The server seed hash is committed before each seed session. Rotate seed to reveal the prior session and verify all hands.'
+                    : 'The server seed hash is committed to the Zcash blockchain BEFORE you bet. After the game, you can verify the outcome was fair.'}
                 </p>
                 {gameId && gameState?.phase === 'complete' && (
                   <a
