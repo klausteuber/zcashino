@@ -38,6 +38,7 @@ vi.mock('@/lib/db', () => ({
 vi.mock('@/lib/wallet', () => ({
   DEFAULT_NETWORK: 'testnet',
   validateAddress: mocks.validateAddressMock,
+  roundZec: (value: number) => value,
 }))
 
 vi.mock('@/lib/wallet/session-wallet', () => ({

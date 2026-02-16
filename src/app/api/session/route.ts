@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
-import { validateAddress, DEFAULT_NETWORK } from '@/lib/wallet'
+import { validateAddress, DEFAULT_NETWORK, roundZec } from '@/lib/wallet'
 import { createDepositWalletForSession } from '@/lib/wallet/session-wallet'
 import { checkPublicRateLimit, createRateLimitResponse } from '@/lib/admin/rate-limit'
 import { isKillSwitchActive } from '@/lib/kill-switch'
@@ -53,9 +53,9 @@ function createSessionResponse(session: {
   const response = NextResponse.json({
     id: session.id,
     walletAddress: session.walletAddress,
-    balance: session.balance,
-    totalWagered: session.totalWagered,
-    totalWon: session.totalWon,
+    balance: roundZec(session.balance),
+    totalWagered: roundZec(session.totalWagered),
+    totalWon: roundZec(session.totalWon),
     depositLimit: session.depositLimit,
     lossLimit: session.lossLimit,
     sessionLimit: session.sessionLimit,

@@ -296,9 +296,9 @@ async function handleStartGame(
   return NextResponse.json({
     gameId,
     gameState: sanitizeStateForClient(gameState),
-    balance: updatedSession?.balance ?? (updatedSessionForBet as { balance: number } | null)?.balance ?? 0,
-    totalWagered: updatedSession?.totalWagered ?? (updatedSessionForBet as { totalWagered: number } | null)?.totalWagered ?? totalBet,
-    totalWon: updatedSession?.totalWon ?? (updatedSessionForBet as { totalWon: number } | null)?.totalWon ?? 0,
+    balance: roundZec(updatedSession?.balance ?? (updatedSessionForBet as { balance: number } | null)?.balance ?? 0),
+    totalWagered: roundZec(updatedSession?.totalWagered ?? (updatedSessionForBet as { totalWagered: number } | null)?.totalWagered ?? totalBet),
+    totalWon: roundZec(updatedSession?.totalWon ?? (updatedSessionForBet as { totalWon: number } | null)?.totalWon ?? 0),
     commitment: blockchainCommitment,
   })
 }
@@ -410,9 +410,9 @@ async function handleDraw(
   return NextResponse.json({
     gameId,
     gameState: sanitizeStateForClient(gameState),
-    balance: updatedSession?.balance ?? session.balance,
-    totalWagered: updatedSession?.totalWagered ?? 0,
-    totalWon: updatedSession?.totalWon ?? 0,
+    balance: roundZec(updatedSession?.balance ?? session.balance),
+    totalWagered: roundZec(updatedSession?.totalWagered ?? 0),
+    totalWon: roundZec(updatedSession?.totalWon ?? 0),
   })
 }
 

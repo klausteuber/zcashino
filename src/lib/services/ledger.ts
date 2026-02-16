@@ -5,6 +5,20 @@ export type ReserveField = 'totalWagered' | 'totalWithdrawn'
 export type CreditField = 'totalWon' | 'totalDeposited'
 
 type TxClient = Prisma.TransactionClient
+const FLOAT_TOLERANCE = 1e-10
+
+async function normalizeSessionAmounts(tx: TxClient, sessionId: string): Promise<void> {
+  await tx.$executeRaw`
+    UPDATE "Session"
+    SET
+      "balance" = ROUND("balance", 8),
+      "totalWagered" = ROUND("totalWagered", 8),
+      "totalWon" = ROUND("totalWon", 8),
+      "totalDeposited" = ROUND("totalDeposited", 8),
+      "totalWithdrawn" = ROUND("totalWithdrawn", 8)
+    WHERE "id" = ${sessionId}
+  `
+}
 
 /**
  * Atomically reserve funds only when sufficient balance exists.
@@ -20,6 +34,7 @@ export async function reserveFunds(
   const normalizedCounter = roundZec(counterAmount ?? amount)
   if (normalizedAmount < 0) return false
   if (normalizedAmount === 0) return true
+  const minimumRequiredBalance = normalizedAmount - FLOAT_TOLERANCE
 
   const data: Prisma.SessionUpdateManyMutationInput = {
     balance: { decrement: normalizedAmount },
@@ -34,10 +49,15 @@ export async function reserveFunds(
   const result = await tx.session.updateMany({
     where: {
       id: sessionId,
-      balance: { gte: normalizedAmount },
+      // Allow tiny IEEE754 dust while still rejecting any meaningful shortfall.
+      balance: { gte: minimumRequiredBalance },
     },
     data,
   })
+
+  if (result.count === 1) {
+    await normalizeSessionAmounts(tx, sessionId)
+  }
 
   return result.count === 1
 }
@@ -68,6 +88,8 @@ export async function creditFunds(
     where: { id: sessionId },
     data,
   })
+
+  await normalizeSessionAmounts(tx, sessionId)
 }
 
 /**
@@ -98,4 +120,6 @@ export async function releaseFunds(
     where: { id: sessionId },
     data,
   })
+
+  await normalizeSessionAmounts(tx, sessionId)
 }

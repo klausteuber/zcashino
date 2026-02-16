@@ -96,9 +96,9 @@ export async function GET(request: NextRequest) {
         synced: nodeStatus.synced,
       },
       balance: {
-        confirmed: session.balance,
+        confirmed: roundZec(session.balance),
         pending: 0, // TODO: Calculate from pending transactions
-        total: session.balance,
+        total: roundZec(session.balance),
       },
       // Authentication status
       auth: {
@@ -481,7 +481,7 @@ async function handleCheckDeposits(session: {
     }))
 
   const authenticated = updatedSession?.isAuthenticated ?? session.isAuthenticated
-  const sessionBalance = updatedSession?.balance ?? session.balance
+  const sessionBalance = roundZec(updatedSession?.balance ?? session.balance)
   const depositAmount = newDeposits.length > 0 ? newDeposits[0].amount : null
 
   return NextResponse.json({
@@ -501,7 +501,7 @@ async function handleCheckDeposits(session: {
     authenticated,
     session: {
       isAuthenticated: authenticated,
-      balance: sessionBalance,
+      balance: roundZec(sessionBalance),
     },
     // Authentication status
     auth: {
