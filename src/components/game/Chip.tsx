@@ -11,8 +11,8 @@ interface ChipProps {
 const chipStyles: Record<number, string> = {
   0.01: 'bg-bone-white border-masque-gold text-midnight-black',
   0.05: 'bg-blood-ruby border-blood-ruby/70 text-bone-white',
-  0.1: 'bg-jester-purple border-jester-purple-light text-bone-white',
-  0.25: 'bg-crimson-mask border-crimson-mask/70 text-bone-white',
+  0.1: 'bg-[#1a4a7a] border-[#3a7abf] text-bone-white',
+  0.25: 'bg-[#1a6a3a] border-[#3aaf5a] text-bone-white',
   0.5: 'bg-gradient-to-br from-masque-gold to-venetian-gold border-venetian-gold text-midnight-black',
   1: 'bg-midnight-black border-masque-gold text-masque-gold'
 }
@@ -57,13 +57,15 @@ interface ChipStackProps {
   selectedValue: number | null
   onSelect: (value: number) => void
   disabled?: boolean
+  size?: 'sm' | 'md' | 'lg'
 }
 
 export function ChipStack({
   values,
   selectedValue,
   onSelect,
-  disabled = false
+  disabled = false,
+  size = 'md'
 }: ChipStackProps) {
   return (
     <div className="flex gap-2 justify-center">
@@ -74,6 +76,7 @@ export function ChipStack({
           selected={selectedValue === value}
           onClick={() => onSelect(value)}
           disabled={disabled}
+          size={size}
         />
       ))}
     </div>

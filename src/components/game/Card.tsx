@@ -5,7 +5,7 @@ import type { Card as CardType, Suit } from '@/types'
 
 interface CardProps {
   card: CardType
-  size?: 'sm' | 'md' | 'lg'
+  size?: 'sm' | 'md' | 'lg' | 'xl'
   className?: string
   dealDelay?: number // Delay in ms before card deals in
   isNew?: boolean // Whether this card was just dealt
@@ -29,7 +29,8 @@ const suitColors: Record<Suit, string> = {
 const sizeClasses = {
   sm: 'w-12 h-[4.2rem] text-sm',
   md: 'w-16 h-[5.6rem] text-base',
-  lg: 'w-20 h-[7rem] text-lg'
+  lg: 'w-20 h-[7rem] text-lg',
+  xl: 'w-28 h-[9.8rem] text-xl'
 }
 
 export default function Card({ card, size = 'md', className = '', dealDelay = 0, isNew = false, dealFromShoe = true }: CardProps) {
@@ -170,12 +171,13 @@ type HandResult = 'win' | 'lose' | 'push' | 'blackjack' | null
 const overlapClasses = {
   sm: '-ml-4',
   md: '-ml-6',
-  lg: '-ml-8'
+  lg: '-ml-8',
+  xl: '-ml-10'
 }
 
 interface HandProps {
   cards: CardType[]
-  size?: 'sm' | 'md' | 'lg'
+  size?: 'sm' | 'md' | 'lg' | 'xl'
   label?: string
   value?: number
   showValue?: boolean

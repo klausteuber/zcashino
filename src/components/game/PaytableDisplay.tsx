@@ -20,7 +20,7 @@ export default function PaytableDisplay({
   const ranks = getHandRankDisplayNames(variant)
 
   return (
-    <div className={`w-full max-w-lg mx-auto ${className}`}>
+    <div className={`w-full max-w-xl mx-auto ${className}`}>
       <table className="w-full text-sm border-collapse">
         <thead>
           <tr className="border-b border-masque-gold/30">

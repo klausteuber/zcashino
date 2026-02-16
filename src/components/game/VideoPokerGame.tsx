@@ -52,6 +52,7 @@ export default function VideoPokerGame() {
   const [resultAnimation, setResultAnimation] = useState<string | null>(null)
   const [handHistory, setHandHistory] = useState<VideoPokerHandHistoryEntry[]>([])
   const [previousCardCount, setPreviousCardCount] = useState(0)
+  const [shouldAnimateDealing, setShouldAnimateDealing] = useState(false)
 
   const prevBalanceRef = useRef<number | null>(null)
   const { playSound, isMuted, toggleMute } = useGameSounds(true)
@@ -163,6 +164,7 @@ export default function VideoPokerGame() {
     setResultAnimation(null)
     setLocalHeldCards([false, false, false, false, false])
     setPreviousCardCount(0)
+    setShouldAnimateDealing(true)
 
     try {
       const res = await fetch('/api/video-poker', {
@@ -186,8 +188,11 @@ export default function VideoPokerGame() {
       setSession(prev => prev ? { ...prev, balance: data.balance, totalWagered: data.totalWagered, totalWon: data.totalWon } : null)
 
       playSound('cardDeal')
+      // Clear animation flag after cards have dealt in
+      setTimeout(() => setShouldAnimateDealing(false), 800)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to deal')
+      setShouldAnimateDealing(false)
     } finally {
       setIsActing(false)
     }
@@ -369,26 +374,43 @@ export default function VideoPokerGame() {
   const canDeal = !isActing && (!phase || phase === 'betting' || phase === 'complete')
   const canDraw = !isActing && phase === 'hold'
 
-  const getResultDisplay = (): { text: string; icon: string; className: string } | null => {
+  const getResultDisplay = (): { text: string; icon: string; className: string; animClass: string } | null => {
     if (!resultAnimation || !gameState) return null
     if (resultAnimation === 'nothing') {
-      return { text: 'NO WIN', icon: '', className: 'text-bone-white/60' }
+      return { text: 'NO WIN', icon: '', className: 'text-bone-white/80', animClass: 'outcome-overlay' }
     }
     const display = gameState.message || resultAnimation.replace(/_/g, ' ').toUpperCase()
     if (resultAnimation === 'royal_flush' || resultAnimation === 'natural_royal_flush') {
-      return { text: display, icon: '', className: 'text-masque-gold blackjack-shimmer-text' }
+      return { text: display, icon: '', className: 'text-masque-gold blackjack-shimmer-text', animClass: 'outcome-overlay-blackjack' }
     }
-    return { text: display, icon: '', className: 'text-masque-gold' }
+    if (resultAnimation === 'four_of_a_kind' || resultAnimation === 'straight_flush' || resultAnimation === 'four_deuces') {
+      return { text: display, icon: '', className: 'text-masque-gold blackjack-shimmer-text', animClass: 'outcome-overlay' }
+    }
+    return { text: display, icon: '', className: 'text-masque-gold', animClass: 'outcome-overlay' }
   }
 
   const resultDisplay = getResultDisplay()
 
-  // Loading state
+  // Loading state — themed card shuffle
   if (isLoading && !session) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
-        <div className="w-12 h-12 border-4 border-masque-gold/30 border-t-masque-gold rounded-full animate-spin" />
-        <p className="text-venetian-gold/50">Loading...</p>
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6">
+        <div className="flex gap-2">
+          {[0, 1, 2, 3, 4].map(i => (
+            <div
+              key={i}
+              className="w-14 h-[4.9rem] sm:w-16 sm:h-[5.6rem] bg-gradient-to-br from-jester-purple-dark via-jester-purple to-jester-purple-dark rounded-lg border-2 border-masque-gold/25 flex items-center justify-center shadow-lg"
+              style={{
+                animation: `shuffle-bob 1.2s ease-in-out ${i * 0.15}s infinite`,
+              }}
+            >
+              <div className="w-8 h-8 sm:w-10 sm:h-10 border border-masque-gold/20 rounded-full flex items-center justify-center">
+                <span className="text-masque-gold/40 text-xs font-cinzel">CJ</span>
+              </div>
+            </div>
+          ))}
+        </div>
+        <p className="text-venetian-gold/50 font-cinzel text-sm tracking-wider">Shuffling the deck...</p>
       </div>
     )
   }
@@ -410,7 +432,7 @@ export default function VideoPokerGame() {
   }
 
   return (
-    <div className="w-full max-w-4xl mx-auto px-4 py-4 space-y-4">
+    <div className="w-full max-w-4xl mx-auto px-4 py-4 space-y-3">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -425,12 +447,26 @@ export default function VideoPokerGame() {
 
         <div className="flex items-center gap-3">
           {/* Sound toggle */}
-          <button onClick={toggleMute} className="text-venetian-gold/50 hover:text-masque-gold transition-colors text-lg">
-            {isMuted ? '🔇' : '🔊'}
+          <button onClick={toggleMute} className="text-venetian-gold/50 hover:text-masque-gold transition-colors" aria-label={isMuted ? 'Unmute' : 'Mute'}>
+            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              {isMuted ? (
+                <>
+                  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" />
+                  <line x1="23" y1="9" x2="17" y2="15" />
+                  <line x1="17" y1="9" x2="23" y2="15" />
+                </>
+              ) : (
+                <>
+                  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" />
+                  <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+                  <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+                </>
+              )}
+            </svg>
           </button>
 
           {/* Navigation */}
-          <Link href="/blackjack" className="text-xs text-venetian-gold/50 hover:text-masque-gold transition-colors">
+          <Link href="/blackjack" className="text-xs text-venetian-gold/50 hover:text-masque-gold transition-colors px-2 py-1 rounded-full border border-masque-gold/15 hover:border-masque-gold/30">
             Blackjack
           </Link>
 
@@ -441,89 +477,92 @@ export default function VideoPokerGame() {
             'text-masque-gold'
           }`}>
             <div className="text-xs text-venetian-gold/50">Balance</div>
-            <div className="font-mono font-bold">{session?.balance.toFixed(4)} ZEC</div>
+            <div className="font-mono font-bold text-sm sm:text-base">{session?.balance.toFixed(4)} ZEC</div>
           </div>
         </div>
       </div>
 
-      {/* Variant selector */}
-      <div className="flex justify-center gap-2">
-        <button
-          onClick={() => !isGameActive && setVariant('jacks_or_better')}
-          disabled={isGameActive}
-          className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-200 ${
-            variant === 'jacks_or_better'
-              ? 'bg-masque-gold text-midnight-black'
-              : 'bg-midnight-black/50 text-venetian-gold/60 hover:text-masque-gold border border-masque-gold/20'
-          } ${isGameActive ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-        >
-          Jacks or Better
-        </button>
-        <button
-          onClick={() => !isGameActive && setVariant('deuces_wild')}
-          disabled={isGameActive}
-          className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-200 ${
-            variant === 'deuces_wild'
-              ? 'bg-masque-gold text-midnight-black'
-              : 'bg-midnight-black/50 text-venetian-gold/60 hover:text-masque-gold border border-masque-gold/20'
-          } ${isGameActive ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-        >
-          Deuces Wild
-        </button>
-      </div>
+      {/* === GAME ZONE === */}
+      <div className="bg-midnight-black/15 rounded-2xl p-3 sm:p-5 space-y-4">
+        {/* Variant selector */}
+        <div className="flex justify-center gap-2">
+          <button
+            onClick={() => !isGameActive && setVariant('jacks_or_better')}
+            disabled={isGameActive}
+            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-200 ${
+              variant === 'jacks_or_better'
+                ? 'bg-masque-gold text-midnight-black'
+                : 'bg-midnight-black/30 text-venetian-gold/60 hover:text-masque-gold border border-masque-gold/20'
+            } ${isGameActive ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+          >
+            Jacks or Better
+          </button>
+          <button
+            onClick={() => !isGameActive && setVariant('deuces_wild')}
+            disabled={isGameActive}
+            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-200 ${
+              variant === 'deuces_wild'
+                ? 'bg-masque-gold text-midnight-black'
+                : 'bg-midnight-black/30 text-venetian-gold/60 hover:text-masque-gold border border-masque-gold/20'
+            } ${isGameActive ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+          >
+            Deuces Wild
+          </button>
+        </div>
 
-      {/* Paytable */}
-      <PaytableDisplay
-        variant={variant}
-        betMultiplier={betMultiplier}
-        winningRank={isComplete ? gameState?.handRank : null}
-      />
+        {/* Paytable */}
+        <PaytableDisplay
+          variant={variant}
+          betMultiplier={betMultiplier}
+          winningRank={isComplete ? gameState?.handRank : null}
+        />
 
-      {/* Game area */}
-      <div className="relative min-h-[200px] flex flex-col items-center justify-center gap-4">
-        {/* Result overlay */}
-        {resultDisplay && (
-          <div className="absolute inset-0 flex items-center justify-center z-30 pointer-events-none">
-            <div className={`text-3xl sm:text-4xl font-cinzel font-bold ${resultDisplay.className} outcomeOverlayIn`}>
-              {resultDisplay.text}
-              {gameState && gameState.lastPayout > 0 && (
-                <div className="text-lg mt-1 font-mono">
-                  +{gameState.lastPayout.toFixed(4)} ZEC
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Cards */}
-        {gameState && gameState.hand && gameState.hand.length > 0 ? (
-          <VideoPokerHand
-            cards={gameState.hand}
-            heldCards={phase === 'hold' ? localHeldCards : (gameState.heldCards || [false, false, false, false, false])}
-            onToggleHold={phase === 'hold' ? toggleHold : undefined}
-            disabled={phase !== 'hold' || isActing}
-            isWild={isDeucesWild ? (card) => card.rank === '2' : undefined}
-            animateDealing={false}
-            previousCardCount={previousCardCount}
-          />
-        ) : (
-          <div className="flex justify-center gap-2 sm:gap-3">
-            {/* Placeholder card backs */}
-            {[0, 1, 2, 3, 4].map(i => (
-              <div
-                key={i}
-                className="w-20 h-[7rem] bg-gradient-to-br from-jester-purple-dark via-jester-purple to-jester-purple-dark rounded-lg border-2 border-masque-gold/20 flex items-center justify-center opacity-30"
-              >
-                <svg className="w-6 h-6 text-masque-gold/30" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" />
-                </svg>
+        {/* Cards area — the visual hero */}
+        <div className="relative min-h-[140px] sm:min-h-[180px] lg:min-h-[240px] flex flex-col items-center justify-center py-2 sm:py-4">
+          {/* Result overlay */}
+          {resultDisplay && (
+            <div className="absolute inset-0 flex items-center justify-center z-30 pointer-events-none">
+              <div className={`text-3xl sm:text-4xl lg:text-5xl font-cinzel font-bold ${resultDisplay.className} ${resultDisplay.animClass}`}>
+                {resultDisplay.text}
+                {gameState && gameState.lastPayout > 0 && (
+                  <div className="text-lg mt-1 font-mono text-center">
+                    +{gameState.lastPayout.toFixed(4)} ZEC
+                  </div>
+                )}
               </div>
-            ))}
-          </div>
-        )}
+            </div>
+          )}
+
+          {/* Cards */}
+          {gameState && gameState.hand && gameState.hand.length > 0 ? (
+            <VideoPokerHand
+              cards={gameState.hand}
+              heldCards={phase === 'hold' ? localHeldCards : (gameState.heldCards || [false, false, false, false, false])}
+              onToggleHold={phase === 'hold' ? toggleHold : undefined}
+              disabled={phase !== 'hold' || isActing}
+              isWild={isDeucesWild ? (card) => card.rank === '2' : undefined}
+              animateDealing={shouldAnimateDealing}
+              previousCardCount={previousCardCount}
+            />
+          ) : (
+            <div className="flex justify-center gap-2 sm:gap-3 lg:gap-4">
+              {/* Placeholder card backs — responsive sizes matching dealt cards */}
+              {[0, 1, 2, 3, 4].map(i => (
+                <div
+                  key={i}
+                  className="w-16 h-[5.6rem] sm:w-20 sm:h-[7rem] lg:w-28 lg:h-[9.8rem] bg-gradient-to-br from-jester-purple-dark via-jester-purple to-jester-purple-dark rounded-lg border-2 border-masque-gold/20 flex items-center justify-center opacity-50 animate-gentle-pulse"
+                >
+                  <svg className="w-5 h-5 sm:w-6 sm:h-6 text-masque-gold/30" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" />
+                  </svg>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Betting controls */}
+      {/* === ACTION ZONE === */}
       <div className="space-y-3">
         {/* Coin multiplier */}
         <div className="flex items-center justify-center gap-2">
@@ -542,41 +581,61 @@ export default function VideoPokerGame() {
               {m}
             </button>
           ))}
-          <span className="text-xs text-venetian-gold/40 ml-2">
+          <span className="text-sm text-venetian-gold/50 ml-2 font-mono">
             = {(selectedBet * betMultiplier).toFixed(2)} ZEC
           </span>
         </div>
 
-        {/* Chip selector */}
-        <ChipStack
-          values={CHIP_VALUES}
-          selectedValue={selectedBet}
-          onSelect={(v) => { if (!isGameActive) setSelectedBet(v) }}
-          disabled={isGameActive}
-        />
+        {/* Chip selector — smaller on mobile */}
+        <div className="sm:hidden">
+          <ChipStack
+            values={CHIP_VALUES}
+            selectedValue={selectedBet}
+            onSelect={(v) => { if (!isGameActive) setSelectedBet(v) }}
+            disabled={isGameActive}
+            size="sm"
+          />
+        </div>
+        <div className="hidden sm:block">
+          <ChipStack
+            values={CHIP_VALUES}
+            selectedValue={selectedBet}
+            onSelect={(v) => { if (!isGameActive) setSelectedBet(v) }}
+            disabled={isGameActive}
+          />
+        </div>
 
         {/* Action buttons */}
-        <div className="flex justify-center gap-3">
-          {canDeal && (
-            <button
-              onClick={handleDeal}
-              disabled={isActing || !session || (selectedBet * betMultiplier > (session?.balance ?? 0))}
-              className="px-8 py-3 bg-gradient-to-r from-masque-gold to-venetian-gold text-midnight-black font-bold rounded-lg hover:shadow-[0_0_20px_rgba(201,162,39,0.4)] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed text-lg font-cinzel"
-            >
-              {isComplete ? 'DEAL AGAIN' : 'DEAL'}
-              <span className="text-xs ml-2 opacity-60 hidden sm:inline">[Enter]</span>
-            </button>
-          )}
+        <div className="flex flex-col items-center gap-2">
+          <div className="flex justify-center gap-3">
+            {canDeal && (
+              <button
+                onClick={handleDeal}
+                disabled={isActing || !session || (selectedBet * betMultiplier > (session?.balance ?? 0))}
+                className="px-8 py-3 bg-gradient-to-r from-masque-gold to-venetian-gold text-midnight-black font-bold rounded-lg hover:shadow-[0_0_20px_rgba(201,162,39,0.4)] transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed text-lg font-cinzel"
+              >
+                {isComplete ? 'DEAL AGAIN' : 'DEAL'}
+                <span className="text-xs ml-2 opacity-60 hidden sm:inline">[D]</span>
+              </button>
+            )}
 
-          {canDraw && (
-            <button
-              onClick={handleDraw}
-              disabled={isActing}
-              className="px-8 py-3 bg-gradient-to-r from-masque-gold to-venetian-gold text-midnight-black font-bold rounded-lg hover:shadow-[0_0_20px_rgba(201,162,39,0.4)] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed text-lg font-cinzel"
-            >
-              DRAW
-              <span className="text-xs ml-2 opacity-60 hidden sm:inline">[Enter]</span>
-            </button>
+            {canDraw && (
+              <button
+                onClick={handleDraw}
+                disabled={isActing}
+                className="px-8 py-3 bg-gradient-to-r from-masque-gold to-venetian-gold text-midnight-black font-bold rounded-lg hover:shadow-[0_0_20px_rgba(201,162,39,0.4)] transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed text-lg font-cinzel"
+              >
+                DRAW
+                <span className="text-xs ml-2 opacity-60 hidden sm:inline">[D]</span>
+              </button>
+            )}
+          </div>
+
+          {/* Insufficient funds message */}
+          {canDeal && session && selectedBet * betMultiplier > session.balance && (
+            <p className="text-blood-ruby text-xs">
+              Bet exceeds balance — lower your bet or deposit
+            </p>
           )}
         </div>
 
@@ -620,25 +679,28 @@ export default function VideoPokerGame() {
 
       {/* Session stats */}
       {session && (
-        <div className="flex justify-center gap-6 text-xs text-venetian-gold/40">
+        <div className="flex justify-center gap-6 text-sm text-venetian-gold/60 border-t border-masque-gold/10 pt-3">
           <span>Wagered: {session.totalWagered.toFixed(4)} ZEC</span>
           <span>Won: {session.totalWon.toFixed(4)} ZEC</span>
-          <span>Net: {(session.totalWon - session.totalWagered).toFixed(4)} ZEC</span>
+          <span className={session.totalWon - session.totalWagered >= 0 ? 'text-green-400' : 'text-blood-ruby'}>
+            Net: {(session.totalWon - session.totalWagered) >= 0 ? '+' : ''}{(session.totalWon - session.totalWagered).toFixed(4)} ZEC
+          </span>
         </div>
       )}
 
       {/* Hand history */}
       {handHistory.length > 0 && (
-        <details className="text-sm">
-          <summary className="text-venetian-gold/50 cursor-pointer hover:text-masque-gold transition-colors">
+        <details className="text-sm bg-midnight-black/20 rounded-lg">
+          <summary className="text-venetian-gold/50 cursor-pointer hover:text-masque-gold transition-colors px-3 py-2 flex items-center gap-2">
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9" /></svg>
             Hand History ({handHistory.length})
           </summary>
-          <div className="mt-2 space-y-1">
+          <div className="px-3 pb-3 space-y-1">
             {handHistory.map(entry => {
               const isWin = entry.payout > 0
               const net = entry.payout - entry.totalBet
               return (
-                <div key={entry.id} className="flex justify-between text-xs px-2 py-1 rounded bg-midnight-black/30">
+                <div key={entry.id} className="flex justify-between text-xs px-2 py-1.5 rounded bg-midnight-black/30">
                   <span className={isWin ? 'text-green-400' : 'text-blood-ruby/70'}>
                     {isWin ? '✓' : '✗'} {entry.handRank ? entry.handRank.replace(/_/g, ' ') : 'no win'}
                   </span>
