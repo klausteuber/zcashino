@@ -15,6 +15,7 @@ import { NETWORK_CONFIG, DEFAULT_NETWORK, zatoshiToZec } from './index'
 // RPC configuration from environment
 const RPC_USER = process.env.ZCASH_RPC_USER || 'zcashrpc'
 const RPC_PASSWORD = process.env.ZCASH_RPC_PASSWORD || ''
+const DEFAULT_Z_SENDMANY_FEE = 0.0001
 
 interface RpcResponse<T = unknown> {
   result: T
@@ -404,9 +405,11 @@ export async function sendZec(
   amount: number,
   memo?: string,
   network: ZcashNetwork = DEFAULT_NETWORK,
-  minconf: number = 1
+  minconf: number = 1,
+  fee: number = DEFAULT_Z_SENDMANY_FEE
 ): Promise<{ operationId: string }> {
   const zatoshi = Math.round(amount * 1e8)
+  const normalizedFee = Math.round(fee * 1e8) / 1e8
 
   const recipient: { address: string; amount: number; memo?: string } = {
     address: toAddress,
@@ -427,7 +430,7 @@ export async function sendZec(
 
   const opid = await rpcCall<string>(
     'z_sendmany',
-    [fromAddress, [recipient], minconf, null, privacyPolicy],
+    [fromAddress, [recipient], minconf, normalizedFee, privacyPolicy],
     network
   )
 
@@ -542,5 +545,5 @@ export async function estimateFee(
   // Zcash has a fixed minimum fee
   // For now, return a conservative estimate
   // TODO: Calculate actual fee based on transaction size
-  return 0.0001
+  return DEFAULT_Z_SENDMANY_FEE
 }

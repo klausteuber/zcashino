@@ -206,3 +206,6 @@ In-memory limits and remote font fetches are acceptable in dev, but must be call
 
 4. **Persisted session state must be mirrored in local UI state immediately.**
    After setting withdrawal address during onboarding, local session state must update right away. Otherwise withdrawal modal can show "Not set" until refresh even though backend data is correct.
+
+5. **`z_sendmany` fee must be explicit under unpaid-action policy.**
+   Passing `null` for fee can be interpreted as a zero-fee transaction, which trips node policy (`tx unpaid action limit exceeded`) on shielded sends. Always pass an explicit paid fee (0.0001 ZEC) in the RPC call.

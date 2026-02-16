@@ -415,3 +415,14 @@ if (result.count > 0) {
   - user withdrawal precheck (`/api/wallet`)
   - admin approval send path (`/api/admin/pool`)
 - Keep deposit confirmation requirements unchanged; this fix is only for house-spend prechecks.
+
+### `tx unpaid action limit exceeded` on withdrawal
+
+**Symptom:** Withdrawal fails with:
+`SendTransaction: Transaction commit failed:: tx unpaid action limit exceeded: 1 action(s) exceeds limit of 0`
+
+**Root Cause:** `z_sendmany` was called with `fee = null`, and node policy treated the transaction as unpaid for shielded action accounting.
+
+**Fix:**
+- In `sendZec(...)`, pass an explicit fee to `z_sendmany` (0.0001 ZEC) instead of `null`.
+- Keep fee normalized to 8 decimals before RPC call.
