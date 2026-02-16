@@ -426,3 +426,15 @@ if (result.count > 0) {
 **Fix:**
 - In `sendZec(...)`, pass an explicit fee to `z_sendmany` (0.0001 ZEC) instead of `null`.
 - Keep fee normalized to 8 decimals before RPC call.
+
+### `tx unpaid action limit exceeded` still occurs with fee=0.0001
+
+**Symptom:** Withdrawal still fails even after explicit fee with:
+`SendTransaction: Transaction commit failed:: tx unpaid action limit exceeded: 2 action(s) exceeds limit of 0`
+
+**Root Cause:** A fixed fee may still underpay ZIP-317 unpaid-action policy for transactions with more logical actions.
+
+**Fix:**
+- Add automatic retry in `sendZec(...)` for this error signature.
+- Parse unpaid/limit counts from the error and increase fee by marginal ZIP-317 steps (`+5000` zats per additional paid action).
+- Retry `z_sendmany` with elevated fee up to bounded attempts.

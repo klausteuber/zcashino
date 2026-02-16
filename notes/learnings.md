@@ -209,3 +209,6 @@ In-memory limits and remote font fetches are acceptable in dev, but must be call
 
 5. **`z_sendmany` fee must be explicit under unpaid-action policy.**
    Passing `null` for fee can be interpreted as a zero-fee transaction, which trips node policy (`tx unpaid action limit exceeded`) on shielded sends. Always pass an explicit paid fee (0.0001 ZEC) in the RPC call.
+
+6. **Shielded action count can require fee escalation beyond 0.0001 ZEC.**
+   Even with explicit fee, some transactions exceed unpaid-action policy when they involve more logical actions. Parse the unpaid-action error and retry with incremented ZIP-317 marginal fee steps (5000 zats per additional paid action).

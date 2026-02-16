@@ -16,6 +16,8 @@ import { NETWORK_CONFIG, DEFAULT_NETWORK, zatoshiToZec } from './index'
 const RPC_USER = process.env.ZCASH_RPC_USER || 'zcashrpc'
 const RPC_PASSWORD = process.env.ZCASH_RPC_PASSWORD || ''
 const DEFAULT_Z_SENDMANY_FEE = 0.0001
+const ZIP317_MARGINAL_FEE_ZATS = 5000
+const MAX_UNPAID_ACTION_RETRIES = 3
 
 interface RpcResponse<T = unknown> {
   result: T
@@ -35,6 +37,28 @@ interface ZcashTransaction {
   time: number
   blocktime?: number
   memo?: string
+}
+
+function normalizeZecAmount(amount: number): number {
+  return Math.round(amount * 1e8) / 1e8
+}
+
+function nextFeeForUnpaidActionError(currentFee: number, errorMessage: string): number | null {
+  if (!errorMessage.toLowerCase().includes('tx unpaid action limit exceeded')) {
+    return null
+  }
+
+  // Example:
+  // "tx unpaid action limit exceeded: 2 action(s) exceeds limit of 0"
+  const match = errorMessage.match(/tx unpaid action limit exceeded:\s*(\d+)\s*action\(s\)\s*exceeds limit of\s*(\d+)/i)
+
+  const unpaidActions = match ? Number.parseInt(match[1], 10) : 1
+  const limit = match ? Number.parseInt(match[2], 10) : 0
+  const additionalPaidActions = Math.max(1, unpaidActions - limit)
+
+  const currentFeeZats = Math.max(0, Math.round(currentFee * 1e8))
+  const nextFeeZats = currentFeeZats + (additionalPaidActions * ZIP317_MARGINAL_FEE_ZATS)
+  return nextFeeZats / 1e8
 }
 
 /**
@@ -409,7 +433,7 @@ export async function sendZec(
   fee: number = DEFAULT_Z_SENDMANY_FEE
 ): Promise<{ operationId: string }> {
   const zatoshi = Math.round(amount * 1e8)
-  const normalizedFee = Math.round(fee * 1e8) / 1e8
+  let normalizedFee = normalizeZecAmount(fee)
 
   const recipient: { address: string; amount: number; memo?: string } = {
     address: toAddress,
@@ -428,13 +452,31 @@ export async function sendZec(
     ? 'AllowFullyTransparent'
     : 'AllowRevealedAmounts'
 
-  const opid = await rpcCall<string>(
-    'z_sendmany',
-    [fromAddress, [recipient], minconf, normalizedFee, privacyPolicy],
-    network
-  )
+  for (let attempt = 0; attempt <= MAX_UNPAID_ACTION_RETRIES; attempt += 1) {
+    try {
+      const opid = await rpcCall<string>(
+        'z_sendmany',
+        [fromAddress, [recipient], minconf, normalizedFee, privacyPolicy],
+        network
+      )
 
-  return { operationId: opid }
+      return { operationId: opid }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      const nextFee = nextFeeForUnpaidActionError(normalizedFee, message)
+
+      if (!nextFee || nextFee <= normalizedFee || attempt === MAX_UNPAID_ACTION_RETRIES) {
+        throw error
+      }
+
+      console.warn(
+        `[RPC] z_sendmany unpaid-action policy hit; retrying with higher fee (${normalizedFee} -> ${nextFee})`
+      )
+      normalizedFee = normalizeZecAmount(nextFee)
+    }
+  }
+
+  throw new Error('z_sendmany fee retry loop exhausted')
 }
 
 /**
