@@ -16,6 +16,10 @@ interface WithdrawalModalProps {
 
 const MIN_WITHDRAWAL = 0.01
 const WITHDRAWAL_FEE = 0.0001
+const ZATS_PER_ZEC = 100_000_000
+
+const toZats = (zec: number): number => Math.round(zec * ZATS_PER_ZEC)
+const fromZats = (zats: number): number => zats / ZATS_PER_ZEC
 
 export function WithdrawalModal({
   isOpen,
@@ -52,10 +56,17 @@ export function WithdrawalModal({
     }
   }, [isOpen])
 
-  const maxWithdrawal = Math.max(0, balance - WITHDRAWAL_FEE)
-  const parsedAmount = parseFloat(amount) || 0
-  const totalDeducted = parsedAmount + WITHDRAWAL_FEE
-  const isValidAmount = parsedAmount >= MIN_WITHDRAWAL && totalDeducted <= balance
+  const feeZats = toZats(WITHDRAWAL_FEE)
+  const minWithdrawalZats = toZats(MIN_WITHDRAWAL)
+  const balanceZats = toZats(balance)
+  const maxWithdrawalZats = Math.max(0, balanceZats - feeZats)
+  const maxWithdrawal = fromZats(maxWithdrawalZats)
+  const rawParsedAmount = parseFloat(amount)
+  const parsedAmount = Number.isFinite(rawParsedAmount) ? rawParsedAmount : 0
+  const parsedAmountZats = toZats(parsedAmount)
+  const totalDeductedZats = parsedAmountZats + feeZats
+  const totalDeducted = fromZats(totalDeductedZats)
+  const isValidAmount = parsedAmountZats >= minWithdrawalZats && totalDeductedZats <= balanceZats
 
   const handleMax = useCallback(() => {
     if (maxWithdrawal >= MIN_WITHDRAWAL) {
@@ -82,7 +93,7 @@ export function WithdrawalModal({
         body: JSON.stringify({
           action: 'withdraw',
           sessionId,
-          amount: parsedAmount,
+          amount: fromZats(parsedAmountZats),
           idempotencyKey,
         }),
       })
@@ -99,16 +110,16 @@ export function WithdrawalModal({
         // Demo mode — instant
         setTxHash(data.transaction.txHash)
         setStep('success')
-        onBalanceUpdate(balance - totalDeducted)
+        onBalanceUpdate(fromZats(Math.max(0, balanceZats - totalDeductedZats)))
       } else if (data.transaction?.status === 'pending_approval') {
         // Large withdrawal — held for admin approval
         setTransactionId(data.transaction.id)
-        onBalanceUpdate(balance - totalDeducted)
+        onBalanceUpdate(fromZats(Math.max(0, balanceZats - totalDeductedZats)))
         setStep('pending_approval')
       } else {
         // Real mode — poll for status
         setTransactionId(data.transaction.id)
-        onBalanceUpdate(balance - totalDeducted)
+        onBalanceUpdate(fromZats(Math.max(0, balanceZats - totalDeductedZats)))
         setStep('processing')
         startPolling(data.transaction.id)
       }

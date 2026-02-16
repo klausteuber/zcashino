@@ -331,18 +331,23 @@ export default function VideoPokerGame() {
   const handleSetWithdrawalAddress = useCallback(async (address: string) => {
     if (!session) return false
     try {
-      const res = await fetch('/api/wallet', {
+      const res = await fetch('/api/session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'set-withdrawal-address',
           sessionId: session.id,
-          address,
+          withdrawalAddress: address,
         }),
       })
       if (!res.ok) return false
       const data = await res.json()
       if (data.depositAddress) setDepositAddress(data.depositAddress)
+      setSession(prev => prev ? {
+        ...prev,
+        withdrawalAddress: data.withdrawalAddress ?? address,
+        depositAddress: data.depositAddress ?? prev.depositAddress,
+      } : prev)
       return true
     } catch (err) {
       console.error('Failed to set withdrawal address:', err)

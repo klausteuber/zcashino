@@ -377,6 +377,11 @@ export default function BlackjackGame() {
       if (data.depositAddress) {
         setDepositAddress(data.depositAddress)
       }
+      setSession(prev => prev ? {
+        ...prev,
+        withdrawalAddress: data.withdrawalAddress ?? address,
+        depositAddress: data.depositAddress ?? prev.depositAddress,
+      } : prev)
       return true
     } catch (err) {
       console.error('Failed to set withdrawal address:', err)
