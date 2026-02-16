@@ -9,6 +9,10 @@ FROM node:22-slim AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+# Provide dummy env vars at build time so turbopack preserves process.env.*
+# references as runtime lookups instead of inlining them as undefined.
+# Real values are injected at runtime via docker-compose env_file.
+ENV PLAYER_SESSION_SECRET=build-time-placeholder-replaced-at-runtime
 RUN npx prisma generate && npm run build
 
 # Stage 3: Production
