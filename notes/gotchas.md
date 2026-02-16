@@ -438,3 +438,16 @@ if (result.count > 0) {
 - Add automatic retry in `sendZec(...)` for this error signature.
 - Parse unpaid/limit counts from the error and increase fee by marginal ZIP-317 steps (`+5000` zats per additional paid action).
 - Retry `z_sendmany` with elevated fee up to bounded attempts.
+
+### Unpaid-action failure appears in `withdrawal-status` after submission
+
+**Symptom:** Initial withdrawal submission returns pending with an operation id, but status polling later reports:
+`SendTransaction: Transaction commit failed:: tx unpaid action limit exceeded: ...`
+
+**Root Cause:** The operation can fail asynchronously after opid creation. Retrying only at the initial `z_sendmany` call is insufficient.
+
+**Fix:**
+- In `handleWithdrawalStatus(...)`, detect unpaid-action failure from `getOperationStatus(...)`.
+- Resubmit the withdrawal with adjusted fee and update the stored `operationId`.
+- Track bounded retry attempts via `failReason` retry marker while status remains pending.
+- Refund and mark failed only after retries are exhausted or non-retryable failure occurs.

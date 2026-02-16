@@ -134,6 +134,8 @@ describe('/api/wallet POST withdrawal-status transitions', () => {
   beforeEach(() => {
     vi.clearAllMocks()
 
+    process.env.HOUSE_ZADDR_TESTNET = 'ztestsaplinghouseaddress1234567890'
+
     checkPublicRateLimitMock.mockReturnValue({ allowed: true })
     createRateLimitResponseMock.mockReturnValue(new Response('rate-limited', { status: 429 }))
     isKillSwitchActiveMock.mockReturnValue(false)
@@ -200,6 +202,7 @@ describe('/api/wallet POST withdrawal-status transitions', () => {
         status: 'confirmed',
         txHash: 'zcash-tx-hash',
         confirmedAt: expect.any(Date),
+        failReason: null,
       },
     })
     expect(prismaMock.session.update).not.toHaveBeenCalled()
@@ -244,6 +247,61 @@ describe('/api/wallet POST withdrawal-status transitions', () => {
       where: { id: 'tx-2' },
       data: { status: 'failed', failReason: 'insufficient fee' },
     })
+  })
+
+  it('resubmits withdrawal with higher fee when operation fails for unpaid actions', async () => {
+    prismaMock.transaction.findFirst.mockResolvedValue({
+      id: 'tx-ua-1',
+      sessionId: 'session-1',
+      type: 'withdrawal',
+      status: 'pending',
+      operationId: 'op-ua-1',
+      amount: 0.4,
+      fee: 0.0001,
+      address: 'u1dest',
+      memo: 'retry-memo',
+      txHash: null,
+      failReason: null,
+      confirmedAt: null,
+    })
+    getOperationStatusMock.mockResolvedValue({
+      status: 'failed',
+      error: 'SendTransaction: Transaction commit failed:: tx unpaid action limit exceeded: 2 action(s) exceeds limit of 0',
+    })
+    sendZecMock.mockResolvedValue({ operationId: 'op-ua-retry-1' })
+
+    const response = await POST(makeRequest({
+      action: 'withdrawal-status',
+      sessionId: 'session-1',
+      transactionId: 'tx-ua-1',
+    }))
+
+    expect(response.status).toBe(200)
+    const payload = await response.json()
+
+    expect(payload.transaction.status).toBe('pending')
+    expect(payload.transaction.operationId).toBe('op-ua-retry-1')
+    expect(payload.transaction.retryAttempt).toBe(1)
+
+    expect(sendZecMock).toHaveBeenCalledWith(
+      'ztestsaplinghouseaddress1234567890',
+      'u1dest',
+      0.4,
+      'retry-memo',
+      'testnet',
+      1,
+      0.0002
+    )
+
+    expect(prismaMock.transaction.update).toHaveBeenCalledWith({
+      where: { id: 'tx-ua-1' },
+      data: {
+        status: 'pending',
+        operationId: 'op-ua-retry-1',
+        failReason: 'retry_unpaid_action:1',
+      },
+    })
+    expect(releaseFundsMock).not.toHaveBeenCalled()
   })
 
   it('returns finalized transactions without polling RPC again', async () => {

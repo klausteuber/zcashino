@@ -212,3 +212,6 @@ In-memory limits and remote font fetches are acceptable in dev, but must be call
 
 6. **Shielded action count can require fee escalation beyond 0.0001 ZEC.**
    Even with explicit fee, some transactions exceed unpaid-action policy when they involve more logical actions. Parse the unpaid-action error and retry with incremented ZIP-317 marginal fee steps (5000 zats per additional paid action).
+
+7. **`z_sendmany` failures can occur after opid creation, not only at call time.**
+   Some fee-policy failures surface in `z_getoperationstatus` as a failed operation. Recovery must exist in withdrawal status polling too: detect unpaid-action failure, resubmit with adjusted fee, and only refund after bounded retry attempts.
