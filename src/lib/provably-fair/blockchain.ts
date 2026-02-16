@@ -103,14 +103,14 @@ export async function commitServerSeedHash(
     const memo = `${COMMITMENT_MEMO_PREFIX}${serverSeedHash}`
 
     // Send commitment transaction (to self)
-    // Use minconf=0 to allow spending unconfirmed change from previous commitment txs
+    // Use minconf=1 to avoid Sapling witness failures on unconfirmed/internal change notes.
     const { operationId } = await sendZec(
       houseAddress,
       houseAddress,
       COMMITMENT_AMOUNT,
       memo,
       network,
-      0 // minconf: allow unconfirmed inputs for commitment self-sends
+      1
     )
 
     // Wait for operation to complete
