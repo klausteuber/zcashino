@@ -42,6 +42,7 @@ model Session {
 
   // Relations
   games         BlackjackGame[]
+  videoPokerGames VideoPokerGame[]
   transactions  Transaction[]
   wallet        DepositWallet?
 
@@ -174,6 +175,7 @@ model Transaction {
   isShielded    Boolean  @default(false)
   memo          String?  // Encrypted memo for z-transactions
   operationId   String?  // z_sendmany operation ID (for tracking)
+  idempotencyKey String? // Client-supplied key to prevent duplicate withdrawals
 
   // Status
   status        String   @default("pending") // pending, confirmed, failed
@@ -187,6 +189,8 @@ model Transaction {
   @@index([txHash])
   @@index([status])
   @@index([operationId])
+  @@unique([sessionId, type, txHash])
+  @@unique([sessionId, type, idempotencyKey])
 }
 
 // Sweep logs — tracks consolidation of deposit address funds → house wallet
@@ -215,6 +219,52 @@ model SweepLog {
   @@index([status])
   @@index([depositWalletId])
   @@index([createdAt])
+}
+
+// Individual video poker game/hand
+model VideoPokerGame {
+  id              String   @id @default(cuid())
+  sessionId       String
+  session         Session  @relation(fields: [sessionId], references: [id])
+
+  // Variant
+  variant         String   @default("jacks_or_better") // jacks_or_better | deuces_wild
+
+  // Bet
+  baseBet         Float              // e.g., 0.01 ZEC
+  betMultiplier   Int      @default(1) // 1-5 coins
+  totalBet        Float              // baseBet * betMultiplier
+
+  // Game state (JSON)
+  initialState    String             // JSON: shuffled deck, initial 5 cards
+  finalState      String?            // JSON: final hand after draw
+  actionHistory   String   @default("[]") // JSON: ["deal", "[0,2,4]"] (held indices)
+
+  // Provably fair data
+  serverSeed      String
+  serverSeedHash  String
+  clientSeed      String
+  nonce           Int
+
+  // Blockchain commitment
+  commitmentTxHash    String?
+  commitmentBlock     Int?
+  commitmentTimestamp  DateTime?
+
+  // Outcome
+  status          String   @default("active") // active, completed
+  handRank        String?  // royal_flush, straight_flush, four_of_a_kind, etc.
+  multiplier      Float?   // Paytable multiplier (0 for nothing)
+  payout          Float?
+
+  // Timestamps
+  createdAt       DateTime @default(now())
+  completedAt     DateTime?
+
+  @@index([sessionId])
+  @@index([status])
+  @@index([serverSeedHash])
+  @@index([commitmentTxHash])
 }
 
 // Geo-blocking log (30-day retention)

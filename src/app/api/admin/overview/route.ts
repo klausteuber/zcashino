@@ -10,6 +10,7 @@ import {
 } from '@/lib/admin/rate-limit'
 import { logAdminEvent } from '@/lib/admin/audit'
 import { getKillSwitchStatus } from '@/lib/kill-switch'
+import { PLAYER_COUNTER_ACTIONS } from '@/lib/telemetry/player-events'
 
 /**
  * GET /api/admin/overview
@@ -41,6 +42,13 @@ export async function GET(request: NextRequest) {
 
   try {
     const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000)
+    const raceRejectionActions = [
+      PLAYER_COUNTER_ACTIONS.WITHDRAW_RESERVE_REJECTED,
+      PLAYER_COUNTER_ACTIONS.BLACKJACK_RESERVE_REJECTED,
+      PLAYER_COUNTER_ACTIONS.BLACKJACK_DUPLICATE_COMPLETION,
+      PLAYER_COUNTER_ACTIONS.VIDEO_POKER_RESERVE_REJECTED,
+      PLAYER_COUNTER_ACTIONS.VIDEO_POKER_DUPLICATE_COMPLETION,
+    ]
 
     const [
       sessionTotals,
@@ -58,6 +66,10 @@ export async function GET(request: NextRequest) {
       nodeStatus,
       failedLogins24h,
       rateLimitedEvents24h,
+      raceRejections24h,
+      raceRejectionsAllTime,
+      idempotencyReplays24h,
+      idempotencyReplaysAllTime,
       recentAuditLogs,
     ] = await Promise.all([
       prisma.session.aggregate({
@@ -129,6 +141,28 @@ export async function GET(request: NextRequest) {
           createdAt: { gte: since24h },
         },
       }),
+      prisma.adminAuditLog.count({
+        where: {
+          action: { in: raceRejectionActions },
+          createdAt: { gte: since24h },
+        },
+      }),
+      prisma.adminAuditLog.count({
+        where: {
+          action: { in: raceRejectionActions },
+        },
+      }),
+      prisma.adminAuditLog.count({
+        where: {
+          action: PLAYER_COUNTER_ACTIONS.WITHDRAW_IDEMPOTENCY_REPLAY,
+          createdAt: { gte: since24h },
+        },
+      }),
+      prisma.adminAuditLog.count({
+        where: {
+          action: PLAYER_COUNTER_ACTIONS.WITHDRAW_IDEMPOTENCY_REPLAY,
+        },
+      }),
       prisma.adminAuditLog.findMany({
         orderBy: { createdAt: 'desc' },
         take: 30,
@@ -180,6 +214,10 @@ export async function GET(request: NextRequest) {
         confirmedDepositVolume: confirmedDepositVolume._sum.amount || 0,
         confirmedWithdrawalCount,
         confirmedWithdrawalVolume: confirmedWithdrawalVolume._sum.amount || 0,
+        raceRejections24h,
+        raceRejectionsAllTime,
+        idempotencyReplays24h,
+        idempotencyReplaysAllTime,
       },
       pendingWithdrawals: pendingWithdrawals.map((tx) => ({
         id: tx.id,

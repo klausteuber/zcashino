@@ -66,14 +66,16 @@ async function rpcCall<T = unknown>(
       signal: AbortSignal.timeout(5000), // 5s timeout to fail fast when node is down
     })
 
-    if (!response.ok) {
-      throw new Error(`RPC HTTP error: ${response.status} ${response.statusText}`)
-    }
-
+    // zcashd returns HTTP 500 for JSON-RPC errors but the body still has structured error info
+    // Always try to parse the JSON body first for better error messages
     const data = (await response.json()) as RpcResponse<T>
 
     if (data.error) {
       throw new Error(`RPC error ${data.error.code}: ${data.error.message}`)
+    }
+
+    if (!response.ok) {
+      throw new Error(`RPC HTTP error: ${response.status} ${response.statusText}`)
     }
 
     return data.result
@@ -387,7 +389,8 @@ export async function sendZec(
   toAddress: string,
   amount: number,
   memo?: string,
-  network: ZcashNetwork = DEFAULT_NETWORK
+  network: ZcashNetwork = DEFAULT_NETWORK,
+  minconf: number = 1
 ): Promise<{ operationId: string }> {
   const zatoshi = Math.round(amount * 1e8)
 
@@ -401,9 +404,16 @@ export async function sendZec(
     recipient.memo = Buffer.from(memo).toString('hex')
   }
 
+  // Determine privacy policy based on address types
+  // AllowRevealedAmounts: needed when spending transparent funds into Sapling pool
+  // AllowFullyTransparent: needed for z→t sends (withdrawals to t-addrs)
+  const privacyPolicy = toAddress.startsWith('t')
+    ? 'AllowFullyTransparent'
+    : 'AllowRevealedAmounts'
+
   const opid = await rpcCall<string>(
     'z_sendmany',
-    [fromAddress, [recipient], 1, null, 'AllowRevealedAmounts'],
+    [fromAddress, [recipient], minconf, null, privacyPolicy],
     network
   )
 

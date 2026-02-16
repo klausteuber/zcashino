@@ -102,7 +102,7 @@ export interface GameVerificationData {
   commitment?: BlockchainCommitment
 
   // Game details
-  gameType: 'blackjack'
+  gameType: 'blackjack' | 'video_poker'
   outcome?: string
   payout?: number
   createdAt: Date | string
@@ -221,6 +221,65 @@ export interface HandHistoryEntry {
   id: string
   outcome: 'win' | 'lose' | 'push' | 'blackjack'
   mainBet: number
+  payout: number
+  createdAt: string | Date
+}
+
+// Video Poker types
+export type VideoPokerVariant = 'jacks_or_better' | 'deuces_wild'
+export type VideoPokerPhase = 'betting' | 'deal' | 'hold' | 'complete'
+
+export type JacksOrBetterHandRank =
+  | 'royal_flush'
+  | 'straight_flush'
+  | 'four_of_a_kind'
+  | 'full_house'
+  | 'flush'
+  | 'straight'
+  | 'three_of_a_kind'
+  | 'two_pair'
+  | 'jacks_or_better'
+  | 'nothing'
+
+export type DeucesWildHandRank =
+  | 'natural_royal_flush'
+  | 'four_deuces'
+  | 'wild_royal_flush'
+  | 'five_of_a_kind'
+  | 'straight_flush'
+  | 'four_of_a_kind'
+  | 'full_house'
+  | 'flush'
+  | 'straight'
+  | 'three_of_a_kind'
+  | 'nothing'
+
+export type VideoPokerHandRank = JacksOrBetterHandRank | DeucesWildHandRank
+
+export interface VideoPokerGameState {
+  phase: VideoPokerPhase
+  variant: VideoPokerVariant
+  hand: Card[]
+  heldCards: boolean[]
+  deck: Card[]
+  balance: number
+  baseBet: number
+  betMultiplier: number
+  totalBet: number
+  serverSeedHash: string
+  clientSeed: string
+  nonce: number
+  handRank: VideoPokerHandRank | null
+  multiplier: number | null
+  lastPayout: number
+  message: string
+}
+
+export interface VideoPokerHandHistoryEntry {
+  id: string
+  variant: VideoPokerVariant
+  handRank: VideoPokerHandRank | null
+  totalBet: number
   payout: number
   createdAt: string | Date
 }

@@ -1,11 +1,16 @@
-import type { ProvablyFairData, VerificationResult, BlackjackAction } from '@/types'
-import { generateShuffleOrder } from '@/lib/game/deck'
+import type { ProvablyFairData, VerificationResult, BlackjackAction, VideoPokerVariant, VideoPokerHandRank } from '@/types'
+import { generateShuffleOrder, cardToString } from '@/lib/game/deck'
 import {
   createInitialState,
   startRound,
   executeAction,
   takeInsurance
 } from '@/lib/game/blackjack'
+import {
+  createInitialState as createVPInitialState,
+  startRound as startVPRound,
+  holdAndDraw as vpHoldAndDraw,
+} from '@/lib/game/video-poker'
 import { randomBytes, createHash } from 'node:crypto'
 
 /**
@@ -167,6 +172,64 @@ export function replayGame(params: {
     dealerCards,
     outcome,
     payout: gameState.lastPayout
+  }
+}
+
+/**
+ * Replay a completed video poker game from its seeds and held indices.
+ * Returns the replayed game state so the verify endpoint can compare.
+ */
+export function replayVideoPokerGame(params: {
+  serverSeed: string
+  serverSeedHash: string
+  clientSeed: string
+  nonce: number
+  baseBet: number
+  betMultiplier: number
+  variant: VideoPokerVariant
+  heldIndices: number[]
+}): {
+  initialHand: string[]
+  finalHand: string[]
+  handRank: VideoPokerHandRank | null
+  payout: number
+  valid: boolean
+} {
+  // Verify seed hash
+  const computedHash = createHash('sha256').update(params.serverSeed).digest('hex')
+  if (computedHash !== params.serverSeedHash) {
+    return {
+      initialHand: [],
+      finalHand: [],
+      handRank: null,
+      payout: 0,
+      valid: false,
+    }
+  }
+
+  // Reconstruct: same seeds → same deck → same cards
+  const initialState = createVPInitialState(1000, params.variant) // Balance doesn't affect card dealing
+  const holdState = startVPRound(
+    initialState,
+    params.baseBet,
+    params.betMultiplier,
+    params.serverSeed,
+    params.serverSeedHash,
+    params.clientSeed,
+    params.nonce
+  )
+
+  const initialHand = holdState.hand.map(c => cardToString(c))
+
+  // Execute draw
+  const finalState = vpHoldAndDraw(holdState, params.heldIndices)
+
+  return {
+    initialHand,
+    finalHand: finalState.hand.map(c => cardToString(c)),
+    handRank: finalState.handRank,
+    payout: finalState.lastPayout,
+    valid: true,
   }
 }
 

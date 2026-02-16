@@ -55,6 +55,7 @@ services:
     image: electriccoinco/zcashd:latest  # v6.11.0 — protocol 170140 required for peer connectivity
     command:
       - -par=6
+      - -dbcache=1000              # 1GB UTXO cache — sufficient post-IBD
       - -rpcuser=${ZCASH_RPC_USER:-zcashrpc}
       - -rpcpassword=${ZCASH_RPC_PASSWORD:?ZCASH_RPC_PASSWORD is required}
       - -rpcallowip=172.16.0.0/12    # Docker internal network only
@@ -71,9 +72,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 12G
+          memory: 4G               # Post-IBD: zcashd needs ~2-3G steady state
         reservations:
-          memory: 8G
+          memory: 2G
     healthcheck:
       test: ["CMD", "zcash-cli", "-rpcuser=${ZCASH_RPC_USER:-zcashrpc}", "-rpcpassword=${ZCASH_RPC_PASSWORD}", "getblockchaininfo"]
       interval: 60s

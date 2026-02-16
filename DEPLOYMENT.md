@@ -20,7 +20,10 @@ cp .env.example .env
 # 3. Start services
 docker compose up -d
 
-# 4. Verify
+# 4. Apply database migrations
+docker compose exec app npx prisma migrate deploy
+
+# 5. Verify
 curl http://localhost:3000/api/health
 ```
 
@@ -42,11 +45,16 @@ curl http://localhost:3000/api/health
 | `ADMIN_USERNAME` | Admin dashboard username | `admin` |
 | `ADMIN_PASSWORD` | Admin password (16+ chars) | `<strong password>` |
 | `ADMIN_SESSION_SECRET` | Session signing secret (64+ chars) | `<64-char hex>` |
+| `PLAYER_SESSION_SECRET` | Player session cookie signing secret (32+ chars) | `<64-char hex>` |
 
 ### Optional
 
 | Variable | Description | Default |
 |----------|-------------|---------|
+| `FORCE_HTTPS` | Set to `true` for secure cookies (required behind TLS proxy) | `false` |
+| `PLAYER_SESSION_AUTH_MODE` | Player auth rollout mode: `compat` or `strict` | `compat` |
+| `WITHDRAWAL_APPROVAL_THRESHOLD` | Withdrawals >= this amount require admin approval (ZEC) | `5.0` |
+| `KILL_SWITCH` | Set to `true` to block new games/withdrawals at startup | `false` |
 | `NEXT_PUBLIC_SENTRY_DSN` | Sentry error tracking DSN | (disabled) |
 | `SENTRY_AUTH_TOKEN` | Sentry source map upload token | (disabled) |
 
@@ -54,6 +62,9 @@ curl http://localhost:3000/api/health
 
 ```bash
 # Generate ADMIN_SESSION_SECRET (64-char hex)
+openssl rand -hex 32
+
+# Generate PLAYER_SESSION_SECRET (64-char hex)
 openssl rand -hex 32
 
 # Generate ADMIN_PASSWORD (24-char alphanumeric)
@@ -129,12 +140,49 @@ echo "New ADMIN_PASSWORD: $NEW_PASSWORD"
 NEW_SECRET=$(openssl rand -hex 32)
 echo "New ADMIN_SESSION_SECRET: $NEW_SECRET"
 
+# Generate new player session secret (invalidates active player cookies)
+NEW_PLAYER_SECRET=$(openssl rand -hex 32)
+echo "New PLAYER_SESSION_SECRET: $NEW_PLAYER_SECRET"
+
 # Generate new RPC password (must also update zcashd config)
 NEW_RPC=$(openssl rand -hex 32)
 echo "New ZCASH_RPC_PASSWORD: $NEW_RPC"
 ```
 
 After rotating, restart the application and zcashd (if RPC password changed).
+
+## Remediation Rollout (2026-02-15)
+
+Ship the money-safety and auth hardening in this order:
+
+1. Run duplicate deposit tx-hash cleanup (dry run first):
+
+```bash
+docker compose exec app node scripts/dedupe-transaction-txhash.js
+docker compose exec app node scripts/dedupe-transaction-txhash.js --apply
+```
+
+2. Apply Prisma migrations:
+
+```bash
+docker compose exec app npx prisma migrate deploy
+```
+
+3. Deploy app with compatibility auth mode:
+- `PLAYER_SESSION_AUTH_MODE=compat`
+- Keep clients sending `sessionId` while new signed player cookie is being adopted
+- Wallet withdraw clients must send `idempotencyKey` on every withdrawal request
+
+4. Monitor `/admin` and `/api/admin/overview` for 24-48h:
+- `transactions.raceRejections24h`
+- `transactions.raceRejectionsAllTime`
+- `transactions.idempotencyReplays24h`
+- `transactions.idempotencyReplaysAllTime`
+- Negative balances must remain zero
+
+5. Flip to strict mode after metrics are clean:
+- Set `PLAYER_SESSION_AUTH_MODE=strict`
+- Reject legacy body/query-only player session access
 
 ## Zcash Node Setup
 
@@ -160,10 +208,13 @@ docker compose up -d
 # Check sync progress (wait for verificationprogress ~1.0)
 docker compose exec zcashd zcash-cli -testnet getblockchaininfo
 
-# Generate a house shielded address
-docker compose exec zcashd zcash-cli -testnet z_getnewaddress sapling
+# Generate a house shielded address (unified account model)
+docker compose exec zcashd zcash-cli -testnet z_getnewaccount
+# → {"account": 0}
+docker compose exec zcashd zcash-cli -testnet z_getaddressforaccount 0 '["sapling"]'
+# → {"address": "utest1...", "account": 0}
 
-# Set the address in .env as HOUSE_ZADDR_TESTNET
+# Set the sapling component in .env as HOUSE_ZADDR_TESTNET
 ```
 
 **Testnet sync:** ~2-12 hours, ~60 GB disk.
@@ -179,7 +230,7 @@ docker compose exec zcashd zcash-cli -testnet z_getnewaddress sapling
 
 ### Getting Testnet ZEC
 
-- **Mine it yourself:** `docker compose exec zcashd zcash-cli -testnet setgenerate true 1` (testnet difficulty is low)
+- **Mine it yourself:** `docker compose exec zcashd zcash-cli -testnet setgenerate true 1` (WARNING: testnet difficulty is too high for CPU mining — this is unlikely to produce blocks)
 - **Ask on Discord:** Join [discord.gg/zcash](https://discord.gg/zcash) and request TAZ in the testnet channel
 
 ### Manual Setup (Without Docker)
@@ -215,7 +266,7 @@ zcash-cli -testnet getblockchaininfo
 No hosted RPC provider supports the wallet methods we need (`z_sendmany`, `z_getnewaddress`, etc.) — these require private keys on the node. Self-hosted is the only option.
 
 **Recommended VPS providers:**
-- **1984.hosting** (~€60/month, 8 GB RAM, 4 CPU, 160 GB SSD, Iceland, no-KYC) — current deployment
+- **1984.hosting** (~€149/month, 16 GB RAM, 6 CPU, 320 GB SSD, Iceland, no-KYC) — current deployment
 - **Hetzner CX32** (~$8/month, 8 GB RAM, 80 GB disk) — budget option (requires passport/KYC)
 - **DigitalOcean** ($48/month, 8 GB RAM, 160 GB disk) — testnet or small mainnet
 - For mainnet, add a volume for 300+ GB blockchain storage
@@ -226,7 +277,7 @@ No hosted RPC provider supports the wallet methods we need (`z_sendmany`, `z_get
 - **Copy native modules to production stage**: `node_modules/.prisma`, `node_modules/@prisma`, `node_modules/@libsql`
 - **SQLite file permissions**: App runs as uid 1001 (nextjs user). DB file AND parent directory must be owned by 1001: `chown -R 1001:1001 /data`
 - **CSP + Next.js**: `script-src` must include `'unsafe-inline'` — Next.js uses inline scripts for hydration that CSP blocks otherwise
-- **Firewall**: Only expose ports 22 (SSH) and 3000 (app). Block zcashd RPC port (18232/8232) externally
+- **Firewall**: Only expose ports 22 (SSH), 80 (HTTP), 443 (HTTPS). Block app port 3000 and zcashd RPC port (18232/8232) externally — app is only accessible via Nginx reverse proxy
 
 ## Mainnet Deployment
 
@@ -245,22 +296,29 @@ cp .env.mainnet.example .env.mainnet
 # Edit .env.mainnet with real values (see file for generation instructions)
 
 # 2. Start zcashd first (sync takes 15-24h)
-docker compose -f docker-compose.mainnet.yml up -d zcashd
+docker compose -p mainnet -f docker-compose.mainnet.yml up -d zcashd
 
 # 3. Monitor sync progress
-docker compose -f docker-compose.mainnet.yml exec zcashd zcash-cli getblockchaininfo
+docker compose -p mainnet -f docker-compose.mainnet.yml exec zcashd zcash-cli getblockchaininfo
 # Wait until verificationprogress >= 0.9999
 
-# 4. Generate house wallet addresses
-docker compose -f docker-compose.mainnet.yml exec zcashd zcash-cli z_getnewaddress sapling
-# → zs1... (set as HOUSE_ZADDR_MAINNET in .env.mainnet)
-docker compose -f docker-compose.mainnet.yml exec zcashd zcash-cli getnewaddress
-# → t1... (house transparent address for deposit sweeps)
+# 4. Generate house wallet addresses (unified account model — getnewaddress is deprecated)
+docker compose -p mainnet -f docker-compose.mainnet.yml exec zcashd zcash-cli z_getnewaccount
+# → {"account": 0}
+docker compose -p mainnet -f docker-compose.mainnet.yml exec zcashd \
+  zcash-cli z_getaddressforaccount 0 '["p2pkh","sapling"]'
+# → {"address": "u1...", "account": 0}
+# Extract receivers:
+docker compose -p mainnet -f docker-compose.mainnet.yml exec zcashd \
+  zcash-cli z_listunifiedreceivers "u1..."
+# → {"p2pkh": "t1...", "sapling": "zs1..."}
+# Set zs1... as HOUSE_ZADDR_MAINNET in .env.mainnet
+# t1... is used for deposit sweeps
 
 # 5. IMMEDIATELY back up the wallet
-docker compose -f docker-compose.mainnet.yml exec zcashd \
+docker compose -p mainnet -f docker-compose.mainnet.yml exec zcashd \
   zcash-cli z_exportwallet /srv/zcashd/.zcash/wallet-export.txt
-docker cp $(docker compose -f docker-compose.mainnet.yml ps -q zcashd):/srv/zcashd/.zcash/wallet.dat ./wallet.dat
+docker cp $(docker compose -p mainnet -f docker-compose.mainnet.yml ps -q zcashd):/srv/zcashd/.zcash/wallet.dat ./wallet.dat
 gpg --symmetric --cipher-algo AES256 wallet.dat
 # Store encrypted copy in 2+ geographically separate locations
 rm wallet.dat  # Remove unencrypted copy
@@ -268,7 +326,7 @@ rm wallet.dat  # Remove unencrypted copy
 # 6. Fund house wallet with initial bankroll
 
 # 7. Start the app
-docker compose -f docker-compose.mainnet.yml up -d
+docker compose -p mainnet -f docker-compose.mainnet.yml up -d
 
 # 8. Verify health
 curl https://cypherjester.com/api/health
@@ -286,7 +344,7 @@ curl https://cypherjester.com/api/health
 | Env file | `.env` | `.env.mainnet` |
 | zcashd flag | `-testnet` | (none) |
 | RPC port | 18232 | 8232 |
-| zcashd image | `:latest` | `:v6.1.0` (pinned) |
+| zcashd image | `:latest` | `:latest` (v6.11.0, protocol 170140 required for peers) |
 | RPC exposure | Host-mapped | Docker-internal only |
 | `rpcallowip` | `0.0.0.0/0` | `172.16.0.0/12` |
 | App port | `3000:3000` | `127.0.0.1:3000:3000` |
@@ -349,6 +407,7 @@ crontab -e
 - **Uptime**: Point UptimeRobot or similar at `https://yourdomain.com/api/health`
 - **Errors**: Configure `NEXT_PUBLIC_SENTRY_DSN` for Sentry error tracking
 - **Admin dashboard**: `https://yourdomain.com/admin` for operational oversight
+- **Race/idempotency telemetry**: track `raceRejections24h` and `idempotencyReplays24h` from `GET /api/admin/overview`
 
 ## Backups
 
@@ -450,7 +509,7 @@ Run a restore drill at least once during the first 30 days of mainnet operation.
 4. Restore database from latest backup
 5. Copy `.env.mainnet` and `docker-compose.mainnet.yml`
 6. Update DNS to point to new IP
-7. Start services: `docker compose -f docker-compose.mainnet.yml up -d`
+7. Start services: `docker compose -p mainnet -f docker-compose.mainnet.yml up -d`
 8. Wait for zcashd to sync (can take 24h for full resync)
 9. Verify: `curl https://cypherjester.com/api/health`
 10. Install monitoring cron jobs
@@ -461,10 +520,17 @@ The kill switch blocks new games and withdrawals while allowing in-progress game
 
 ```bash
 # Activate via API (from server)
-curl -X POST http://127.0.0.1:3000/api/admin/kill-switch \
-  -H "Cookie: zcashino_admin_session=<token>" \
+# First, get an admin session token:
+TOKEN=$(curl -s -X POST http://127.0.0.1:3000/api/admin/auth \
   -H "Content-Type: application/json" \
-  -d '{"active": true}'
+  -d '{"username":"admin","password":"<admin-password>"}' \
+  -c - | grep zcashino_admin_session | awk '{print $NF}')
+
+# Toggle kill switch (via /api/admin/pool endpoint):
+curl -X POST http://127.0.0.1:3000/api/admin/pool \
+  -H "Cookie: zcashino_admin_session=$TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"action":"toggle-kill-switch"}'
 
 # Or use admin dashboard: https://cypherjester.com/admin
 ```
@@ -475,6 +541,7 @@ State persists across container restarts (stored in `/app/data/kill-switch.json`
 
 ### Security
 - [ ] Strong credentials set in `.env.mainnet` (all generated with `openssl rand`)
+- [ ] `PLAYER_SESSION_SECRET` set (32+ chars)
 - [ ] `DEMO_MODE=false`
 - [ ] UFW firewall: only ports 22, 80, 443 (no direct app/RPC access)
 - [ ] SSH key-only auth (`PasswordAuthentication no`)
@@ -492,16 +559,21 @@ State persists across container restarts (stored in `/app/data/kill-switch.json`
 - [ ] Backup scripts tested (DB + wallet)
 
 ### Application
+- [ ] DB dedupe + migration completed (`scripts/dedupe-transaction-txhash.js --apply`, `prisma migrate deploy`)
 - [ ] `WITHDRAWAL_APPROVAL_THRESHOLD` set (recommend 1.0 ZEC initially)
+- [ ] `PLAYER_SESSION_AUTH_MODE=compat` on first deployment
 - [ ] Sentry DSN configured
 - [ ] Admin dashboard accessible
+- [ ] Client withdrawal requests include `idempotencyKey`
 - [ ] Legal pages reviewed (/terms, /privacy, /responsible-gambling)
 - [ ] Smoke test: deposit, play, withdraw with real ZEC
 
 ### Post-Launch (First 30 Days)
 - [ ] Daily reconciliation: `sum(session.balance)` vs on-chain house balance
+- [ ] Monitor race/idempotency counters in admin overview for first 48h
+- [ ] Flip `PLAYER_SESSION_AUTH_MODE=strict` after clean metrics
 - [ ] Weekly dependency/security patch review
 - [ ] Backup restore drill completed at least once
 - [ ] Credential rotation at 90 days
 - [ ] Let's Encrypt cert renewal verified
-- [ ] zcashd version check (v6.1.0 support window ~16 weeks)
+- [ ] zcashd version check (v6.11.0, monitor for deprecation notices)

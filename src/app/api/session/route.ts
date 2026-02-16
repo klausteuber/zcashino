@@ -4,6 +4,8 @@ import { validateAddress, DEFAULT_NETWORK } from '@/lib/wallet'
 import { createDepositWalletForSession } from '@/lib/wallet/session-wallet'
 import { checkPublicRateLimit, createRateLimitResponse } from '@/lib/admin/rate-limit'
 import { isKillSwitchActive } from '@/lib/kill-switch'
+import { requirePlayerSession, setPlayerSessionCookie } from '@/lib/auth/player-session'
+import { parseWithSchema, sessionBodySchema } from '@/lib/validation/api-schemas'
 
 // Demo mode: Generate a fake wallet address for testing
 function generateDemoWallet(): string {
@@ -18,6 +20,41 @@ function generateDemoWallet(): string {
 // Check if this is a demo session
 function isDemoSession(walletAddress: string): boolean {
   return walletAddress.startsWith('demo_')
+}
+
+function createSessionResponse(session: {
+  id: string
+  walletAddress: string
+  balance: number
+  totalWagered: number
+  totalWon: number
+  depositLimit: number | null
+  lossLimit: number | null
+  sessionLimit: number | null
+  isAuthenticated: boolean
+  withdrawalAddress: string | null
+  authTxHash: string | null
+  wallet: { transparentAddr: string } | null
+}) {
+  const response = NextResponse.json({
+    id: session.id,
+    walletAddress: session.walletAddress,
+    balance: session.balance,
+    totalWagered: session.totalWagered,
+    totalWon: session.totalWon,
+    depositLimit: session.depositLimit,
+    lossLimit: session.lossLimit,
+    sessionLimit: session.sessionLimit,
+    isAuthenticated: session.isAuthenticated,
+    withdrawalAddress: session.withdrawalAddress,
+    authTxHash: session.authTxHash,
+    depositAddress: session.wallet?.transparentAddr,
+    isDemo: isDemoSession(session.walletAddress),
+    maintenanceMode: isKillSwitchActive(),
+  })
+
+  setPlayerSessionCookie(response, session.id, session.walletAddress)
+  return response
 }
 
 // GET /api/session - Get or create session
@@ -84,25 +121,7 @@ export async function GET(request: NextRequest) {
       }, { status: 403 })
     }
 
-    return NextResponse.json({
-      id: session.id,
-      walletAddress: session.walletAddress,
-      balance: session.balance,
-      totalWagered: session.totalWagered,
-      totalWon: session.totalWon,
-      depositLimit: session.depositLimit,
-      lossLimit: session.lossLimit,
-      sessionLimit: session.sessionLimit,
-      // Authentication status
-      isAuthenticated: session.isAuthenticated,
-      withdrawalAddress: session.withdrawalAddress,
-      authTxHash: session.authTxHash,
-      // Deposit address (if wallet exists)
-      depositAddress: session.wallet?.transparentAddr,
-      isDemo: isDemoSession(session.walletAddress),
-      // Platform status
-      maintenanceMode: isKillSwitchActive(),
-    })
+    return createSessionResponse(session)
   } catch (error) {
     console.error('Session error:', error)
     return NextResponse.json(
@@ -128,6 +147,11 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json()
+    const parsed = parseWithSchema(sessionBodySchema, body)
+    if (!parsed.success) {
+      return NextResponse.json(parsed.payload, { status: 400 })
+    }
+
     const {
       action,
       sessionId,
@@ -135,14 +159,12 @@ export async function POST(request: NextRequest) {
       depositLimit,
       lossLimit,
       sessionLimit,
-      excludeDuration
-    } = body
+      excludeDuration,
+    } = parsed.data
 
-    if (!sessionId) {
-      return NextResponse.json(
-        { error: 'Session ID required' },
-        { status: 400 }
-      )
+    const playerSession = requirePlayerSession(request, sessionId)
+    if (!playerSession.ok) {
+      return playerSession.response
     }
 
     // Get current session
@@ -199,8 +221,15 @@ export async function POST(request: NextRequest) {
  */
 async function handleSetWithdrawalAddress(
   session: { id: string; withdrawalAddress: string | null; isAuthenticated: boolean; walletAddress: string; wallet: unknown | null },
-  withdrawalAddress: string
+  withdrawalAddress?: string
 ) {
+  if (!withdrawalAddress || withdrawalAddress.trim().length === 0) {
+    return NextResponse.json({
+      error: 'Invalid request payload',
+      details: { withdrawalAddress: ['Withdrawal address is required'] },
+    }, { status: 400 })
+  }
+
   // Don't allow changing if already authenticated (use change-withdrawal-address instead)
   if (session.isAuthenticated && session.withdrawalAddress) {
     return NextResponse.json({
@@ -245,8 +274,15 @@ async function handleSetWithdrawalAddress(
  */
 async function handleChangeWithdrawalAddress(
   session: { id: string; isAuthenticated: boolean },
-  newWithdrawalAddress: string
+  newWithdrawalAddress?: string
 ) {
+  if (!newWithdrawalAddress || newWithdrawalAddress.trim().length === 0) {
+    return NextResponse.json({
+      error: 'Invalid request payload',
+      details: { withdrawalAddress: ['Withdrawal address is required'] },
+    }, { status: 400 })
+  }
+
   if (!session.isAuthenticated) {
     return NextResponse.json({
       error: 'Session not authenticated. Use set-withdrawal-address first.',

@@ -29,6 +29,10 @@ interface AdminOverview {
     confirmedDepositVolume: number
     confirmedWithdrawalCount: number
     confirmedWithdrawalVolume: number
+    raceRejections24h: number
+    raceRejectionsAllTime: number
+    idempotencyReplays24h: number
+    idempotencyReplaysAllTime: number
   }
   pendingWithdrawals: Array<{
     id: string
@@ -528,7 +532,7 @@ export default function AdminPage() {
               <MetricCard
                 label="Pending Withdrawals"
                 value={String(overview.transactions.pendingWithdrawalCount)}
-                detail={`${overview.transactions.failedWithdrawalCount} failed all-time`}
+                detail={`${overview.transactions.failedWithdrawalCount} failed • ${overview.transactions.raceRejections24h} race rejects (24h)`}
               />
               <MetricCard
                 label="Active Games"
@@ -598,6 +602,14 @@ export default function AdminPage() {
                   <InlineStat
                     label="Confirmed Withdrawals"
                     value={`${overview.transactions.confirmedWithdrawalCount} (${formatZec(overview.transactions.confirmedWithdrawalVolume)})`}
+                  />
+                  <InlineStat
+                    label="Race Rejections"
+                    value={`${overview.transactions.raceRejections24h} (24h) / ${overview.transactions.raceRejectionsAllTime} total`}
+                  />
+                  <InlineStat
+                    label="Idempotency Replays"
+                    value={`${overview.transactions.idempotencyReplays24h} (24h) / ${overview.transactions.idempotencyReplaysAllTime} total`}
                   />
                 </div>
                 <div className="text-xs text-venetian-gold/50 mt-3">

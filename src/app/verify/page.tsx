@@ -7,13 +7,28 @@ import JesterLogo from '@/components/ui/JesterLogo'
 import type { FullVerificationResult, GameVerificationData } from '@/types'
 
 type VerificationMode = 'gameId' | 'manual'
+type GameType = 'blackjack' | 'video_poker'
+
+interface VerificationResponse extends FullVerificationResult {
+  replay?: {
+    playerCards?: string[][]
+    dealerCards?: string[]
+    replayedOutcome?: string
+    replayedPayout?: number
+    initialHand?: string[]
+    finalHand?: string[]
+    replayedHandRank?: string | null
+  }
+}
 
 // Wrapper component to handle Suspense for useSearchParams
 function VerifyPageContent() {
   const searchParams = useSearchParams()
   const initialGameId = searchParams.get('gameId') || ''
+  const initialGameType = searchParams.get('gameType') === 'video_poker' ? 'video_poker' : 'blackjack'
 
   const [mode, setMode] = useState<VerificationMode>(initialGameId ? 'gameId' : 'manual')
+  const [gameType, setGameType] = useState<GameType>(initialGameType)
   const [gameId, setGameId] = useState(initialGameId)
   const [serverSeed, setServerSeed] = useState('')
   const [serverSeedHash, setServerSeedHash] = useState('')
@@ -22,7 +37,7 @@ function VerifyPageContent() {
   const [txHash, setTxHash] = useState('')
 
   const [isLoading, setIsLoading] = useState(false)
-  const [result, setResult] = useState<FullVerificationResult | null>(null)
+  const [result, setResult] = useState<VerificationResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   // Auto-verify if gameId is in URL
@@ -39,13 +54,14 @@ function VerifyPageContent() {
 
     try {
       const body = mode === 'gameId'
-        ? { gameId }
+        ? { gameId, gameType }
         : {
             serverSeed,
             serverSeedHash,
             clientSeed,
             nonce: parseInt(nonce, 10),
-            txHash: txHash || undefined
+            txHash: txHash || undefined,
+            gameType,
           }
 
       const res = await fetch('/api/verify', {
@@ -75,7 +91,7 @@ function VerifyPageContent() {
     setError(null)
 
     try {
-      const res = await fetch(`/api/verify?gameId=${gameId}`)
+      const res = await fetch(`/api/verify?gameId=${encodeURIComponent(gameId)}&gameType=${encodeURIComponent(gameType)}`)
       const data = await res.json()
 
       if (!res.ok) {
@@ -88,6 +104,7 @@ function VerifyPageContent() {
       setServerSeedHash(gameData.serverSeedHash)
       setClientSeed(gameData.clientSeed)
       setNonce(gameData.nonce.toString())
+      setGameType(gameData.gameType === 'video_poker' ? 'video_poker' : 'blackjack')
       if (gameData.commitment?.txHash) {
         setTxHash(gameData.commitment.txHash)
       }
@@ -150,6 +167,30 @@ function VerifyPageContent() {
             }`}
           >
             Manual Verification
+          </button>
+        </div>
+
+        <div className="flex items-center gap-2 mb-6">
+          <span className="text-sm text-venetian-gold/60">Game Type</span>
+          <button
+            onClick={() => setGameType('blackjack')}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+              gameType === 'blackjack'
+                ? 'bg-masque-gold text-midnight-black'
+                : 'bg-midnight-black/40 text-venetian-gold/60 hover:text-bone-white border border-masque-gold/20'
+            }`}
+          >
+            Blackjack
+          </button>
+          <button
+            onClick={() => setGameType('video_poker')}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+              gameType === 'video_poker'
+                ? 'bg-masque-gold text-midnight-black'
+                : 'bg-midnight-black/40 text-venetian-gold/60 hover:text-bone-white border border-masque-gold/20'
+            }`}
+          >
+            Video Poker
           </button>
         </div>
 
@@ -335,6 +376,7 @@ function VerifyPageContent() {
               <h3 className="text-lg font-bold text-bone-white mb-4">Game Details</h3>
               <div className="space-y-3 font-mono text-sm">
                 <DetailRow label="Game ID" value={result.data.gameId} />
+                <DetailRow label="Game Type" value={result.data.gameType} />
                 <DetailRow label="Server Seed" value={result.data.serverSeed} truncate />
                 <DetailRow label="Server Seed Hash" value={result.data.serverSeedHash} truncate />
                 <DetailRow label="Client Seed" value={result.data.clientSeed} truncate />
@@ -370,6 +412,35 @@ function VerifyPageContent() {
                         View on Block Explorer
                       </a>
                     </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {result.replay && (
+              <div className="bg-midnight-black/40 rounded-lg p-6 border border-masque-gold/20">
+                <h3 className="text-lg font-bold text-bone-white mb-4">Replay Data</h3>
+                <div className="space-y-2 text-sm text-venetian-gold/70 font-mono break-all">
+                  {result.replay.playerCards && (
+                    <div>Player Cards: {JSON.stringify(result.replay.playerCards)}</div>
+                  )}
+                  {result.replay.dealerCards && (
+                    <div>Dealer Cards: {JSON.stringify(result.replay.dealerCards)}</div>
+                  )}
+                  {result.replay.initialHand && (
+                    <div>Initial Hand: {result.replay.initialHand.join(', ')}</div>
+                  )}
+                  {result.replay.finalHand && (
+                    <div>Final Hand: {result.replay.finalHand.join(', ')}</div>
+                  )}
+                  {result.replay.replayedOutcome && (
+                    <div>Replayed Outcome: {result.replay.replayedOutcome}</div>
+                  )}
+                  {result.replay.replayedHandRank && (
+                    <div>Replayed Hand Rank: {result.replay.replayedHandRank}</div>
+                  )}
+                  {result.replay.replayedPayout !== undefined && (
+                    <div>Replayed Payout: {result.replay.replayedPayout} ZEC</div>
                   )}
                 </div>
               </div>

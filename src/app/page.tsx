@@ -25,6 +25,9 @@ export default function Home() {
             <a href="/blackjack" className="hover:text-masque-gold transition-colors">
               Blackjack
             </a>
+            <a href="/video-poker" className="hover:text-masque-gold transition-colors">
+              Video Poker
+            </a>
             <a href="/provably-fair" className="hover:text-masque-gold transition-colors">
               Provably Fair
             </a>
@@ -56,6 +59,12 @@ export default function Home() {
                 className="btn-gold-shimmer text-midnight-black px-8 py-4 rounded-lg font-bold text-lg"
               >
                 Play Blackjack
+              </a>
+              <a
+                href="/video-poker"
+                className="btn-gold-shimmer text-midnight-black px-8 py-4 rounded-lg font-bold text-lg"
+              >
+                Play Video Poker
               </a>
               <a
                 href="/provably-fair"
@@ -138,10 +147,18 @@ export default function Home() {
           <p className="text-venetian-gold/70 mb-6 max-w-2xl mx-auto">
             We believe in full transparency. Here are our house edges:
           </p>
-          <div className="grid md:grid-cols-3 gap-6">
+          <div className="grid md:grid-cols-3 lg:grid-cols-5 gap-6">
             <div className="bg-midnight-black/50 rounded-lg p-4 border border-masque-gold/10">
               <div className="text-3xl font-display font-bold text-masque-gold">0.5%</div>
               <div className="text-venetian-gold/60">Blackjack (Basic Strategy)</div>
+            </div>
+            <div className="bg-midnight-black/50 rounded-lg p-4 border border-masque-gold/10">
+              <div className="text-3xl font-display font-bold text-masque-gold">0.46%</div>
+              <div className="text-venetian-gold/60">Jacks or Better (9/6)</div>
+            </div>
+            <div className="bg-midnight-black/50 rounded-lg p-4 border border-masque-gold/10">
+              <div className="text-3xl font-display font-bold text-masque-gold">0.76%</div>
+              <div className="text-venetian-gold/60">Deuces Wild (Full Pay)</div>
             </div>
             <div className="bg-midnight-black/50 rounded-lg p-4 border border-masque-gold/10">
               <div className="text-3xl font-display font-bold text-masque-gold">4.5%</div>
@@ -175,6 +192,7 @@ export default function Home() {
               <h4 className="font-semibold mb-4 text-bone-white">Games</h4>
               <ul className="space-y-2 text-venetian-gold/60 text-sm">
                 <li><a href="/blackjack" className="hover:text-masque-gold transition-colors">Blackjack</a></li>
+                <li><a href="/video-poker" className="hover:text-masque-gold transition-colors">Video Poker</a></li>
               </ul>
             </div>
             <div>

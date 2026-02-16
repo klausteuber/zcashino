@@ -21,6 +21,10 @@ import { getDepositInfo } from '@/lib/wallet/addresses'
 import { createDepositWalletForSession } from '@/lib/wallet/session-wallet'
 import { checkPublicRateLimit, createRateLimitResponse } from '@/lib/admin/rate-limit'
 import { isKillSwitchActive } from '@/lib/kill-switch'
+import { requirePlayerSession } from '@/lib/auth/player-session'
+import { parseWithSchema, walletBodySchema } from '@/lib/validation/api-schemas'
+import { reserveFunds, releaseFunds, creditFunds } from '@/lib/services/ledger'
+import { logPlayerCounterEvent, PLAYER_COUNTER_ACTIONS } from '@/lib/telemetry/player-events'
 
 /**
  * GET /api/wallet
@@ -110,10 +114,17 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json()
-    const { action, sessionId } = body
+    const parsed = parseWithSchema(walletBodySchema, body)
+    if (!parsed.success) {
+      return NextResponse.json(parsed.payload, { status: 400 })
+    }
 
-    if (!sessionId) {
-      return NextResponse.json({ error: 'Session ID required' }, { status: 400 })
+    const payload = parsed.data
+    const sessionId = payload.sessionId
+
+    const playerSession = requirePlayerSession(request, sessionId)
+    if (!playerSession.ok) {
+      return playerSession.response
     }
 
     // Verify session exists
@@ -126,7 +137,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Session not found' }, { status: 404 })
     }
 
-    switch (action) {
+    switch (payload.action) {
       case 'create':
         return handleCreateWallet(session)
 
@@ -158,11 +169,11 @@ export async function POST(request: NextRequest) {
           withdrawalAddress: session.withdrawalAddress,
           walletAddress: session.walletAddress,
           wallet: session.wallet,
-        }, body)
+        }, payload, request)
       }
 
       case 'withdrawal-status':
-        return handleWithdrawalStatus(session.id, body.transactionId)
+        return handleWithdrawalStatus(session.id, payload.transactionId)
 
       default:
         return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
@@ -225,23 +236,47 @@ async function handleCheckDeposits(session: {
     })
   }
 
-  // Get balance of transparent deposit address only (for proof of reserves)
+  // Keep an address-level balance snapshot for reserves UI only.
   const tBalance = await getAddressBalance(session.wallet.transparentAddr, network)
-
-  // Calculate totals
   const totalConfirmed = tBalance.confirmed
   const totalPending = tBalance.pending
 
-  // Check for pending deposit transactions
-  const pendingTxs = await prisma.transaction.findMany({
-    where: {
-      sessionId: session.id,
-      type: 'deposit',
-      status: 'pending',
-    },
-  })
+  const chainTxs = await listAddressTransactions(session.wallet.transparentAddr, 200, network)
+  const receiveMap = new Map<string, { amount: number; confirmations: number }>()
+  for (const tx of chainTxs) {
+    if (tx.category !== 'receive' || !tx.txid || tx.amount <= 0) continue
+    const current = receiveMap.get(tx.txid)
+    if (!current) {
+      receiveMap.set(tx.txid, {
+        amount: roundZec(tx.amount),
+        confirmations: tx.confirmations,
+      })
+      continue
+    }
 
-  // Track new deposits and authentication status
+    current.amount = roundZec(current.amount + tx.amount)
+    current.confirmations = Math.max(current.confirmations, tx.confirmations)
+  }
+
+  const txHashes = Array.from(receiveMap.keys())
+  const existingDeposits = txHashes.length > 0
+    ? await prisma.transaction.findMany({
+        where: {
+          sessionId: session.id,
+          type: 'deposit',
+          txHash: { in: txHashes },
+        },
+        orderBy: { createdAt: 'asc' },
+      })
+    : []
+
+  const existingByHash = new Map<string, (typeof existingDeposits)[number]>()
+  for (const row of existingDeposits) {
+    if (row.txHash && !existingByHash.has(row.txHash)) {
+      existingByHash.set(row.txHash, row)
+    }
+  }
+
   const newDeposits: Array<{
     amount: number
     confirmations: number
@@ -249,86 +284,146 @@ async function handleCheckDeposits(session: {
     isAuthDeposit: boolean
   }> = []
   let justAuthenticated = false
+  let isAuthenticatedNow = session.isAuthenticated
 
-  if (totalConfirmed > 0) {
-    // Check if this is a new deposit
-    const existingDeposits = await prisma.transaction.aggregate({
-      where: {
-        sessionId: session.id,
-        type: 'deposit',
-        status: 'confirmed',
-      },
-      _sum: { amount: true },
-    })
+  for (const [txHash, tx] of receiveMap.entries()) {
+    const existing = existingByHash.get(txHash)
+    const isConfirmedOnChain = tx.confirmations >= CONFIRMATIONS_REQUIRED
+    const eligibleAmount = tx.amount >= MIN_DEPOSIT
 
-    const previouslyDeposited = existingDeposits._sum.amount || 0
-    const newDepositAmount = roundZec(totalConfirmed - previouslyDeposited)
-
-    if (newDepositAmount >= MIN_DEPOSIT) {
-      // Get real txHash from RPC if available, fall back to generated hash
-      let txHash: string
+    if (!existing) {
+      let authenticatedThisTx = false
+      let createdTx = false
       try {
-        const txs = await listAddressTransactions(session.wallet.transparentAddr, 10, network)
-        const receiveTx = txs.find(
-          (tx) => tx.category === 'receive' && tx.confirmations >= CONFIRMATIONS_REQUIRED
-        )
-        txHash = receiveTx?.txid || `tx_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`
-      } catch {
-        txHash = `tx_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`
+        await prisma.$transaction(async (dbTx) => {
+          await dbTx.transaction.create({
+            data: {
+              sessionId: session.id,
+              type: 'deposit',
+              amount: tx.amount,
+              address: session.wallet!.transparentAddr,
+              txHash,
+              confirmations: tx.confirmations,
+              status: isConfirmedOnChain ? 'confirmed' : 'pending',
+              confirmedAt: isConfirmedOnChain ? new Date() : null,
+            },
+          })
+
+          if (!isConfirmedOnChain || !eligibleAmount) return
+          await creditFunds(dbTx, session.id, tx.amount, 'totalDeposited')
+
+          const shouldAuthenticate = !isAuthenticatedNow && !!session.withdrawalAddress
+          if (shouldAuthenticate) {
+            await dbTx.session.update({
+              where: { id: session.id },
+              data: {
+                isAuthenticated: true,
+                authTxHash: txHash,
+                authConfirmedAt: new Date(),
+              },
+            })
+            isAuthenticatedNow = true
+            justAuthenticated = true
+            authenticatedThisTx = true
+          }
+        })
+        createdTx = true
+      } catch (error) {
+        // Another request already inserted this tx hash.
+        if (!(error instanceof Error) || !error.message.includes('Unique constraint')) {
+          throw error
+        }
       }
 
-      const transaction = await prisma.transaction.create({
-        data: {
-          sessionId: session.id,
-          type: 'deposit',
-          amount: newDepositAmount,
+      if (createdTx && isConfirmedOnChain && eligibleAmount) {
+        newDeposits.push({
+          amount: tx.amount,
+          confirmations: tx.confirmations,
           address: session.wallet.transparentAddr,
-          txHash,
-          confirmations: CONFIRMATIONS_REQUIRED,
+          isAuthDeposit: authenticatedThisTx,
+        })
+      }
+      continue
+    }
+
+    if (existing.status === 'confirmed') {
+      if (existing.confirmations !== tx.confirmations) {
+        await prisma.transaction.update({
+          where: { id: existing.id },
+          data: { confirmations: tx.confirmations },
+        })
+      }
+      continue
+    }
+
+    if (!isConfirmedOnChain) {
+      if (existing.confirmations !== tx.confirmations) {
+        await prisma.transaction.update({
+          where: { id: existing.id },
+          data: { confirmations: tx.confirmations },
+        })
+      }
+      continue
+    }
+
+    let authenticatedThisTx = false
+    await prisma.$transaction(async (dbTx) => {
+      const promoted = await dbTx.transaction.updateMany({
+        where: {
+          id: existing.id,
+          status: { not: 'confirmed' },
+        },
+        data: {
           status: 'confirmed',
+          confirmations: tx.confirmations,
           confirmedAt: new Date(),
         },
       })
+      if (promoted.count === 0 || !eligibleAmount) return
 
-      // Check if this should authenticate the session
-      const isAuthDeposit = !session.isAuthenticated && session.withdrawalAddress
+      await creditFunds(dbTx, session.id, existing.amount, 'totalDeposited')
 
-      // Update session balance and potentially authenticate
-      const updateData: Record<string, unknown> = {
-        balance: { increment: newDepositAmount },
-        totalDeposited: { increment: newDepositAmount },
-      }
-
-      if (isAuthDeposit) {
-        // First deposit authenticates the session
-        updateData.isAuthenticated = true
-        updateData.authTxHash = txHash
-        updateData.authConfirmedAt = new Date()
+      const shouldAuthenticate = !isAuthenticatedNow && !!session.withdrawalAddress
+      if (shouldAuthenticate) {
+        await dbTx.session.update({
+          where: { id: session.id },
+          data: {
+            isAuthenticated: true,
+            authTxHash: txHash,
+            authConfirmedAt: new Date(),
+          },
+        })
+        isAuthenticatedNow = true
         justAuthenticated = true
+        authenticatedThisTx = true
       }
+    })
 
-      await prisma.session.update({
-        where: { id: session.id },
-        data: updateData,
-      })
-
-      // Update cached balance on wallet
-      await prisma.depositWallet.update({
-        where: { sessionId: session.id },
-        data: {
-          cachedBalance: totalConfirmed,
-          balanceUpdatedAt: new Date(),
-        },
-      })
-
+    if (eligibleAmount) {
       newDeposits.push({
-        amount: newDepositAmount,
-        confirmations: CONFIRMATIONS_REQUIRED,
+        amount: existing.amount,
+        confirmations: tx.confirmations,
         address: session.wallet.transparentAddr,
-        isAuthDeposit: !!isAuthDeposit,
+        isAuthDeposit: authenticatedThisTx,
       })
     }
   }
+
+  await prisma.depositWallet.update({
+    where: { sessionId: session.id },
+    data: {
+      cachedBalance: totalConfirmed,
+      balanceUpdatedAt: new Date(),
+    },
+  })
+
+  const pendingCount = await prisma.transaction.count({
+    where: {
+      sessionId: session.id,
+      type: 'deposit',
+      status: 'pending',
+    },
+  })
 
   // Get updated session to return current state
   const updatedSession = await prisma.session.findUnique({
@@ -344,7 +439,7 @@ async function handleCheckDeposits(session: {
     },
     sessionBalance: updatedSession?.balance ?? session.balance,
     deposits: newDeposits,
-    pendingCount: pendingTxs.length,
+    pendingCount,
     // Authentication status
     auth: {
       isAuthenticated: updatedSession?.isAuthenticated ?? session.isAuthenticated,
@@ -368,9 +463,10 @@ async function handleWithdraw(
     walletAddress: string
     wallet: { transparentAddr: string; network: string } | null
   },
-  body: { amount: number; memo?: string }
+  body: { amount: number; memo?: string; idempotencyKey: string },
+  request: NextRequest
 ) {
-  const { amount, memo } = body
+  const { amount, memo, idempotencyKey } = body
 
   // Check if session is authenticated (or demo)
   const isDemo = session.walletAddress.startsWith('demo_')
@@ -418,43 +514,92 @@ async function handleWithdraw(
   }
 
   const totalAmount = roundZec(amount + WITHDRAWAL_FEE)
-  if (totalAmount > session.balance) {
+
+  // Check withdrawal approval threshold
+  const approvalThreshold = parseFloat(process.env.WITHDRAWAL_APPROVAL_THRESHOLD || '0')
+  const holdForApproval = approvalThreshold > 0 && amount >= approvalThreshold && !isDemo
+
+  const reservation = await prisma.$transaction(async (tx) => {
+    const existing = await tx.transaction.findFirst({
+      where: {
+        sessionId: session.id,
+        type: 'withdrawal',
+        idempotencyKey,
+      },
+      orderBy: { createdAt: 'asc' },
+    })
+    if (existing) {
+      return { replay: true as const, transaction: existing }
+    }
+
+    const reserved = await reserveFunds(tx, session.id, totalAmount, 'totalWithdrawn', amount)
+    if (!reserved) {
+      return { replay: false as const, transaction: null }
+    }
+
+    const created = await tx.transaction.create({
+      data: {
+        sessionId: session.id,
+        type: 'withdrawal',
+        amount,
+        fee: WITHDRAWAL_FEE,
+        address: destinationAddress,
+        isShielded: !isDemo && !destinationAddress.startsWith('t'),
+        memo,
+        status: holdForApproval ? 'pending_approval' : 'pending',
+        idempotencyKey,
+      },
+    })
+
+    return { replay: false as const, transaction: created }
+  })
+
+  if (!reservation.transaction) {
+    await logPlayerCounterEvent({
+      request,
+      action: PLAYER_COUNTER_ACTIONS.WITHDRAW_RESERVE_REJECTED,
+      details: 'Conditional withdrawal reserve rejected',
+      metadata: {
+        sessionId: session.id,
+        amount,
+        totalAmount,
+      },
+    })
     return NextResponse.json({
       error: `Insufficient balance. Need ${totalAmount} ZEC (including ${WITHDRAWAL_FEE} ZEC fee)`,
     }, { status: 400 })
   }
 
-  // Create pending withdrawal transaction
-  const transaction = await prisma.transaction.create({
-    data: {
-      sessionId: session.id,
-      type: 'withdrawal',
-      amount,
-      fee: WITHDRAWAL_FEE,
-      address: destinationAddress,
-      isShielded: !isDemo && !destinationAddress.startsWith('t'),
-      memo,
-      status: 'pending',
-    },
-  })
+  const transaction = reservation.transaction
 
-  // Deduct from balance immediately
-  await prisma.session.update({
-    where: { id: session.id },
-    data: {
-      balance: { decrement: totalAmount },
-      totalWithdrawn: { increment: amount },
-    },
-  })
-
-  // Check withdrawal approval threshold
-  const approvalThreshold = parseFloat(process.env.WITHDRAWAL_APPROVAL_THRESHOLD || '0')
-  if (approvalThreshold > 0 && amount >= approvalThreshold && !isDemo) {
-    // Large withdrawal: hold for admin approval instead of processing immediately
-    await prisma.transaction.update({
-      where: { id: transaction.id },
-      data: { status: 'pending_approval' },
+  if (reservation.replay) {
+    await logPlayerCounterEvent({
+      request,
+      action: PLAYER_COUNTER_ACTIONS.WITHDRAW_IDEMPOTENCY_REPLAY,
+      details: 'Withdrawal idempotency replay returned existing transaction',
+      metadata: {
+        sessionId: session.id,
+        transactionId: transaction.id,
+        idempotencyKey,
+      },
     })
+    return NextResponse.json({
+      success: true,
+      transaction: {
+        id: transaction.id,
+        amount: transaction.amount,
+        fee: transaction.fee,
+        destinationAddress: transaction.address,
+        status: transaction.status,
+        txHash: transaction.txHash,
+        operationId: transaction.operationId,
+      },
+      message: 'Duplicate request detected. Returning existing withdrawal transaction.',
+      idempotentReplay: true,
+    })
+  }
+
+  if (holdForApproval) {
     console.log(
       `[Withdrawal] Amount ${amount} ZEC >= threshold ${approvalThreshold} ZEC — held for admin approval (tx: ${transaction.id})`
     )
@@ -586,16 +731,12 @@ async function refundWithdrawal(
   withdrawnAmount: number,
   reason: string
 ) {
-  await prisma.session.update({
-    where: { id: sessionId },
-    data: {
-      balance: { increment: totalAmount },
-      totalWithdrawn: { decrement: withdrawnAmount },
-    },
-  })
-  await prisma.transaction.update({
-    where: { id: transactionId },
-    data: { status: 'failed', failReason: reason },
+  await prisma.$transaction(async (tx) => {
+    await releaseFunds(tx, sessionId, totalAmount, 'totalWithdrawn', withdrawnAmount)
+    await tx.transaction.update({
+      where: { id: transactionId },
+      data: { status: 'failed', failReason: reason },
+    })
   })
 }
 

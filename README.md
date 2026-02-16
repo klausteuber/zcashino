@@ -12,20 +12,27 @@ Play in Private. Verify in Public. A provably fair, privacy-focused online casin
 
 ## Current Status
 
-The blackjack game is fully playable with server-side game logic and database persistence. Supports both **demo mode** (mock commitments, instant withdrawals) and **real Zcash node connections** (on-chain commitments, async RPC withdrawals via `z_sendmany`). Configure via environment variables.
+Blackjack and Video Poker are fully playable with server-side game logic, atomic ledger writes, and database persistence. Supports both **demo mode** (mock commitments, instant withdrawals) and **real Zcash node connections** (on-chain commitments, async RPC withdrawals via `z_sendmany`). Configure via environment variables.
 
 ### Implemented
 - ✅ Single-player Blackjack (Vegas Strip rules)
+- ✅ Single-player Video Poker (`jacks_or_better`, `deuces_wild`)
 - ✅ Perfect Pairs side bet
 - ✅ **Blockchain Provably Fair** - Server seed hashes committed on-chain before betting
 - ✅ **Commitment Pool** - Pre-generated commitments for instant game starts
 - ✅ **Verification System** - Full verification UI at `/verify`
+- ✅ **Verification Parity** - `/api/verify` supports both blackjack and video poker (`gameType`)
 - ✅ Hit, Stand, Double, Split actions
-- ✅ Server-side API routes (`/api/session`, `/api/game`, `/api/wallet`, `/api/verify`, `/api/admin/pool`)
+- ✅ Server-side API routes (`/api/session`, `/api/game`, `/api/video-poker`, `/api/wallet`, `/api/verify`, `/api/admin/pool`)
 - ✅ **Admin Authentication API** (`/api/admin/auth`) with signed HttpOnly session cookies
 - ✅ **Admin Overview API** (`/api/admin/overview`) for operations + finance metrics
 - ✅ **Admin Dashboard UI** (`/admin`) for pool management and withdrawal recovery
 - ✅ **Admin Hardening** - per-IP rate limits and persistent admin audit logs
+- ✅ **Race Safety + Atomicity** - conditional debits/credits and guarded completion transitions
+- ✅ **Withdrawal Idempotency** - `idempotencyKey` support for safe client retries
+- ✅ **Deposit Credit Hardening** - credits based on confirmed txids, resilient to sweeps
+- ✅ **Player Session Auth** - signed `zcashino_player_session` cookie (`compat`/`strict` rollout mode)
+- ✅ **Request Validation** - strict zod schemas with standardized `400 { error, details }`
 - ✅ SQLite database with Prisma 7 (sessions, games, transactions, wallets, commitments)
 - ✅ Session management with balance tracking
 - ✅ Game history persistence with blockchain proof data
@@ -38,7 +45,7 @@ The blackjack game is fully playable with server-side game logic and database pe
 - ✅ **Zcash Node Connection** - Full RPC integration (testnet/mainnet), env-configurable, graceful fallback to demo mode
 - ✅ **Admin Withdrawal Recovery** - `/api/admin/pool` `process-withdrawals` action for stuck pending withdrawals
 - ✅ **Proof of Reserves** - `/reserves` dashboard with on-chain balance verification
-- ✅ **Test Suite** - 293 tests across 16 files (game logic, wallet, provably fair, admin security, API race/idempotency, UI + timer regressions)
+- ✅ **Test Suite** - 391 tests across 17 files (game logic, wallet, provably fair, admin security, API race/idempotency, UI + timer regressions)
 - ✅ **Cryptographically Secure RNG** - `node:crypto.randomBytes` for all seed/nonce generation (fixed from Math.random)
 - ✅ **Security Headers** - CSP, HSTS, X-Frame-Options, X-Content-Type-Options, Permissions-Policy
 - ✅ **Public API Rate Limiting** - Bucket-based per-IP rate limits on `/api/game`, `/api/session`, `/api/wallet`
@@ -124,7 +131,7 @@ npx vitest run
 npx vitest run --coverage
 ```
 
-**293 tests** across 16 test files:
+**391 tests** across 17 test files:
 
 | Module | File | Tests | Coverage |
 |--------|------|-------|----------|
@@ -174,7 +181,7 @@ The Dockerfile uses multi-stage builds with Next.js standalone output for minima
 GitHub Actions workflow (`.github/workflows/ci.yml`) runs on every push and PR:
 1. **Lint** - ESLint
 2. **Typecheck** - `tsc --noEmit`
-3. **Test** - `vitest run` (293 tests)
+3. **Test** - `vitest run` (391 tests)
 4. **Build** - Production build verification
 
 ### Production Database
@@ -214,6 +221,11 @@ ADMIN_USERNAME=admin
 ADMIN_PASSWORD=change-this-password
 ADMIN_SESSION_SECRET=replace-with-a-long-random-secret
 
+# Player session auth (required in production)
+PLAYER_SESSION_SECRET=replace-with-a-second-long-random-secret
+# Deploy in compat first, then switch to strict after metrics are clean
+PLAYER_SESSION_AUTH_MODE=compat
+
 # Sentry error tracking (optional - disabled if not set)
 SENTRY_DSN=https://your-dsn@sentry.io/project-id
 
@@ -240,7 +252,7 @@ ADMIN_RATE_LIMIT_ACTION_WINDOW_MS=60000
 ## Withdrawals
 
 ### Flow
-1. Player submits withdrawal request
+1. Player submits withdrawal request with `idempotencyKey`
 2. Balance deducted immediately (prevents double-spend)
 3. **Demo**: Transaction marked `confirmed` instantly
 4. **Real**: `z_sendmany` called, `operationId` stored, status returned as `pending`
@@ -252,6 +264,21 @@ ADMIN_RATE_LIMIT_ACTION_WINDOW_MS=60000
 - All failures automatically refund the player's balance
 - Admin can process stuck withdrawals via `POST /api/admin/pool` with `action: "process-withdrawals"`
 - Failure reasons are stored on the transaction record for audit
+
+## API Compatibility Update (2026-02-15)
+
+### Additive request fields
+- `POST /api/wallet` with `action: "withdraw"` requires `idempotencyKey` (string, max 128 chars)
+- `GET /api/verify` and `POST /api/verify` accept `gameType: "blackjack" | "video_poker"` (default: `blackjack`)
+
+### Player auth rollout
+- Session auth uses signed `httpOnly` cookie `zcashino_player_session`
+- `PLAYER_SESSION_AUTH_MODE=compat`: cookie preferred, legacy `sessionId` fallback accepted
+- `PLAYER_SESSION_AUTH_MODE=strict`: valid cookie required for privileged player actions
+
+### Validation errors
+- Invalid API payloads return `400` in this shape:
+  - `{ "error": "Invalid request payload", "details": { "field.path": ["message"] } }`
 
 ## Admin Dashboard
 
@@ -376,12 +403,14 @@ zcashino-app/
 │   │   ├── api/
 │   │   │   ├── session/    # Session management API
 │   │   │   ├── game/       # Game actions API
+│   │   │   ├── video-poker/ # Video poker API
 │   │   │   ├── wallet/     # Wallet API (deposits, withdrawals)
 │   │   │   ├── verify/     # Game verification API
 │   │   │   ├── health/     # Health check endpoint
 │   │   │   └── admin/      # Admin APIs (auth, overview, pool)
 │   │   ├── page.tsx        # Landing page
 │   │   ├── blackjack/      # Blackjack game UI
+│   │   ├── video-poker/    # Video poker game UI
 │   │   ├── verify/         # Game verification page
 │   │   ├── reserves/       # Proof of reserves dashboard
 │   │   ├── terms/          # Terms of service
@@ -398,12 +427,15 @@ zcashino-app/
 │   │   └── useDepositPolling.ts # Deposit confirmation polling
 │   ├── lib/
 │   │   ├── db.ts           # Prisma client with LibSQL adapter
+│   │   ├── auth/           # Player session cookie signing/validation
+│   │   ├── validation/     # Zod API request schemas
 │   │   ├── game/           # Blackjack logic, deck utilities
 │   │   ├── provably-fair/  # Provably fair system
 │   │   │   ├── index.ts    # Core provably fair functions
 │   │   │   ├── blockchain.ts # Blockchain commitment service
 │   │   │   └── commitment-pool.ts # Pool management
 │   │   ├── services/
+│   │   │   ├── ledger.ts   # Atomic reserve/credit/release helpers
 │   │   │   └── commitment-pool-manager.ts # Background pool service
 │   │   └── wallet/         # Zcash wallet integration
 │   │       ├── index.ts    # Core utilities, address validation

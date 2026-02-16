@@ -14,6 +14,7 @@ import {
 import {
   getOrCreateCommitment,
   markCommitmentUsed,
+  releaseClaimedCommitment,
   checkAndRefillPool
 } from '@/lib/provably-fair/commitment-pool'
 import { getExplorerUrl } from '@/lib/provably-fair/blockchain'
@@ -21,6 +22,10 @@ import { checkPublicRateLimit, createRateLimitResponse } from '@/lib/admin/rate-
 import { isKillSwitchActive } from '@/lib/kill-switch'
 import { roundZec } from '@/lib/wallet'
 import type { BlackjackAction, BlackjackGameState, BlockchainCommitment } from '@/types'
+import { requirePlayerSession } from '@/lib/auth/player-session'
+import { parseWithSchema, blackjackBodySchema } from '@/lib/validation/api-schemas'
+import { reserveFunds, creditFunds } from '@/lib/services/ledger'
+import { logPlayerCounterEvent, PLAYER_COUNTER_ACTIONS } from '@/lib/telemetry/player-events'
 
 // Check if this is a demo session
 function isDemoSession(walletAddress: string): boolean {
@@ -36,11 +41,16 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json()
-    const { action, sessionId, gameId, bet, perfectPairsBet, clientSeed } = body
-
-    if (!sessionId) {
-      return NextResponse.json({ error: 'Session ID required' }, { status: 400 })
+    const parsed = parseWithSchema(blackjackBodySchema, body)
+    if (!parsed.success) {
+      return NextResponse.json(parsed.payload, { status: 400 })
     }
+
+    const payload = parsed.data
+    const sessionId = payload.sessionId
+
+    const playerSession = requirePlayerSession(request, sessionId)
+    if (!playerSession.ok) return playerSession.response
 
     // Get session
     const session = await prisma.session.findUnique({
@@ -69,7 +79,7 @@ export async function POST(request: NextRequest) {
       }, { status: 403 })
     }
 
-    switch (action) {
+    switch (payload.action) {
       case 'start':
         // Kill switch blocks NEW games but allows in-progress games to complete
         if (isKillSwitchActive()) {
@@ -78,16 +88,22 @@ export async function POST(request: NextRequest) {
             maintenanceMode: true,
           }, { status: 503 })
         }
-        return handleStartGame(session, bet, perfectPairsBet, clientSeed)
+        return handleStartGame(
+          request,
+          session,
+          payload.bet,
+          payload.perfectPairsBet,
+          payload.clientSeed
+        )
 
       case 'hit':
       case 'stand':
       case 'double':
       case 'split':
-        return handleGameAction(session, gameId, action as BlackjackAction)
+        return handleGameAction(request, session, payload.gameId, payload.action as BlackjackAction)
 
       case 'insurance':
-        return handleInsuranceAction(session, gameId)
+        return handleInsuranceAction(request, session, payload.gameId)
 
       default:
         return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
@@ -100,6 +116,7 @@ export async function POST(request: NextRequest) {
 }
 
 async function handleStartGame(
+  request: NextRequest,
   session: { id: string; balance: number; walletAddress: string },
   mainBet: number,
   perfectPairsBet: number = 0,
@@ -112,7 +129,7 @@ async function handleStartGame(
     }, { status: 400 })
   }
 
-  const totalBet = mainBet + perfectPairsBet
+  const totalBet = roundZec(mainBet + perfectPairsBet)
   if (totalBet > session.balance) {
     return NextResponse.json({ error: 'Insufficient balance' }, { status: 400 })
   }
@@ -147,63 +164,85 @@ async function handleStartGame(
     nonce
   )
 
-  // ATOMIC: Deduct bet from balance using decrement (not direct set)
-  // This prevents double-bet exploits from concurrent requests.
-  // The WHERE clause implicitly fails if balance went negative from another request.
-  const updatedSessionForBet = await prisma.session.update({
-    where: { id: session.id },
-    data: {
-      balance: { decrement: totalBet },
-      totalWagered: { increment: totalBet }
-    }
-  })
+  let gameId = ''
+  let updatedSessionForBet: {
+    balance: number
+    totalWagered: number
+    totalWon: number
+  } | null = null
 
-  // Verify balance didn't go negative (race condition safeguard)
-  if (updatedSessionForBet.balance < 0) {
-    // Rollback: restore balance and reject
-    await prisma.session.update({
-      where: { id: session.id },
-      data: {
-        balance: { increment: totalBet },
-        totalWagered: { decrement: totalBet }
+  try {
+    await prisma.$transaction(async (tx) => {
+      const reserved = await reserveFunds(tx, session.id, totalBet, 'totalWagered')
+      if (!reserved) {
+        throw new Error('INSUFFICIENT_BALANCE')
       }
+
+      const game = await tx.blackjackGame.create({
+        data: {
+          sessionId: session.id,
+          mainBet,
+          perfectPairsBet,
+          serverSeed,
+          serverSeedHash,
+          clientSeed,
+          nonce,
+          commitmentTxHash: txHash,
+          commitmentBlock: blockHeight,
+          commitmentTimestamp: blockTimestamp,
+          initialState: JSON.stringify({
+            deck: gameState.deck.slice(0, 10),
+            playerCards: gameState.playerHands[0]?.cards,
+            dealerCards: gameState.dealerHand.cards
+          }),
+          status: 'active'
+        }
+      })
+
+      const marked = await markCommitmentUsed(commitment.id, game.id, tx)
+      if (!marked) {
+        throw new Error('COMMITMENT_MARK_FAILED')
+      }
+
+      gameId = game.id
+      updatedSessionForBet = await tx.session.findUnique({
+        where: { id: session.id },
+        select: {
+          balance: true,
+          totalWagered: true,
+          totalWon: true,
+        },
+      })
     })
-    return NextResponse.json({ error: 'Insufficient balance' }, { status: 400 })
-  }
-
-  // Save game to database with blockchain commitment data
-  const game = await prisma.blackjackGame.create({
-    data: {
-      sessionId: session.id,
-      mainBet,
-      perfectPairsBet,
-      serverSeed,
-      serverSeedHash,
-      clientSeed,
-      nonce,
-      // Blockchain commitment
-      commitmentTxHash: txHash,
-      commitmentBlock: blockHeight,
-      commitmentTimestamp: blockTimestamp,
-      initialState: JSON.stringify({
-        deck: gameState.deck.slice(0, 10), // Store first 10 cards for verification
-        playerCards: gameState.playerHands[0]?.cards,
-        dealerCards: gameState.dealerHand.cards
-      }),
-      // Always create as 'active' — processGameCompletion will atomically transition to 'completed'
-      status: 'active'
+  } catch (error) {
+    if (error instanceof Error && error.message === 'INSUFFICIENT_BALANCE') {
+      await logPlayerCounterEvent({
+        request,
+        action: PLAYER_COUNTER_ACTIONS.BLACKJACK_RESERVE_REJECTED,
+        details: 'Conditional game-start reserve rejected',
+        metadata: {
+          sessionId: session.id,
+          totalBet,
+        },
+      })
+      await releaseClaimedCommitment(commitment.id).catch((releaseError) => {
+        console.error('[Game] Failed to release claimed commitment:', releaseError)
+      })
+      return NextResponse.json({ error: 'Insufficient balance' }, { status: 400 })
     }
-  })
 
-  // Mark commitment as used
-  await markCommitmentUsed(commitment.id, game.id)
+    await releaseClaimedCommitment(commitment.id).catch((releaseError) => {
+      console.error('[Game] Failed to release claimed commitment:', releaseError)
+    })
+    throw error
+  }
 
   // Trigger pool refill check in background (non-blocking)
   checkAndRefillPool().catch(err => console.error('Pool refill error:', err))
 
   // If game completed immediately (blackjack), process payout atomically
   if (gameState.phase === 'complete') {
-    await processGameCompletion(game.id, session.id, gameState)
+    await processGameCompletion(request, gameId, session.id, gameState)
   }
 
   // Build blockchain commitment info for response
@@ -214,22 +253,23 @@ async function handleStartGame(
     explorerUrl: getExplorerUrl(txHash)
   }
 
-  // Get updated session to include stats
   const updatedSession = await prisma.session.findUnique({
-    where: { id: session.id }
+    where: { id: session.id },
+    select: { balance: true, totalWagered: true, totalWon: true },
   })
 
   return NextResponse.json({
-    gameId: game.id,
+    gameId,
     gameState: sanitizeGameState(gameState),
-    balance: updatedSession?.balance ?? (updatedSessionForBet.balance + (gameState.lastPayout || 0)),
-    totalWagered: updatedSession?.totalWagered ?? totalBet,
-    totalWon: updatedSession?.totalWon ?? 0,
+    balance: updatedSession?.balance ?? (updatedSessionForBet as { balance: number } | null)?.balance ?? 0,
+    totalWagered: updatedSession?.totalWagered ?? (updatedSessionForBet as { totalWagered: number } | null)?.totalWagered ?? totalBet,
+    totalWon: updatedSession?.totalWon ?? (updatedSessionForBet as { totalWon: number } | null)?.totalWon ?? 0,
     commitment: blockchainCommitment
   })
 }
 
 async function handleGameAction(
+  request: NextRequest,
   session: { id: string; balance: number },
   gameId: string,
   action: BlackjackAction
@@ -286,19 +326,24 @@ async function handleGameAction(
   // Check if action requires additional funds (double, split)
   // Only charge for the NEW action, not replayed ones
   if (action === 'double' || action === 'split') {
-    const additionalBet = game.mainBet
-    if (additionalBet > session.balance) {
+    const additionalBet = roundZec(game.mainBet)
+    const reserved = await prisma.$transaction((tx) =>
+      reserveFunds(tx, session.id, additionalBet, 'totalWagered')
+    )
+    if (!reserved) {
+      await logPlayerCounterEvent({
+        request,
+        action: PLAYER_COUNTER_ACTIONS.BLACKJACK_RESERVE_REJECTED,
+        details: 'Conditional action reserve rejected',
+        metadata: {
+          sessionId: session.id,
+          gameId,
+          action,
+          additionalBet,
+        },
+      })
       return NextResponse.json({ error: 'Insufficient balance' }, { status: 400 })
     }
-
-    // Deduct additional bet
-    await prisma.session.update({
-      where: { id: session.id },
-      data: {
-        balance: { decrement: additionalBet },
-        totalWagered: { increment: additionalBet }
-      }
-    })
   }
 
   // Execute the NEW action
@@ -321,7 +366,7 @@ async function handleGameAction(
   if (gameState.phase === 'complete') {
     // processGameCompletion atomically transitions status 'active' → 'completed'
     // and credits payout. It also sets status, completedAt, and payout on the game row.
-    await processGameCompletion(gameId, session.id, gameState)
+    await processGameCompletion(request, gameId, session.id, gameState)
 
     // Set remaining fields that processGameCompletion doesn't handle
     updateData.outcome = determineOutcome(gameState)
@@ -347,6 +392,7 @@ async function handleGameAction(
 }
 
 async function handleInsuranceAction(
+  request: NextRequest,
   session: { id: string; balance: number },
   gameId: string
 ) {
@@ -372,11 +418,7 @@ async function handleInsuranceAction(
   }
 
   // Calculate insurance amount (half of main bet)
-  const insuranceAmount = game.mainBet / 2
-
-  if (insuranceAmount > session.balance) {
-    return NextResponse.json({ error: 'Insufficient balance for insurance' }, { status: 400 })
-  }
+  const insuranceAmount = roundZec(game.mainBet / 2)
 
   // Reconstruct game state from initial deal
   const initialState = createInitialState(session.balance + game.mainBet + game.perfectPairsBet)
@@ -404,14 +446,22 @@ async function handleInsuranceAction(
   // Apply insurance
   gameState = takeInsurance(gameState, insuranceAmount)
 
-  // Deduct insurance bet from session
-  await prisma.session.update({
-    where: { id: session.id },
-    data: {
-      balance: { decrement: insuranceAmount },
-      totalWagered: { increment: insuranceAmount }
-    }
-  })
+  const reserved = await prisma.$transaction((tx) =>
+    reserveFunds(tx, session.id, insuranceAmount, 'totalWagered')
+  )
+  if (!reserved) {
+    await logPlayerCounterEvent({
+      request,
+      action: PLAYER_COUNTER_ACTIONS.BLACKJACK_RESERVE_REJECTED,
+      details: 'Conditional insurance reserve rejected',
+      metadata: {
+        sessionId: session.id,
+        gameId,
+        insuranceAmount,
+      },
+    })
+    return NextResponse.json({ error: 'Insufficient balance for insurance' }, { status: 400 })
+  }
 
   // Update game with insurance bet
   await prisma.blackjackGame.update({
@@ -443,33 +493,36 @@ async function handleInsuranceAction(
 }
 
 async function processGameCompletion(
+  request: NextRequest,
   gameId: string,
   sessionId: string,
   gameState: BlackjackGameState
 ) {
   const payout = roundZec(gameState.lastPayout)
+  let duplicateBlocked = false
 
-  // ATOMIC: Only complete if game transitions from active → completed
-  // This prevents double-payout if processGameCompletion is called twice
-  // (e.g. from both handleStartGame and handleGameAction on immediate blackjack)
-  const result = await prisma.blackjackGame.updateMany({
-    where: { id: gameId, status: 'active' },
-    data: { status: 'completed', completedAt: new Date(), payout }
+  await prisma.$transaction(async (tx) => {
+    const result = await tx.blackjackGame.updateMany({
+      where: { id: gameId, status: 'active' },
+      data: { status: 'completed', completedAt: new Date(), payout }
+    })
+
+    if (result.count === 0) {
+      duplicateBlocked = true
+      return
+    }
+    await creditFunds(tx, sessionId, payout, 'totalWon')
   })
 
-  // If no rows updated, game was already completed — skip
-  if (result.count === 0) {
-    return
-  }
-
-  // Credit payout to session balance (only when player wins)
-  if (payout > 0) {
-    await prisma.session.update({
-      where: { id: sessionId },
-      data: {
-        balance: { increment: payout },
-        totalWon: { increment: payout }
-      }
+  if (duplicateBlocked) {
+    await logPlayerCounterEvent({
+      request,
+      action: PLAYER_COUNTER_ACTIONS.BLACKJACK_DUPLICATE_COMPLETION,
+      details: 'Duplicate completion blocked by active->completed guard',
+      metadata: {
+        sessionId,
+        gameId,
+      },
     })
   }
 }

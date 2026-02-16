@@ -265,6 +265,36 @@ Replace all uses of `Math.random()` in the provably fair system with `node:crypt
 
 ---
 
+## Monetary Safety + Session Hardening Remediation (2026-02-15)
+
+### Decision
+Prioritize atomic money movement and player session hardening before further feature expansion.
+
+### Why
+- Concurrent withdrawal/game requests can race and must never overdraw balances.
+- Deposit crediting must survive sweeps and partial confirmations.
+- Body/query `sessionId` alone is not strong enough for privileged wallet/game actions.
+- API payloads need strict validation to prevent ambiguous behavior and fragile parsing.
+
+### Implementation
+- **Atomic ledger helpers:** Introduced `reserveFunds`, `creditFunds`, `releaseFunds` in `src/lib/services/ledger.ts`.
+- **Withdrawal idempotency:** `POST /api/wallet` withdraw now requires `idempotencyKey` and returns replayed transaction on duplicate keys.
+- **Deposit txid accounting:** Wallet deposit sync now credits from confirmed unseen txids instead of balance deltas.
+- **DB uniqueness guard:** Added unique constraints for `(sessionId, type, txHash)` and `(sessionId, type, idempotencyKey)` with dedupe migration/backfill.
+- **Player session cookie:** Added signed `zcashino_player_session` with rollout modes:
+  - `compat` (cookie preferred, legacy fallback)
+  - `strict` (cookie required)
+- **Validation contract:** Added zod schemas for session/game/video-poker/wallet/verify with standardized `400 { error, details }`.
+- **Verification parity:** `/api/verify` now supports blackjack and video poker through `gameType`.
+- **Ops telemetry:** Added race-rejection and idempotency replay counters to admin overview/dashboard.
+
+### Key Technical Choices
+1. **Conditional writes over read-then-write:** `updateMany(... balance: { gte: amount })` avoids race windows.
+2. **Status transition guards:** Game completion credits payout only when `active -> completed` transition wins.
+3. **Staged auth rollout:** Deploy `compat` first to avoid breaking existing clients, then switch to `strict`.
+
+---
+
 ## Phase 1 Mainnet Safety Guards (2026-02-10)
 
 ### Decision

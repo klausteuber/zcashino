@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
-import { hashServerSeed, verifyGame, replayGame } from '@/lib/provably-fair'
-import type { BlackjackAction } from '@/types'
+import { hashServerSeed, verifyGame, replayGame, replayVideoPokerGame } from '@/lib/provably-fair'
+import type { BlackjackAction, VideoPokerVariant } from '@/types'
 import { verifyCommitment, getExplorerUrl } from '@/lib/provably-fair/blockchain'
 import type {
   GameVerificationData,
@@ -9,6 +9,7 @@ import type {
   FullVerificationResult,
   BlockchainCommitment
 } from '@/types'
+import { parseWithSchema, verifyPostSchema, verifyQuerySchema } from '@/lib/validation/api-schemas'
 
 /**
  * GET /api/verify - Get verification data for a game
@@ -18,14 +19,66 @@ import type {
  * - sessionId: Session ID (for access control, optional for public verification)
  */
 export async function GET(request: NextRequest) {
-  const gameId = request.nextUrl.searchParams.get('gameId')
-  const sessionId = request.nextUrl.searchParams.get('sessionId')
-
-  if (!gameId) {
-    return NextResponse.json({ error: 'Game ID required' }, { status: 400 })
+  const queryParsed = parseWithSchema(verifyQuerySchema, {
+    gameId: request.nextUrl.searchParams.get('gameId') ?? undefined,
+    sessionId: request.nextUrl.searchParams.get('sessionId') ?? undefined,
+    gameType: request.nextUrl.searchParams.get('gameType') ?? undefined,
+  }, 'Invalid query parameters')
+  if (!queryParsed.success) {
+    return NextResponse.json(queryParsed.payload, { status: 400 })
   }
 
+  const { gameId, sessionId, gameType = 'blackjack' } = queryParsed.data
+
   try {
+    if (gameType === 'video_poker') {
+      const game = await prisma.videoPokerGame.findUnique({
+        where: { id: gameId }
+      })
+
+      if (!game) {
+        return NextResponse.json({ error: 'Game not found' }, { status: 404 })
+      }
+
+      const isOwner = !!sessionId && game.sessionId === sessionId
+      const isCompleted = game.status === 'completed'
+
+      if (!isOwner && !isCompleted) {
+        return NextResponse.json({
+          error: 'Cannot verify active game. Wait for game to complete.'
+        }, { status: 403 })
+      }
+
+      const commitment: BlockchainCommitment | undefined = game.commitmentTxHash
+        ? {
+            txHash: game.commitmentTxHash,
+            blockHeight: game.commitmentBlock || 0,
+            blockTimestamp: game.commitmentTimestamp || game.createdAt,
+            explorerUrl: getExplorerUrl(game.commitmentTxHash)
+          }
+        : undefined
+
+      const verificationData: GameVerificationData = {
+        gameId: game.id,
+        serverSeed: isCompleted ? game.serverSeed : '[Hidden until game completes]',
+        serverSeedHash: game.serverSeedHash,
+        clientSeed: game.clientSeed,
+        nonce: game.nonce,
+        commitment,
+        gameType: 'video_poker',
+        outcome: game.handRank || undefined,
+        payout: game.payout || undefined,
+        createdAt: game.createdAt,
+        completedAt: game.completedAt || undefined
+      }
+
+      return NextResponse.json({
+        data: verificationData,
+        canVerify: isCompleted,
+        isOwner
+      })
+    }
+
     const game = await prisma.blackjackGame.findUnique({
       where: { id: gameId }
     })
@@ -34,10 +87,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Game not found' }, { status: 404 })
     }
 
-    // Only allow access if:
-    // 1. User owns the game (has sessionId)
-    // 2. Game is completed (public verification allowed)
-    const isOwner = sessionId && game.sessionId === sessionId
+    const isOwner = !!sessionId && game.sessionId === sessionId
     const isCompleted = game.status === 'completed'
 
     if (!isOwner && !isCompleted) {
@@ -46,7 +96,6 @@ export async function GET(request: NextRequest) {
       }, { status: 403 })
     }
 
-    // Build commitment data
     const commitment: BlockchainCommitment | undefined = game.commitmentTxHash
       ? {
           txHash: game.commitmentTxHash,
@@ -56,7 +105,6 @@ export async function GET(request: NextRequest) {
         }
       : undefined
 
-    // Build verification data
     const verificationData: GameVerificationData = {
       gameId: game.id,
       serverSeed: isCompleted ? game.serverSeed : '[Hidden until game completes]',
@@ -97,21 +145,19 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { gameId, serverSeed, serverSeedHash, clientSeed, nonce, txHash } = body
-
-    // If gameId provided, fetch from database
-    if (gameId) {
-      return verifyGameById(gameId)
+    const parsed = parseWithSchema(verifyPostSchema, body)
+    if (!parsed.success) {
+      return NextResponse.json(parsed.payload, { status: 400 })
     }
 
-    // Otherwise, perform manual verification
-    if (!serverSeed || !serverSeedHash || !clientSeed || nonce === undefined) {
-      return NextResponse.json({
-        error: 'Missing required fields: serverSeed, serverSeedHash, clientSeed, nonce'
-      }, { status: 400 })
+    const payload = parsed.data
+    const gameType = payload.gameType ?? 'blackjack'
+
+    if ('gameId' in payload) {
+      return verifyGameById(payload.gameId, gameType)
     }
 
-    return verifyManual(serverSeed, serverSeedHash, clientSeed, nonce, txHash)
+    return verifyManual(payload.serverSeed, payload.serverSeedHash, payload.clientSeed, payload.nonce, gameType, payload.txHash)
   } catch (error) {
     console.error('Verification error:', error)
     return NextResponse.json({ error: 'Verification failed' }, { status: 500 })
@@ -121,7 +167,151 @@ export async function POST(request: NextRequest) {
 /**
  * Verify a game by its database ID
  */
-async function verifyGameById(gameId: string) {
+async function verifyGameById(gameId: string, gameType: 'blackjack' | 'video_poker' = 'blackjack') {
+  if (gameType === 'video_poker') {
+    const game = await prisma.videoPokerGame.findUnique({
+      where: { id: gameId }
+    })
+
+    if (!game) {
+      return NextResponse.json({ error: 'Game not found' }, { status: 404 })
+    }
+
+    if (game.status !== 'completed') {
+      return NextResponse.json({
+        error: 'Cannot verify active game. Server seed is only revealed after game completes.'
+      }, { status: 400 })
+    }
+
+    const errors: string[] = []
+    const steps: VerificationSteps = {
+      hashMatches: false,
+      onChainConfirmed: false,
+      timestampValid: false,
+      outcomeValid: false
+    }
+
+    const computedHash = await hashServerSeed(game.serverSeed)
+    steps.hashMatches = computedHash === game.serverSeedHash
+    if (!steps.hashMatches) {
+      errors.push('Server seed hash does not match. The game may have been manipulated.')
+    }
+
+    if (game.commitmentTxHash) {
+      const commitmentResult = await verifyCommitment(
+        game.commitmentTxHash,
+        game.serverSeedHash
+      )
+      steps.onChainConfirmed = commitmentResult.valid
+
+      if (!commitmentResult.valid) {
+        errors.push(`Blockchain verification failed: ${commitmentResult.error}`)
+      }
+
+      if (commitmentResult.valid && game.commitmentTimestamp) {
+        const commitmentTime = new Date(game.commitmentTimestamp).getTime()
+        const gameStartTime = new Date(game.createdAt).getTime()
+        steps.timestampValid = commitmentTime <= gameStartTime
+        if (!steps.timestampValid) {
+          errors.push('Commitment timestamp is after game start. This should not happen.')
+        }
+      }
+    } else {
+      errors.push('This game does not have a blockchain commitment (pre-blockchain feature).')
+    }
+
+    const replayResult = await verifyGame(
+      game.serverSeed,
+      game.serverSeedHash,
+      game.clientSeed,
+      game.nonce,
+      52
+    )
+    steps.outcomeValid = replayResult.valid
+    if (!replayResult.valid) {
+      errors.push(replayResult.message)
+    }
+
+    let replayData: ReturnType<typeof replayVideoPokerGame> | undefined
+    try {
+      const parsedHistory = JSON.parse(game.actionHistory || '[]')
+      const heldIndices = Array.isArray(parsedHistory)
+        ? parsedHistory.filter((v) => Number.isInteger(v) && v >= 0 && v <= 4)
+        : []
+
+      replayData = replayVideoPokerGame({
+        serverSeed: game.serverSeed,
+        serverSeedHash: game.serverSeedHash,
+        clientSeed: game.clientSeed,
+        nonce: game.nonce,
+        baseBet: game.baseBet,
+        betMultiplier: game.betMultiplier,
+        variant: game.variant as VideoPokerVariant,
+        heldIndices,
+      })
+
+      if (!replayData.valid) {
+        steps.outcomeValid = false
+        errors.push('Replay failed: server seed does not match committed hash.')
+      }
+
+      const storedPayout = game.payout ?? 0
+      if (Math.abs(replayData.payout - storedPayout) > 0.000001) {
+        steps.outcomeValid = false
+        errors.push(`Payout mismatch: replayed ${replayData.payout}, stored ${storedPayout}`)
+      }
+
+      const storedRank = game.handRank ?? null
+      if (replayData.handRank !== storedRank) {
+        steps.outcomeValid = false
+        errors.push(`Hand rank mismatch: replayed ${replayData.handRank}, stored ${storedRank}`)
+      }
+    } catch (replayError) {
+      steps.outcomeValid = false
+      errors.push(
+        `Game replay failed: ${replayError instanceof Error ? replayError.message : 'Unknown error'}`
+      )
+    }
+
+    const commitment: BlockchainCommitment | undefined = game.commitmentTxHash
+      ? {
+          txHash: game.commitmentTxHash,
+          blockHeight: game.commitmentBlock || 0,
+          blockTimestamp: game.commitmentTimestamp || game.createdAt,
+          explorerUrl: getExplorerUrl(game.commitmentTxHash)
+        }
+      : undefined
+
+    const result: FullVerificationResult = {
+      valid: steps.hashMatches && steps.outcomeValid && (steps.onChainConfirmed || !game.commitmentTxHash),
+      data: {
+        gameId: game.id,
+        serverSeed: game.serverSeed,
+        serverSeedHash: game.serverSeedHash,
+        clientSeed: game.clientSeed,
+        nonce: game.nonce,
+        commitment,
+        gameType: 'video_poker',
+        outcome: game.handRank || undefined,
+        payout: game.payout || undefined,
+        createdAt: game.createdAt,
+        completedAt: game.completedAt || undefined
+      },
+      steps,
+      errors
+    }
+
+    return NextResponse.json({
+      ...result,
+      replay: replayData ? {
+        initialHand: replayData.initialHand,
+        finalHand: replayData.finalHand,
+        replayedHandRank: replayData.handRank,
+        replayedPayout: replayData.payout
+      } : undefined
+    })
+  }
+
   const game = await prisma.blackjackGame.findUnique({
     where: { id: gameId }
   })
@@ -144,7 +334,6 @@ async function verifyGameById(gameId: string) {
     outcomeValid: false
   }
 
-  // Step 1: Verify hash matches
   const computedHash = await hashServerSeed(game.serverSeed)
   steps.hashMatches = computedHash === game.serverSeedHash
 
@@ -152,7 +341,6 @@ async function verifyGameById(gameId: string) {
     errors.push('Server seed hash does not match. The game may have been manipulated.')
   }
 
-  // Step 2: Verify on-chain commitment
   if (game.commitmentTxHash) {
     const commitmentResult = await verifyCommitment(
       game.commitmentTxHash,
@@ -164,7 +352,6 @@ async function verifyGameById(gameId: string) {
       errors.push(`Blockchain verification failed: ${commitmentResult.error}`)
     }
 
-    // Step 3: Verify timestamp (commitment before game start)
     if (commitmentResult.valid && game.commitmentTimestamp) {
       const commitmentTime = new Date(game.commitmentTimestamp).getTime()
       const gameStartTime = new Date(game.createdAt).getTime()
@@ -175,13 +362,10 @@ async function verifyGameById(gameId: string) {
       }
     }
   } else {
-    // No blockchain commitment (legacy game)
     errors.push('This game does not have a blockchain commitment (pre-blockchain feature).')
   }
 
-  // Step 4: Verify game outcome (replay)
-  // For blackjack, we verify the deck shuffle order
-  const deckSize = 312 // 6 decks * 52 cards
+  const deckSize = 312
   const replayResult = await verifyGame(
     game.serverSeed,
     game.serverSeedHash,
@@ -195,8 +379,6 @@ async function verifyGameById(gameId: string) {
     errors.push(replayResult.message)
   }
 
-  // Step 5: Full game action replay — replay actions against the deterministic deck
-  // and verify the dealt cards and payout match what was stored
   let replayData: ReturnType<typeof replayGame> | undefined
   const actionHistory: BlackjackAction[] = JSON.parse(game.actionHistory || '[]')
   try {
@@ -211,7 +393,6 @@ async function verifyGameById(gameId: string) {
       actionHistory
     })
 
-    // Compare replayed payout against stored payout
     const storedPayout = game.payout ?? 0
     if (Math.abs(replayData.payout - storedPayout) > 0.000001) {
       errors.push(
@@ -225,7 +406,6 @@ async function verifyGameById(gameId: string) {
     )
   }
 
-  // Build commitment data
   const commitment: BlockchainCommitment | undefined = game.commitmentTxHash
     ? {
         txHash: game.commitmentTxHash,
@@ -235,7 +415,6 @@ async function verifyGameById(gameId: string) {
       }
     : undefined
 
-  // Build full result
   const result: FullVerificationResult = {
     valid: steps.hashMatches && steps.outcomeValid && (steps.onChainConfirmed || !game.commitmentTxHash),
     data: {
@@ -255,7 +434,6 @@ async function verifyGameById(gameId: string) {
     errors
   }
 
-  // Update verification status in database
   if (result.valid && game.commitmentTxHash && !game.verifiedOnChain) {
     await prisma.blackjackGame.update({
       where: { id: game.id },
@@ -265,7 +443,6 @@ async function verifyGameById(gameId: string) {
 
   return NextResponse.json({
     ...result,
-    // Include replay data so users can see the exact cards dealt
     replay: replayData ? {
       playerCards: replayData.playerCards,
       dealerCards: replayData.dealerCards,
@@ -283,6 +460,7 @@ async function verifyManual(
   serverSeedHash: string,
   clientSeed: string,
   nonce: number,
+  gameType: 'blackjack' | 'video_poker',
   txHash?: string
 ) {
   const errors: string[] = []
@@ -315,7 +493,7 @@ async function verifyManual(
   }
 
   // Step 3: Verify game replay
-  const deckSize = 312 // 6 decks * 52 cards
+  const deckSize = gameType === 'video_poker' ? 52 : 312
   const replayResult = await verifyGame(
     serverSeed,
     serverSeedHash,
@@ -343,7 +521,7 @@ async function verifyManual(
         blockTimestamp: new Date(),
         explorerUrl: getExplorerUrl(txHash)
       } : undefined,
-      gameType: 'blackjack',
+      gameType,
       createdAt: new Date()
     },
     steps,

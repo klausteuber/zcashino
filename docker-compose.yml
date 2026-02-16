@@ -35,12 +35,11 @@ services:
     volumes:
       - zcash-data:/srv/zcashd/.zcash
     restart: unless-stopped
-    # zcashd needs ~8GB RAM for shielded tx and ~60GB disk for testnet
-    # Mainnet: change -testnet to nothing, -rpcport=8232, and expect ~300GB disk
+    # zcashd needs ~2-3GB RAM once synced, ~60GB disk for testnet
     deploy:
       resources:
         limits:
-          memory: 8G
+          memory: 3G
 
 volumes:
   app-data:

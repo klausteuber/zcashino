@@ -3,9 +3,11 @@ import type { NextRequest } from 'next/server'
 
 const mocks = vi.hoisted(() => ({
   prismaMock: {
+    $transaction: vi.fn(),
     session: {
       findUnique: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
     },
     blackjackGame: {
       findFirst: vi.fn(),
@@ -23,11 +25,15 @@ const mocks = vi.hoisted(() => ({
   generateClientSeedMock: vi.fn(),
   getOrCreateCommitmentMock: vi.fn(),
   markCommitmentUsedMock: vi.fn(),
+  releaseClaimedCommitmentMock: vi.fn(),
   checkAndRefillPoolMock: vi.fn(),
   getExplorerUrlMock: vi.fn(),
   checkPublicRateLimitMock: vi.fn(),
   createRateLimitResponseMock: vi.fn(),
   isKillSwitchActiveMock: vi.fn(),
+  reserveFundsMock: vi.fn(),
+  creditFundsMock: vi.fn(),
+  logPlayerCounterEventMock: vi.fn(),
 }))
 
 const {
@@ -39,11 +45,15 @@ const {
   generateClientSeedMock,
   getOrCreateCommitmentMock,
   markCommitmentUsedMock,
+  releaseClaimedCommitmentMock,
   checkAndRefillPoolMock,
   getExplorerUrlMock,
   checkPublicRateLimitMock,
   createRateLimitResponseMock,
   isKillSwitchActiveMock,
+  reserveFundsMock,
+  creditFundsMock,
+  logPlayerCounterEventMock,
 } = mocks
 
 vi.mock('@/lib/db', () => ({
@@ -66,6 +76,7 @@ vi.mock('@/lib/provably-fair', () => ({
 vi.mock('@/lib/provably-fair/commitment-pool', () => ({
   getOrCreateCommitment: mocks.getOrCreateCommitmentMock,
   markCommitmentUsed: mocks.markCommitmentUsedMock,
+  releaseClaimedCommitment: mocks.releaseClaimedCommitmentMock,
   checkAndRefillPool: mocks.checkAndRefillPoolMock,
 }))
 
@@ -84,6 +95,23 @@ vi.mock('@/lib/kill-switch', () => ({
 
 vi.mock('@/lib/wallet', () => ({
   roundZec: (value: number) => value,
+}))
+
+vi.mock('@/lib/services/ledger', () => ({
+  reserveFunds: mocks.reserveFundsMock,
+  creditFunds: mocks.creditFundsMock,
+}))
+
+vi.mock('@/lib/telemetry/player-events', () => ({
+  PLAYER_COUNTER_ACTIONS: {
+    WITHDRAW_IDEMPOTENCY_REPLAY: 'player.withdraw.idempotency_replay',
+    WITHDRAW_RESERVE_REJECTED: 'player.withdraw.reserve_rejected',
+    BLACKJACK_RESERVE_REJECTED: 'player.game.reserve_rejected',
+    BLACKJACK_DUPLICATE_COMPLETION: 'player.game.duplicate_completion_blocked',
+    VIDEO_POKER_RESERVE_REJECTED: 'player.video_poker.reserve_rejected',
+    VIDEO_POKER_DUPLICATE_COMPLETION: 'player.video_poker.duplicate_completion_blocked',
+  },
+  logPlayerCounterEvent: mocks.logPlayerCounterEventMock,
 }))
 
 import { POST } from './route'
@@ -137,6 +165,10 @@ describe('/api/game POST race/idempotency', () => {
     checkPublicRateLimitMock.mockReturnValue({ allowed: true })
     createRateLimitResponseMock.mockReturnValue(new Response('rate-limited', { status: 429 }))
     isKillSwitchActiveMock.mockReturnValue(false)
+    prismaMock.$transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => fn(prismaMock))
+    reserveFundsMock.mockResolvedValue(true)
+    creditFundsMock.mockResolvedValue(undefined)
+    logPlayerCounterEventMock.mockResolvedValue(undefined)
 
     generateClientSeedMock.mockReturnValue('generated-client-seed')
     createInitialStateMock.mockReturnValue({})
@@ -151,7 +183,8 @@ describe('/api/game POST race/idempotency', () => {
       blockHeight: 10,
       blockTimestamp: new Date('2026-02-14T00:00:00Z'),
     })
-    markCommitmentUsedMock.mockResolvedValue(undefined)
+    markCommitmentUsedMock.mockResolvedValue(true)
+    releaseClaimedCommitmentMock.mockResolvedValue(undefined)
     checkAndRefillPoolMock.mockResolvedValue(undefined)
     getExplorerUrlMock.mockReturnValue('https://explorer.example/tx-hash')
 
@@ -160,8 +193,9 @@ describe('/api/game POST race/idempotency', () => {
     prismaMock.blackjackGame.updateMany.mockResolvedValue({ count: 1 })
   })
 
-  it('rolls back atomic bet deduction when balance goes negative after decrement', async () => {
+  it('rejects start when atomic reserve fails (concurrent spend protection)', async () => {
     startRoundMock.mockReturnValue(buildGameState('playerTurn'))
+    reserveFundsMock.mockResolvedValueOnce(false)
 
     prismaMock.session.findUnique
       .mockResolvedValueOnce({
@@ -171,10 +205,6 @@ describe('/api/game POST race/idempotency', () => {
         isAuthenticated: false,
         excludedUntil: null,
       })
-
-    prismaMock.session.update
-      .mockResolvedValueOnce({ balance: -0.2 }) // decrement call
-      .mockResolvedValueOnce({}) // rollback call
 
     const response = await POST(makeRequest({
       action: 'start',
@@ -186,14 +216,7 @@ describe('/api/game POST race/idempotency', () => {
     expect(response.status).toBe(400)
     await expect(response.json()).resolves.toEqual({ error: 'Insufficient balance' })
 
-    expect(prismaMock.session.update).toHaveBeenCalledTimes(2)
-    expect(prismaMock.session.update).toHaveBeenNthCalledWith(2, {
-      where: { id: 'session-1' },
-      data: {
-        balance: { increment: 1.2 },
-        totalWagered: { decrement: 1.2 },
-      },
-    })
+    expect(reserveFundsMock).toHaveBeenCalled()
     expect(prismaMock.blackjackGame.create).not.toHaveBeenCalled()
   })
 
@@ -215,8 +238,12 @@ describe('/api/game POST race/idempotency', () => {
         totalWagered: 0.5,
         totalWon: 0,
       })
-
-    prismaMock.session.update.mockResolvedValueOnce({ balance: 0.5 })
+      .mockResolvedValueOnce({
+        id: 'session-1',
+        balance: 0.5,
+        totalWagered: 0.5,
+        totalWon: 0,
+      })
 
     const response = await POST(makeRequest({
       action: 'start',
@@ -238,7 +265,7 @@ describe('/api/game POST race/idempotency', () => {
       },
     })
 
-    // Only the initial bet deduction should run. No payout increment when count === 0.
-    expect(prismaMock.session.update).toHaveBeenCalledTimes(1)
+    // No payout credit should be attempted when completion transition is already consumed.
+    expect(creditFundsMock).not.toHaveBeenCalled()
   })
 })

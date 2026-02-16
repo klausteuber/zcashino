@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server'
 
 const mocks = vi.hoisted(() => ({
   prismaMock: {
+    $transaction: vi.fn(),
     session: {
       findUnique: vi.fn(),
       update: vi.fn(),
@@ -101,6 +102,7 @@ describe('/api/wallet POST withdrawal-status transitions', () => {
     checkPublicRateLimitMock.mockReturnValue({ allowed: true })
     createRateLimitResponseMock.mockReturnValue(new Response('rate-limited', { status: 429 }))
     isKillSwitchActiveMock.mockReturnValue(false)
+    prismaMock.$transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => fn(prismaMock))
     checkNodeStatusMock.mockResolvedValue({ connected: true, synced: true })
     getAddressBalanceMock.mockResolvedValue({ confirmed: 0, pending: 0 })
     sendZecMock.mockResolvedValue({ operationId: 'op-1' })
