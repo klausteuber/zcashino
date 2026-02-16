@@ -75,6 +75,7 @@ export function WithdrawalModal({
     setError(null)
 
     try {
+      const idempotencyKey = `wd-${sessionId}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
       const res = await fetch('/api/wallet', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -82,6 +83,7 @@ export function WithdrawalModal({
           action: 'withdraw',
           sessionId,
           amount: parsedAmount,
+          idempotencyKey,
         }),
       })
 
