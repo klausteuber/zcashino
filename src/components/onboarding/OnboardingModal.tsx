@@ -368,7 +368,7 @@ function DepositScreen({
         </div>
         <div className="flex items-center gap-2">
           <span className="text-masque-gold">•</span>
-          <span>Network: testnet</span>
+          <span>Network: {depositAddress.startsWith('t1') ? 'mainnet' : 'testnet'}</span>
         </div>
       </div>
 

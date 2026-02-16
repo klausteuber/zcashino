@@ -27,7 +27,7 @@ export function useDepositPolling(
   options: UseDepositPollingOptions = {}
 ) {
   const {
-    interval = 10000,
+    interval = 15000,
     pauseWhenHidden = true,
     onDeposit,
     onConfirmed,
@@ -46,9 +46,16 @@ export function useDepositPolling(
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
   const isPollingRef = useRef(false)
   const lastCheckRef = useRef<number>(0)
+  const backoffRef = useRef<number>(0)
 
   const checkForDeposits = useCallback(async () => {
     if (!sessionId || isPollingRef.current) return
+
+    // Exponential backoff on rate limit
+    if (backoffRef.current > 0) {
+      backoffRef.current--
+      return
+    }
 
     isPollingRef.current = true
     lastCheckRef.current = Date.now()
@@ -63,9 +70,19 @@ export function useDepositPolling(
         })
       })
 
+      if (res.status === 429) {
+        // Rate limited — back off for several cycles
+        backoffRef.current = 3
+        isPollingRef.current = false
+        return
+      }
+
       if (!res.ok) {
         throw new Error('Failed to check deposits')
       }
+
+      // Successful request — reset backoff
+      backoffRef.current = 0
 
       const data = await res.json()
 
