@@ -15,7 +15,7 @@ import { NETWORK_CONFIG, DEFAULT_NETWORK, zatoshiToZec } from './index'
 // RPC configuration from environment
 const RPC_USER = process.env.ZCASH_RPC_USER || 'zcashrpc'
 const RPC_PASSWORD = process.env.ZCASH_RPC_PASSWORD || ''
-const DEFAULT_Z_SENDMANY_FEE = 0.0001
+export const DEFAULT_Z_SENDMANY_FEE = 0.0001
 const ZIP317_MARGINAL_FEE_ZATS = 5000
 const MAX_UNPAID_ACTION_RETRIES = 3
 
@@ -43,7 +43,7 @@ function normalizeZecAmount(amount: number): number {
   return Math.round(amount * 1e8) / 1e8
 }
 
-function nextFeeForUnpaidActionError(currentFee: number, errorMessage: string): number | null {
+export function nextFeeForUnpaidActionError(currentFee: number, errorMessage: string): number | null {
   if (!errorMessage.toLowerCase().includes('tx unpaid action limit exceeded')) {
     return null
   }

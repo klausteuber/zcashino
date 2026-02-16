@@ -273,6 +273,11 @@ export async function createAnchoredFairnessSeed(
   const commitment = await commitServerSeedHash(serverSeedHash, network)
 
   if (!commitment.success || !commitment.txHash) {
+    console.error('[SessionFairness] Failed to create anchored seed commitment:', {
+      network,
+      seedHashPrefix: serverSeedHash.slice(0, 12),
+      error: commitment.error || 'unknown',
+    })
     return null
   }
 

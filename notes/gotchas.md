@@ -452,3 +452,16 @@ if (result.count > 0) {
 - Track bounded retry attempts via `failReason` retry marker while status remains pending.
 - Refund and mark failed only after retries are exhausted or non-retryable failure occurs.
 - Emit `player.withdraw.unpaid_action_retry` telemetry and surface counts in admin overview (24h + all-time).
+
+### Session seed pool reports low availability even though refill is running
+
+**Symptom:** `/api/health` shows `sessionSeedPool.available=0` and fairness warnings/critical status, while pool refill jobs and manual refill actions appear to run.
+
+**Root Cause:** Session fairness seed creation could fail asynchronously after `z_sendmany` returned an opid. The commitment path only handled unpaid-action retries at call-time, not operation-completion-time, so refill silently produced no new seeds.
+
+**Fix:**
+- Add operation-level retry in `commitServerSeedHash(...)` when `waitForOperation(...)` fails with `tx unpaid action limit exceeded`.
+- Increase fee using the same ZIP-317 marginal step logic used for immediate RPC rejections.
+- Add explicit logging in:
+  - `createAnchoredFairnessSeed(...)` for commitment creation failures
+  - `session-seed-pool-manager` refill loop when seed creation returns null

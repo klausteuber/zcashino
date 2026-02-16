@@ -12,12 +12,13 @@
  */
 
 import type { ZcashNetwork } from '@/types'
-import { sendZec, waitForOperation, getTransaction, checkNodeStatus } from '@/lib/wallet/rpc'
+import { sendZec, waitForOperation, getTransaction, checkNodeStatus, nextFeeForUnpaidActionError, DEFAULT_Z_SENDMANY_FEE } from '@/lib/wallet/rpc'
 import { DEFAULT_NETWORK, NETWORK_CONFIG } from '@/lib/wallet'
 
 // Configuration
 const COMMITMENT_AMOUNT = 0.00001 // Dust amount for commitment tx (10 zatoshi)
 const COMMITMENT_MEMO_PREFIX = 'ZCASHINO_COMMIT_V1:' // Prefix for memo parsing
+const MAX_COMMITMENT_FEE_RETRIES = 3
 
 // House wallet addresses (would be from env in production)
 const HOUSE_ADDRESSES = {
@@ -102,24 +103,46 @@ export async function commitServerSeedHash(
     // Create memo with commitment
     const memo = `${COMMITMENT_MEMO_PREFIX}${serverSeedHash}`
 
-    // Send commitment transaction (to self)
-    // Use minconf=1 to avoid Sapling witness failures on unconfirmed/internal change notes.
-    const { operationId } = await sendZec(
-      houseAddress,
-      houseAddress,
-      COMMITMENT_AMOUNT,
-      memo,
-      network,
-      1
-    )
+    let result: Awaited<ReturnType<typeof waitForOperation>> | null = null
+    let fee = DEFAULT_Z_SENDMANY_FEE
 
-    // Wait for operation to complete
-    const result = await waitForOperation(operationId, 120000, network)
+    // zcashd may accept z_sendmany (returns opid) but later fail operation with
+    // "tx unpaid action limit exceeded". Retry with a higher fee in that case.
+    for (let attempt = 0; attempt <= MAX_COMMITMENT_FEE_RETRIES; attempt += 1) {
+      // Send commitment transaction (to self)
+      // Use minconf=1 to avoid Sapling witness failures on unconfirmed/internal change notes.
+      const { operationId } = await sendZec(
+        houseAddress,
+        houseAddress,
+        COMMITMENT_AMOUNT,
+        memo,
+        network,
+        1,
+        fee
+      )
 
-    if (!result.success || !result.txid) {
+      // Wait for operation to complete
+      result = await waitForOperation(operationId, 120000, network)
+
+      if (result.success && result.txid) {
+        break
+      }
+
+      const nextFee = nextFeeForUnpaidActionError(fee, result.error || '')
+      if (!nextFee || nextFee <= fee || attempt === MAX_COMMITMENT_FEE_RETRIES) {
+        break
+      }
+
+      console.warn(
+        `[Blockchain] Commitment op failed due to unpaid-action policy; retrying with higher fee (${fee} -> ${nextFee})`
+      )
+      fee = nextFee
+    }
+
+    if (!result?.success || !result.txid) {
       return {
         success: false,
-        error: result.error || 'Transaction failed'
+        error: result?.error || 'Transaction failed'
       }
     }
 

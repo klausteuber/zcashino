@@ -77,6 +77,11 @@ export async function checkAndRefillSessionSeedPool(
     for (let i = 0; i < toCreate; i++) {
       const created = await createAnchoredFairnessSeed(network)
       if (!created) {
+        console.warn('[SessionSeedPoolManager] Seed creation failed during refill run', {
+          network,
+          available: status.available,
+          target: SESSION_SEED_POOL_TARGET,
+        })
         break
       }
     }

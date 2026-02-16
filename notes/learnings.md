@@ -218,3 +218,14 @@ In-memory limits and remote font fetches are acceptable in dev, but must be call
 
 8. **Retry resilience needs observable counters in admin ops.**
    Add explicit telemetry (`player.withdraw.unpaid_action_retry`) and expose 24h/all-time counts in admin overview so fee-policy friction is visible and tunable.
+
+## Session Fairness Seed Pool Learnings (2026-02-16)
+
+1. **`z_sendmany` fee-policy errors can surface after opid creation in seed commits too.**
+   Seed commitment creation originally only retried when `z_sendmany` itself threw an unpaid-action policy error. In production, the RPC call often returned an opid and the failure appeared later in `z_getoperationstatus`, which left the session seed pool starved (`available=0`) despite refill attempts.
+
+2. **Commitment creation needs operation-level fee escalation, not just call-level retries.**
+   `commitServerSeedHash()` now retries when `waitForOperation(...)` fails with `tx unpaid action limit exceeded`, recomputes a higher ZIP-317 fee target, and resubmits with bounded attempts. This closes the gap between submission-time and execution-time fee-policy failures.
+
+3. **Pool starvation diagnosis depends on explicit seed creation error logs.**
+   `createAnchoredFairnessSeed()` and `session-seed-pool-manager` now log commitment failure causes and refill failures directly. Without this, admin-triggered refill appears successful while no new seeds are actually created.
