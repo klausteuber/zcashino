@@ -215,3 +215,6 @@ In-memory limits and remote font fetches are acceptable in dev, but must be call
 
 7. **`z_sendmany` failures can occur after opid creation, not only at call time.**
    Some fee-policy failures surface in `z_getoperationstatus` as a failed operation. Recovery must exist in withdrawal status polling too: detect unpaid-action failure, resubmit with adjusted fee, and only refund after bounded retry attempts.
+
+8. **Retry resilience needs observable counters in admin ops.**
+   Add explicit telemetry (`player.withdraw.unpaid_action_retry`) and expose 24h/all-time counts in admin overview so fee-policy friction is visible and tunable.

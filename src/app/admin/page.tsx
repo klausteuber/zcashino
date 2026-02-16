@@ -33,6 +33,8 @@ interface AdminOverview {
     raceRejectionsAllTime: number
     idempotencyReplays24h: number
     idempotencyReplaysAllTime: number
+    unpaidActionRetries24h: number
+    unpaidActionRetriesAllTime: number
   }
   pendingWithdrawals: Array<{
     id: string
@@ -534,7 +536,7 @@ export default function AdminPage() {
               <MetricCard
                 label="Pending Withdrawals"
                 value={String(overview.transactions.pendingWithdrawalCount)}
-                detail={`${overview.transactions.failedWithdrawalCount} failed • ${overview.transactions.raceRejections24h} race rejects (24h)`}
+                detail={`${overview.transactions.failedWithdrawalCount} failed • ${overview.transactions.unpaidActionRetries24h} unpaid retries (24h)`}
               />
               <MetricCard
                 label="Active Games"
@@ -612,6 +614,10 @@ export default function AdminPage() {
                   <InlineStat
                     label="Idempotency Replays"
                     value={`${overview.transactions.idempotencyReplays24h} (24h) / ${overview.transactions.idempotencyReplaysAllTime} total`}
+                  />
+                  <InlineStat
+                    label="Unpaid-Action Retries"
+                    value={`${overview.transactions.unpaidActionRetries24h} (24h) / ${overview.transactions.unpaidActionRetriesAllTime} total`}
                   />
                   <InlineStat
                     label="Legacy Auth Fallbacks"

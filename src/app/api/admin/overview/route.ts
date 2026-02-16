@@ -72,6 +72,8 @@ export async function GET(request: NextRequest) {
       raceRejectionsAllTime,
       idempotencyReplays24h,
       idempotencyReplaysAllTime,
+      unpaidActionRetries24h,
+      unpaidActionRetriesAllTime,
       recentAuditLogs,
     ] = await Promise.all([
       prisma.session.aggregate({
@@ -176,6 +178,17 @@ export async function GET(request: NextRequest) {
           action: PLAYER_COUNTER_ACTIONS.WITHDRAW_IDEMPOTENCY_REPLAY,
         },
       }),
+      prisma.adminAuditLog.count({
+        where: {
+          action: PLAYER_COUNTER_ACTIONS.WITHDRAW_UNPAID_ACTION_RETRY,
+          createdAt: { gte: since24h },
+        },
+      }),
+      prisma.adminAuditLog.count({
+        where: {
+          action: PLAYER_COUNTER_ACTIONS.WITHDRAW_UNPAID_ACTION_RETRY,
+        },
+      }),
       prisma.adminAuditLog.findMany({
         orderBy: { createdAt: 'desc' },
         take: 30,
@@ -231,6 +244,8 @@ export async function GET(request: NextRequest) {
         raceRejectionsAllTime,
         idempotencyReplays24h,
         idempotencyReplaysAllTime,
+        unpaidActionRetries24h,
+        unpaidActionRetriesAllTime,
       },
       pendingWithdrawals: pendingWithdrawals.map((tx) => ({
         id: tx.id,

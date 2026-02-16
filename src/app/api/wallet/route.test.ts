@@ -113,6 +113,7 @@ vi.mock('@/lib/telemetry/player-events', () => ({
   PLAYER_COUNTER_ACTIONS: {
     WITHDRAW_IDEMPOTENCY_REPLAY: 'player.withdraw.idempotency_replay',
     WITHDRAW_RESERVE_REJECTED: 'player.withdraw.reserve_rejected',
+    WITHDRAW_UNPAID_ACTION_RETRY: 'player.withdraw.unpaid_action_retry',
     BLACKJACK_RESERVE_REJECTED: 'player.game.reserve_rejected',
     BLACKJACK_DUPLICATE_COMPLETION: 'player.game.duplicate_completion_blocked',
     VIDEO_POKER_RESERVE_REJECTED: 'player.video_poker.reserve_rejected',
@@ -301,6 +302,17 @@ describe('/api/wallet POST withdrawal-status transitions', () => {
         failReason: 'retry_unpaid_action:1',
       },
     })
+    expect(logPlayerCounterEventMock).toHaveBeenCalledWith(expect.objectContaining({
+      action: 'player.withdraw.unpaid_action_retry',
+      details: 'Withdrawal unpaid-action retry 1/3',
+      metadata: expect.objectContaining({
+        sessionId: 'session-1',
+        transactionId: 'tx-ua-1',
+        retryOperationId: 'op-ua-retry-1',
+        retryAttempt: 1,
+        retryFee: 0.0002,
+      }),
+    }))
     expect(releaseFundsMock).not.toHaveBeenCalled()
   })
 

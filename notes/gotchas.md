@@ -451,3 +451,4 @@ if (result.count > 0) {
 - Resubmit the withdrawal with adjusted fee and update the stored `operationId`.
 - Track bounded retry attempts via `failReason` retry marker while status remains pending.
 - Refund and mark failed only after retries are exhausted or non-retryable failure occurs.
+- Emit `player.withdraw.unpaid_action_retry` telemetry and surface counts in admin overview (24h + all-time).

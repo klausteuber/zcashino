@@ -226,7 +226,7 @@ export async function POST(request: NextRequest) {
       }
 
       case 'withdrawal-status':
-        return handleWithdrawalStatus(session.id, payload.transactionId)
+        return handleWithdrawalStatus(request, session.id, payload.transactionId)
 
       default:
         return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
@@ -845,7 +845,7 @@ async function refundWithdrawal(
 /**
  * Check withdrawal status by polling the Zcash operation
  */
-async function handleWithdrawalStatus(sessionId: string, transactionId: string) {
+async function handleWithdrawalStatus(request: NextRequest, sessionId: string, transactionId: string) {
   if (!transactionId) {
     return NextResponse.json({ error: 'Transaction ID required' }, { status: 400 })
   }
@@ -935,6 +935,21 @@ async function handleWithdrawalStatus(sessionId: string, transactionId: string) 
                     status: 'pending',
                     operationId: retryOperationId,
                     failReason: buildUnpaidActionRetryMarker(retryAttempt),
+                  },
+                })
+
+                await logPlayerCounterEvent({
+                  request,
+                  action: PLAYER_COUNTER_ACTIONS.WITHDRAW_UNPAID_ACTION_RETRY,
+                  details: `Withdrawal unpaid-action retry ${retryAttempt}/${MAX_UNPAID_ACTION_OPERATION_RETRIES}`,
+                  metadata: {
+                    sessionId,
+                    transactionId: transaction.id,
+                    previousOperationId: transaction.operationId,
+                    retryOperationId,
+                    retryAttempt,
+                    retryFee,
+                    operationError,
                   },
                 })
 

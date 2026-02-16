@@ -5,6 +5,7 @@ import { getClientIpAddress, getUserAgent } from '@/lib/admin/request'
 export const PLAYER_COUNTER_ACTIONS = {
   WITHDRAW_IDEMPOTENCY_REPLAY: 'player.withdraw.idempotency_replay',
   WITHDRAW_RESERVE_REJECTED: 'player.withdraw.reserve_rejected',
+  WITHDRAW_UNPAID_ACTION_RETRY: 'player.withdraw.unpaid_action_retry',
   BLACKJACK_RESERVE_REJECTED: 'player.game.reserve_rejected',
   BLACKJACK_DUPLICATE_COMPLETION: 'player.game.duplicate_completion_blocked',
   VIDEO_POKER_RESERVE_REJECTED: 'player.video_poker.reserve_rejected',
