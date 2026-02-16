@@ -60,7 +60,7 @@ export function getDepositInfo(
     network,
     minimumDeposit: MIN_DEPOSIT,
     confirmationsRequired: CONFIRMATIONS_REQUIRED,
-    qrCodeData: `zcash:${depositAddress}`,
+    qrCodeData: depositAddress,
   }
 }
 

@@ -12,7 +12,10 @@
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "npx playwright test",
-    "test:e2e:smoke": "npx playwright test tests/e2e/smoke.spec.ts"
+    "test:e2e:smoke": "npx playwright test tests/e2e/smoke.spec.ts",
+    "ops:baseline": "node scripts/guarded-live-baseline.js",
+    "ops:monitor": "node scripts/guarded-live-monitor.js",
+    "ops:reconcile": "node scripts/guarded-live-reconcile.js"
   },
   "keywords": [
     "zcash",
@@ -33,6 +36,7 @@
     "dotenv": "^17.2.3",
     "next": "^16.1.4",
     "prisma": "^7.2.0",
+    "qrcode": "^1.5.4",
     "react": "^19.2.3",
     "react-dom": "^19.2.3"
   },
@@ -41,6 +45,7 @@
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
     "@types/node": "^25.0.9",
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^19.2.8",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.2",

@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => ({
   startRoundMock: vi.fn(),
   executeActionMock: vi.fn(),
   takeInsuranceMock: vi.fn(),
+  getAvailableActionsMock: vi.fn(),
   generateClientSeedMock: vi.fn(),
   getOrCreateCommitmentMock: vi.fn(),
   markCommitmentUsedMock: vi.fn(),
@@ -34,6 +35,8 @@ const mocks = vi.hoisted(() => ({
   reserveFundsMock: vi.fn(),
   creditFundsMock: vi.fn(),
   logPlayerCounterEventMock: vi.fn(),
+  checkWagerAllowedMock: vi.fn(),
+  requirePlayerSessionMock: vi.fn(),
 }))
 
 const {
@@ -42,6 +45,7 @@ const {
   startRoundMock,
   executeActionMock,
   takeInsuranceMock,
+  getAvailableActionsMock,
   generateClientSeedMock,
   getOrCreateCommitmentMock,
   markCommitmentUsedMock,
@@ -54,6 +58,8 @@ const {
   reserveFundsMock,
   creditFundsMock,
   logPlayerCounterEventMock,
+  checkWagerAllowedMock,
+  requirePlayerSessionMock,
 } = mocks
 
 vi.mock('@/lib/db', () => ({
@@ -65,6 +71,7 @@ vi.mock('@/lib/game/blackjack', () => ({
   startRound: mocks.startRoundMock,
   executeAction: mocks.executeActionMock,
   takeInsurance: mocks.takeInsuranceMock,
+  getAvailableActions: mocks.getAvailableActionsMock,
   MIN_BET: 0.01,
   MAX_BET: 10,
 }))
@@ -102,6 +109,14 @@ vi.mock('@/lib/services/ledger', () => ({
   creditFunds: mocks.creditFundsMock,
 }))
 
+vi.mock('@/lib/services/responsible-gambling', () => ({
+  checkWagerAllowed: mocks.checkWagerAllowedMock,
+}))
+
+vi.mock('@/lib/auth/player-session', () => ({
+  requirePlayerSession: mocks.requirePlayerSessionMock,
+}))
+
 vi.mock('@/lib/telemetry/player-events', () => ({
   PLAYER_COUNTER_ACTIONS: {
     WITHDRAW_IDEMPOTENCY_REPLAY: 'player.withdraw.idempotency_replay',
@@ -110,6 +125,7 @@ vi.mock('@/lib/telemetry/player-events', () => ({
     BLACKJACK_DUPLICATE_COMPLETION: 'player.game.duplicate_completion_blocked',
     VIDEO_POKER_RESERVE_REJECTED: 'player.video_poker.reserve_rejected',
     VIDEO_POKER_DUPLICATE_COMPLETION: 'player.video_poker.duplicate_completion_blocked',
+    LEGACY_SESSION_FALLBACK: 'player.auth.legacy_fallback',
   },
   logPlayerCounterEvent: mocks.logPlayerCounterEventMock,
 }))
@@ -149,6 +165,7 @@ function buildGameState(phase: 'playerTurn' | 'complete', lastPayout = 0) {
     currentBet: 0.5,
     perfectPairsBet: 0,
     insuranceBet: 0,
+    dealerPeeked: true,
     serverSeedHash: 'server-hash',
     clientSeed: 'client-seed',
     nonce: 0,
@@ -174,6 +191,9 @@ describe('/api/game POST race/idempotency', () => {
     createInitialStateMock.mockReturnValue({})
     executeActionMock.mockImplementation((state: unknown) => state)
     takeInsuranceMock.mockImplementation((state: unknown) => state)
+    getAvailableActionsMock.mockReturnValue(['hit', 'stand', 'double', 'split'])
+    checkWagerAllowedMock.mockReturnValue({ allowed: true })
+    requirePlayerSessionMock.mockReturnValue({ ok: true, legacyFallback: false })
 
     getOrCreateCommitmentMock.mockResolvedValue({
       id: 'commitment-1',
@@ -204,19 +224,55 @@ describe('/api/game POST race/idempotency', () => {
         walletAddress: 'demo_wallet',
         isAuthenticated: false,
         excludedUntil: null,
+        totalWagered: 0,
+        totalWon: 0,
+        lossLimit: null,
+        sessionLimit: null,
+        createdAt: new Date('2026-02-16T00:00:00Z'),
       })
 
     const response = await POST(makeRequest({
       action: 'start',
       sessionId: 'session-1',
       bet: 0.5,
-      perfectPairsBet: 0.7,
+      perfectPairsBet: 0.2,
     }))
 
     expect(response.status).toBe(400)
     await expect(response.json()).resolves.toEqual({ error: 'Insufficient balance' })
 
     expect(reserveFundsMock).toHaveBeenCalled()
+    expect(prismaMock.blackjackGame.create).not.toHaveBeenCalled()
+  })
+
+  it('returns 503 and triggers background refill when commitment creation fails', async () => {
+    getOrCreateCommitmentMock.mockResolvedValueOnce(null)
+
+    prismaMock.session.findUnique.mockResolvedValueOnce({
+      id: 'session-1',
+      balance: 1,
+      walletAddress: 'demo_wallet',
+      isAuthenticated: false,
+      excludedUntil: null,
+      totalWagered: 0,
+      totalWon: 0,
+      lossLimit: null,
+      sessionLimit: null,
+      createdAt: new Date('2026-02-16T00:00:00Z'),
+    })
+
+    const response = await POST(makeRequest({
+      action: 'start',
+      sessionId: 'session-1',
+      bet: 0.5,
+      perfectPairsBet: 0,
+    }))
+
+    expect(response.status).toBe(503)
+    await expect(response.json()).resolves.toEqual({
+      error: 'Unable to create provably fair commitment. Please try again.'
+    })
+    expect(checkAndRefillPoolMock).toHaveBeenCalledTimes(1)
     expect(prismaMock.blackjackGame.create).not.toHaveBeenCalled()
   })
 
@@ -231,6 +287,11 @@ describe('/api/game POST race/idempotency', () => {
         walletAddress: 'demo_wallet',
         isAuthenticated: false,
         excludedUntil: null,
+        totalWagered: 0,
+        totalWon: 0,
+        lossLimit: null,
+        sessionLimit: null,
+        createdAt: new Date('2026-02-16T00:00:00Z'),
       })
       .mockResolvedValueOnce({
         id: 'session-1',
@@ -267,5 +328,256 @@ describe('/api/game POST race/idempotency', () => {
 
     // No payout credit should be attempted when completion transition is already consumed.
     expect(creditFundsMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects negative perfectPairsBet with INVALID_SIDE_BET code', async () => {
+    const response = await POST(makeRequest({
+      action: 'start',
+      sessionId: 'session-1',
+      bet: 0.2,
+      perfectPairsBet: -0.01,
+    }))
+
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toMatchObject({
+      error: 'Invalid request payload',
+      code: 'INVALID_SIDE_BET',
+    })
+  })
+
+  it('rejects perfectPairsBet above main bet with INVALID_SIDE_BET code', async () => {
+    prismaMock.session.findUnique.mockResolvedValueOnce({
+      id: 'session-1',
+      balance: 2,
+      walletAddress: 'demo_wallet',
+      isAuthenticated: false,
+      excludedUntil: null,
+      totalWagered: 0,
+      totalWon: 0,
+      lossLimit: null,
+      sessionLimit: null,
+      createdAt: new Date('2026-02-16T00:00:00Z'),
+    })
+
+    const response = await POST(makeRequest({
+      action: 'start',
+      sessionId: 'session-1',
+      bet: 0.2,
+      perfectPairsBet: 0.3,
+    }))
+
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toMatchObject({
+      code: 'INVALID_SIDE_BET',
+    })
+    expect(reserveFundsMock).not.toHaveBeenCalled()
+  })
+
+  it('returns 403 LOSS_LIMIT_REACHED for start wagers', async () => {
+    checkWagerAllowedMock.mockReturnValueOnce({
+      allowed: false,
+      code: 'LOSS_LIMIT_REACHED',
+      message: 'Loss limit reached. New wagers are blocked for this session.',
+    })
+
+    prismaMock.session.findUnique.mockResolvedValueOnce({
+      id: 'session-1',
+      balance: 2,
+      walletAddress: 'demo_wallet',
+      isAuthenticated: false,
+      excludedUntil: null,
+      totalWagered: 0.4,
+      totalWon: 0,
+      lossLimit: 0.5,
+      sessionLimit: null,
+      createdAt: new Date('2026-02-16T00:00:00Z'),
+    })
+
+    const response = await POST(makeRequest({
+      action: 'start',
+      sessionId: 'session-1',
+      bet: 0.2,
+      perfectPairsBet: 0,
+    }))
+
+    expect(response.status).toBe(403)
+    await expect(response.json()).resolves.toMatchObject({
+      code: 'LOSS_LIMIT_REACHED',
+    })
+    expect(getOrCreateCommitmentMock).not.toHaveBeenCalled()
+  })
+
+  it('persists and credits exactly once when insurance action completes game', async () => {
+    prismaMock.session.findUnique
+      .mockResolvedValueOnce({
+        id: 'session-1',
+        balance: 0.9,
+        walletAddress: 'demo_wallet',
+        isAuthenticated: false,
+        excludedUntil: null,
+        totalWagered: 0.1,
+        totalWon: 0,
+        lossLimit: null,
+        sessionLimit: null,
+        createdAt: new Date('2026-02-16T00:00:00Z'),
+      })
+      .mockResolvedValueOnce({
+        id: 'session-1',
+        balance: 1.0,
+        totalWagered: 0.15,
+        totalWon: 0.15,
+      })
+
+    prismaMock.blackjackGame.findUnique.mockResolvedValueOnce({
+      id: 'game-1',
+      sessionId: 'session-1',
+      status: 'active',
+      mainBet: 0.1,
+      perfectPairsBet: 0,
+      insuranceBet: 0,
+      serverSeed: 'server-seed',
+      serverSeedHash: 'server-hash',
+      clientSeed: 'client-seed',
+      nonce: 0,
+      fairnessVersion: 'legacy_mulberry_v1',
+      actionHistory: '[]',
+    })
+
+    startRoundMock.mockReturnValue({
+      ...buildGameState('playerTurn'),
+      dealerHand: {
+        cards: [
+          { rank: 'A', suit: 'spades', faceUp: true },
+          { rank: 'K', suit: 'diamonds', faceUp: false },
+        ],
+        isBusted: false,
+        isBlackjack: true,
+      },
+      dealerPeeked: false,
+      currentBet: 0.1,
+      insuranceBet: 0,
+      balance: 0.9,
+      lastPayout: 0,
+    })
+
+    takeInsuranceMock.mockReturnValue({
+      ...buildGameState('complete', 0.15),
+      dealerPeeked: true,
+      insuranceBet: 0.05,
+      settlement: {
+        totalStake: 0.15,
+        totalPayout: 0.15,
+        net: 0,
+        mainHandsPayout: 0,
+        insurancePayout: 0.15,
+        perfectPairsPayout: 0,
+      },
+    })
+
+    const response = await POST(makeRequest({
+      action: 'insurance',
+      sessionId: 'session-1',
+      gameId: 'game-1',
+    }))
+
+    expect(response.status).toBe(200)
+    expect(prismaMock.blackjackGame.updateMany).toHaveBeenCalledWith({
+      where: { id: 'game-1', status: 'active' },
+      data: {
+        status: 'completed',
+        completedAt: expect.any(Date),
+        payout: 0.15,
+      },
+    })
+    expect(creditFundsMock).toHaveBeenCalledTimes(1)
+    expect(prismaMock.blackjackGame.update).toHaveBeenCalledWith({
+      where: { id: 'game-1' },
+      data: expect.objectContaining({
+        insuranceBet: 0.05,
+        outcome: expect.any(String),
+      }),
+    })
+  })
+
+  it('returns limit codes for double, split, and insurance increments', async () => {
+    const sessionRow = {
+      id: 'session-1',
+      balance: 1,
+      walletAddress: 'demo_wallet',
+      isAuthenticated: false,
+      excludedUntil: null,
+      totalWagered: 0.5,
+      totalWon: 0,
+      lossLimit: 0.6,
+      sessionLimit: null,
+      createdAt: new Date('2026-02-16T00:00:00Z'),
+    }
+    const gameRow = {
+      id: 'game-1',
+      sessionId: 'session-1',
+      status: 'active',
+      mainBet: 0.1,
+      perfectPairsBet: 0,
+      insuranceBet: 0,
+      serverSeed: 'server-seed',
+      serverSeedHash: 'server-hash',
+      clientSeed: 'client-seed',
+      nonce: 0,
+      fairnessVersion: 'legacy_mulberry_v1',
+      actionHistory: '[]',
+    }
+
+    startRoundMock.mockReturnValue({
+      ...buildGameState('playerTurn'),
+      dealerPeeked: true,
+      dealerHand: {
+        cards: [
+          { rank: 'A', suit: 'spades', faceUp: true },
+          { rank: '9', suit: 'diamonds', faceUp: false },
+        ],
+        isBusted: false,
+        isBlackjack: false,
+      },
+      currentBet: 0.1,
+      insuranceBet: 0,
+    })
+    executeActionMock.mockReturnValue(buildGameState('playerTurn'))
+
+    prismaMock.session.findUnique.mockResolvedValue(sessionRow)
+    prismaMock.blackjackGame.findUnique.mockResolvedValue(gameRow)
+
+    checkWagerAllowedMock.mockReturnValue({
+      allowed: false,
+      code: 'SESSION_LIMIT_REACHED',
+      message: 'Session time limit reached. New wagers are blocked, but withdrawals remain available.',
+    })
+    const doubleRes = await POST(makeRequest({
+      action: 'double',
+      sessionId: 'session-1',
+      gameId: 'game-1',
+    }))
+    expect(doubleRes.status).toBe(403)
+    await expect(doubleRes.json()).resolves.toMatchObject({ code: 'SESSION_LIMIT_REACHED' })
+
+    checkWagerAllowedMock.mockReturnValue({
+      allowed: false,
+      code: 'LOSS_LIMIT_REACHED',
+      message: 'Loss limit reached. New wagers are blocked for this session.',
+    })
+    const splitRes = await POST(makeRequest({
+      action: 'split',
+      sessionId: 'session-1',
+      gameId: 'game-1',
+    }))
+    expect(splitRes.status).toBe(403)
+    await expect(splitRes.json()).resolves.toMatchObject({ code: 'LOSS_LIMIT_REACHED' })
+
+    const insuranceRes = await POST(makeRequest({
+      action: 'insurance',
+      sessionId: 'session-1',
+      gameId: 'game-1',
+    }))
+    expect(insuranceRes.status).toBe(403)
+    await expect(insuranceRes.json()).resolves.toMatchObject({ code: 'LOSS_LIMIT_REACHED' })
   })
 })

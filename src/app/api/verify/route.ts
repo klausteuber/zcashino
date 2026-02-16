@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { hashServerSeed, verifyGame, replayGame, replayVideoPokerGame } from '@/lib/provably-fair'
-import type { BlackjackAction, VideoPokerVariant } from '@/types'
+import type { BlackjackAction, VideoPokerVariant, FairnessVersion } from '@/types'
 import { verifyCommitment, getExplorerUrl } from '@/lib/provably-fair/blockchain'
 import type {
   GameVerificationData,
@@ -10,6 +10,7 @@ import type {
   BlockchainCommitment
 } from '@/types'
 import { parseWithSchema, verifyPostSchema, verifyQuerySchema } from '@/lib/validation/api-schemas'
+import { HMAC_FAIRNESS_VERSION, normalizeFairnessVersion } from '@/lib/game/shuffle'
 
 /**
  * GET /api/verify - Get verification data for a game
@@ -64,6 +65,7 @@ export async function GET(request: NextRequest) {
         serverSeedHash: game.serverSeedHash,
         clientSeed: game.clientSeed,
         nonce: game.nonce,
+        fairnessVersion: normalizeFairnessVersion(game.fairnessVersion),
         commitment,
         gameType: 'video_poker',
         outcome: game.handRank || undefined,
@@ -111,6 +113,7 @@ export async function GET(request: NextRequest) {
       serverSeedHash: game.serverSeedHash,
       clientSeed: game.clientSeed,
       nonce: game.nonce,
+      fairnessVersion: normalizeFairnessVersion(game.fairnessVersion),
       commitment,
       gameType: 'blackjack',
       outcome: game.outcome || undefined,
@@ -157,7 +160,15 @@ export async function POST(request: NextRequest) {
       return verifyGameById(payload.gameId, gameType)
     }
 
-    return verifyManual(payload.serverSeed, payload.serverSeedHash, payload.clientSeed, payload.nonce, gameType, payload.txHash)
+    return verifyManual(
+      payload.serverSeed,
+      payload.serverSeedHash,
+      payload.clientSeed,
+      payload.nonce,
+      gameType,
+      payload.txHash,
+      payload.fairnessVersion
+    )
   } catch (error) {
     console.error('Verification error:', error)
     return NextResponse.json({ error: 'Verification failed' }, { status: 500 })
@@ -220,12 +231,14 @@ async function verifyGameById(gameId: string, gameType: 'blackjack' | 'video_pok
       errors.push('This game does not have a blockchain commitment (pre-blockchain feature).')
     }
 
+    const fairnessVersion = normalizeFairnessVersion(game.fairnessVersion)
     const replayResult = await verifyGame(
       game.serverSeed,
       game.serverSeedHash,
       game.clientSeed,
       game.nonce,
-      52
+      52,
+      fairnessVersion
     )
     steps.outcomeValid = replayResult.valid
     if (!replayResult.valid) {
@@ -248,6 +261,7 @@ async function verifyGameById(gameId: string, gameType: 'blackjack' | 'video_pok
         betMultiplier: game.betMultiplier,
         variant: game.variant as VideoPokerVariant,
         heldIndices,
+        fairnessVersion,
       })
 
       if (!replayData.valid) {
@@ -290,6 +304,7 @@ async function verifyGameById(gameId: string, gameType: 'blackjack' | 'video_pok
         serverSeedHash: game.serverSeedHash,
         clientSeed: game.clientSeed,
         nonce: game.nonce,
+        fairnessVersion,
         commitment,
         gameType: 'video_poker',
         outcome: game.handRank || undefined,
@@ -366,12 +381,14 @@ async function verifyGameById(gameId: string, gameType: 'blackjack' | 'video_pok
   }
 
   const deckSize = 312
+  const fairnessVersion = normalizeFairnessVersion(game.fairnessVersion)
   const replayResult = await verifyGame(
     game.serverSeed,
     game.serverSeedHash,
     game.clientSeed,
     game.nonce,
-    deckSize
+    deckSize,
+    fairnessVersion
   )
   steps.outcomeValid = replayResult.valid
 
@@ -390,7 +407,8 @@ async function verifyGameById(gameId: string, gameType: 'blackjack' | 'video_pok
       mainBet: game.mainBet,
       perfectPairsBet: game.perfectPairsBet,
       insuranceBet: game.insuranceBet,
-      actionHistory
+      actionHistory,
+      fairnessVersion,
     })
 
     const storedPayout = game.payout ?? 0
@@ -423,6 +441,7 @@ async function verifyGameById(gameId: string, gameType: 'blackjack' | 'video_pok
       serverSeedHash: game.serverSeedHash,
       clientSeed: game.clientSeed,
       nonce: game.nonce,
+      fairnessVersion,
       commitment,
       gameType: 'blackjack',
       outcome: game.outcome || undefined,
@@ -461,7 +480,8 @@ async function verifyManual(
   clientSeed: string,
   nonce: number,
   gameType: 'blackjack' | 'video_poker',
-  txHash?: string
+  txHash?: string,
+  fairnessVersionInput?: FairnessVersion
 ) {
   const errors: string[] = []
   const steps: VerificationSteps = {
@@ -470,6 +490,8 @@ async function verifyManual(
     timestampValid: false,
     outcomeValid: false
   }
+
+  const fairnessVersion = normalizeFairnessVersion(fairnessVersionInput, HMAC_FAIRNESS_VERSION)
 
   // Step 1: Verify hash matches
   const computedHash = await hashServerSeed(serverSeed)
@@ -499,7 +521,8 @@ async function verifyManual(
     serverSeedHash,
     clientSeed,
     nonce,
-    deckSize
+    deckSize,
+    fairnessVersion
   )
   steps.outcomeValid = replayResult.valid
 
@@ -515,6 +538,7 @@ async function verifyManual(
       serverSeedHash,
       clientSeed,
       nonce,
+      fairnessVersion,
       commitment: txHash ? {
         txHash,
         blockHeight: 0,

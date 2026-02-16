@@ -66,6 +66,8 @@ export async function GET(request: NextRequest) {
       nodeStatus,
       failedLogins24h,
       rateLimitedEvents24h,
+      legacyPlayerAuthFallback24h,
+      legacyPlayerAuthFallbackAllTime,
       raceRejections24h,
       raceRejectionsAllTime,
       idempotencyReplays24h,
@@ -139,6 +141,17 @@ export async function GET(request: NextRequest) {
         where: {
           details: { contains: 'Rate limit exceeded' },
           createdAt: { gte: since24h },
+        },
+      }),
+      prisma.adminAuditLog.count({
+        where: {
+          action: PLAYER_COUNTER_ACTIONS.LEGACY_SESSION_FALLBACK,
+          createdAt: { gte: since24h },
+        },
+      }),
+      prisma.adminAuditLog.count({
+        where: {
+          action: PLAYER_COUNTER_ACTIONS.LEGACY_SESSION_FALLBACK,
         },
       }),
       prisma.adminAuditLog.count({
@@ -242,6 +255,8 @@ export async function GET(request: NextRequest) {
       security: {
         failedLoginAttempts24h: failedLogins24h,
         rateLimitedEvents24h,
+        legacyPlayerAuthFallback24h,
+        legacyPlayerAuthFallbackAllTime,
       },
       auditLogs: recentAuditLogs,
       killSwitch: getKillSwitchStatus(),

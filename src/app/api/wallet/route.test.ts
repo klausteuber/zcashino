@@ -11,8 +11,10 @@ const mocks = vi.hoisted(() => ({
     transaction: {
       findFirst: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
       findMany: vi.fn(),
       create: vi.fn(),
+      count: vi.fn(),
       aggregate: vi.fn(),
     },
     depositWallet: {
@@ -30,6 +32,11 @@ const mocks = vi.hoisted(() => ({
   checkPublicRateLimitMock: vi.fn(),
   createRateLimitResponseMock: vi.fn(),
   isKillSwitchActiveMock: vi.fn(),
+  logPlayerCounterEventMock: vi.fn(),
+  requirePlayerSessionMock: vi.fn(),
+  reserveFundsMock: vi.fn(),
+  releaseFundsMock: vi.fn(),
+  creditFundsMock: vi.fn(),
 }))
 
 const {
@@ -45,6 +52,11 @@ const {
   checkPublicRateLimitMock,
   createRateLimitResponseMock,
   isKillSwitchActiveMock,
+  logPlayerCounterEventMock,
+  requirePlayerSessionMock,
+  reserveFundsMock,
+  releaseFundsMock,
+  creditFundsMock,
 } = mocks
 
 vi.mock('@/lib/db', () => ({
@@ -87,7 +99,30 @@ vi.mock('@/lib/kill-switch', () => ({
   isKillSwitchActive: mocks.isKillSwitchActiveMock,
 }))
 
-import { POST } from './route'
+vi.mock('@/lib/auth/player-session', () => ({
+  requirePlayerSession: mocks.requirePlayerSessionMock,
+}))
+
+vi.mock('@/lib/services/ledger', () => ({
+  reserveFunds: mocks.reserveFundsMock,
+  releaseFunds: mocks.releaseFundsMock,
+  creditFunds: mocks.creditFundsMock,
+}))
+
+vi.mock('@/lib/telemetry/player-events', () => ({
+  PLAYER_COUNTER_ACTIONS: {
+    WITHDRAW_IDEMPOTENCY_REPLAY: 'player.withdraw.idempotency_replay',
+    WITHDRAW_RESERVE_REJECTED: 'player.withdraw.reserve_rejected',
+    BLACKJACK_RESERVE_REJECTED: 'player.game.reserve_rejected',
+    BLACKJACK_DUPLICATE_COMPLETION: 'player.game.duplicate_completion_blocked',
+    VIDEO_POKER_RESERVE_REJECTED: 'player.video_poker.reserve_rejected',
+    VIDEO_POKER_DUPLICATE_COMPLETION: 'player.video_poker.duplicate_completion_blocked',
+    LEGACY_SESSION_FALLBACK: 'player.auth.legacy_fallback',
+  },
+  logPlayerCounterEvent: mocks.logPlayerCounterEventMock,
+}))
+
+import { GET, POST } from './route'
 
 function makeRequest(body: unknown): NextRequest {
   return {
@@ -102,6 +137,8 @@ describe('/api/wallet POST withdrawal-status transitions', () => {
     checkPublicRateLimitMock.mockReturnValue({ allowed: true })
     createRateLimitResponseMock.mockReturnValue(new Response('rate-limited', { status: 429 }))
     isKillSwitchActiveMock.mockReturnValue(false)
+    requirePlayerSessionMock.mockReturnValue({ ok: true })
+    logPlayerCounterEventMock.mockResolvedValue(undefined)
     prismaMock.$transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => fn(prismaMock))
     checkNodeStatusMock.mockResolvedValue({ connected: true, synced: true })
     getAddressBalanceMock.mockResolvedValue({ confirmed: 0, pending: 0 })
@@ -109,8 +146,10 @@ describe('/api/wallet POST withdrawal-status transitions', () => {
     listAddressTransactionsMock.mockResolvedValue([])
     validateAddressViaRPCMock.mockResolvedValue({ isvalid: true })
     getDepositInfoMock.mockReturnValue({})
+    creditFundsMock.mockResolvedValue(undefined)
     createDepositWalletForSessionMock.mockResolvedValue({
       id: 'wallet-1',
+      unifiedAddr: null,
       transparentAddr: 'tmock',
       network: 'testnet',
     })
@@ -122,6 +161,7 @@ describe('/api/wallet POST withdrawal-status transitions', () => {
       isAuthenticated: true,
       withdrawalAddress: 't1dest',
       wallet: {
+        unifiedAddr: null,
         transparentAddr: 'tmock',
         network: 'testnet',
       },
@@ -192,13 +232,13 @@ describe('/api/wallet POST withdrawal-status transitions', () => {
     expect(payload.transaction.status).toBe('failed')
     expect(payload.transaction.failReason).toBe('insufficient fee')
 
-    expect(prismaMock.session.update).toHaveBeenCalledWith({
-      where: { id: 'session-1' },
-      data: {
-        balance: { increment: 0.4001 },
-        totalWithdrawn: { decrement: 0.4 },
-      },
-    })
+    expect(releaseFundsMock).toHaveBeenCalledWith(
+      prismaMock,
+      'session-1',
+      0.4001,
+      'totalWithdrawn',
+      0.4
+    )
 
     expect(prismaMock.transaction.update).toHaveBeenCalledWith({
       where: { id: 'tx-2' },
@@ -231,5 +271,124 @@ describe('/api/wallet POST withdrawal-status transitions', () => {
 
     expect(payload.transaction.status).toBe('confirmed')
     expect(getOperationStatusMock).not.toHaveBeenCalled()
+  })
+
+  it('returns unified-first wallet metadata on GET', async () => {
+    prismaMock.session.findUnique.mockResolvedValueOnce({
+      id: 'session-1',
+      balance: 1,
+      walletAddress: 'demo_wallet',
+      isAuthenticated: true,
+      withdrawalAddress: 'u1dest',
+      authTxHash: null,
+      authConfirmedAt: null,
+      wallet: {
+        id: 'wallet-ua',
+        unifiedAddr: 'utestUnifiedDepositAddress1234567890',
+        transparentAddr: 'tmock',
+        network: 'testnet',
+      },
+    })
+
+    getDepositInfoMock.mockReturnValueOnce({
+      address: 'utestUnifiedDepositAddress1234567890',
+      addressType: 'unified',
+      network: 'testnet',
+      minimumDeposit: 0.001,
+      confirmationsRequired: 3,
+      qrCodeData: 'utestUnifiedDepositAddress1234567890',
+    })
+
+    const response = await GET({
+      nextUrl: { searchParams: new URLSearchParams('sessionId=session-1') },
+    } as unknown as NextRequest)
+
+    expect(response.status).toBe(200)
+    const payload = await response.json()
+
+    expect(payload.wallet.depositAddress).toBe('utestUnifiedDepositAddress1234567890')
+    expect(payload.wallet.depositAddressType).toBe('unified')
+    expect(payload.wallet.transparentAddress).toBe('tmock')
+    expect(getDepositInfoMock).toHaveBeenCalledWith(
+      'utestUnifiedDepositAddress1234567890',
+      'unified',
+      'testnet'
+    )
+  })
+
+  it('returns compatibility fields and monitors unified deposit address on check-deposits', async () => {
+    prismaMock.session.findUnique
+      .mockResolvedValueOnce({
+        id: 'session-1',
+        balance: 1,
+        walletAddress: 'real_wallet',
+        isAuthenticated: false,
+        withdrawalAddress: 'u1withdrawal',
+        authTxHash: null,
+        authConfirmedAt: null,
+        wallet: {
+          id: 'wallet-1',
+          unifiedAddr: 'utestUnifiedDepositAddress1234567890',
+          transparentAddr: 'tmTransparentAddress1234567890123',
+          network: 'testnet',
+        },
+      })
+      .mockResolvedValueOnce({
+        id: 'session-1',
+        balance: 1,
+        isAuthenticated: false,
+        withdrawalAddress: 'u1withdrawal',
+        authTxHash: null,
+      })
+
+    getAddressBalanceMock.mockResolvedValueOnce({ confirmed: 0.25, pending: 0 })
+    listAddressTransactionsMock.mockResolvedValueOnce([
+      {
+        txid: 'tx-pending',
+        category: 'receive',
+        amount: 0.5,
+        confirmations: 1,
+        time: 1,
+      },
+    ])
+    prismaMock.transaction.findMany.mockResolvedValueOnce([])
+    prismaMock.transaction.count.mockResolvedValueOnce(1)
+
+    const response = await POST(makeRequest({
+      action: 'check-deposits',
+      sessionId: 'session-1',
+    }))
+
+    expect(response.status).toBe(200)
+    const payload = await response.json()
+
+    expect(listAddressTransactionsMock).toHaveBeenCalledWith(
+      'utestUnifiedDepositAddress1234567890',
+      200,
+      'testnet'
+    )
+    expect(prismaMock.depositWallet.update).toHaveBeenCalledWith({
+      where: { sessionId: 'session-1' },
+      data: {
+        cachedBalance: 0.25,
+        balanceUpdatedAt: expect.any(Date),
+      },
+    })
+
+    expect(payload.pendingDeposits).toEqual([
+      {
+        txHash: 'tx-pending',
+        amount: 0.5,
+        confirmations: 1,
+        address: 'utestUnifiedDepositAddress1234567890',
+      },
+    ])
+    expect(payload.newDeposit).toBe(false)
+    expect(payload.depositAmount).toBeNull()
+    expect(payload.authenticated).toBe(false)
+    expect(payload.session).toEqual({
+      isAuthenticated: false,
+      balance: 1,
+    })
   })
 })

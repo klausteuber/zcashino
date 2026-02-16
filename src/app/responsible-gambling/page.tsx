@@ -5,7 +5,7 @@ import JesterLogo from '@/components/ui/JesterLogo'
 export const metadata: Metadata = {
   title: 'Responsible Gambling',
   description:
-    'Tools and resources for responsible gambling at CypherJester. Set deposit limits, loss limits, and self-exclusion.',
+    'Tools and resources for responsible gambling at CypherJester. Enforced session limits, loss limits, and self-exclusion.',
   openGraph: {
     title: 'Responsible Gambling | CypherJester',
     url: 'https://cypherjester.com/responsible-gambling',
@@ -73,19 +73,19 @@ export default function ResponsibleGamblingPage() {
             <div className="space-y-4">
               <div className="border-b border-masque-gold/10 pb-4">
                 <h3 className="text-lg font-semibold text-bone-white mb-1">Deposit Limits</h3>
-                <p className="text-venetian-gold/70">Set a maximum amount you can deposit per day. Once reached, no further deposits will be accepted until the next day.</p>
+                <p className="text-venetian-gold/70">Planned feature. Deposit-limit enforcement is not active yet.</p>
               </div>
               <div className="border-b border-masque-gold/10 pb-4">
                 <h3 className="text-lg font-semibold text-bone-white mb-1">Loss Limits</h3>
-                <p className="text-venetian-gold/70">Set a maximum loss per session. When your losses reach this limit, you will be unable to place further bets until you start a new session.</p>
+                <p className="text-venetian-gold/70">Enforced now. When your session net loss reaches the configured cap, new wagers are blocked for that session.</p>
               </div>
               <div className="border-b border-masque-gold/10 pb-4">
                 <h3 className="text-lg font-semibold text-bone-white mb-1">Session Time Limits</h3>
-                <p className="text-venetian-gold/70">Set a maximum session duration. You will receive a warning at 80% of your time limit and be logged out when the limit is reached.</p>
+                <p className="text-venetian-gold/70">Enforced now. When elapsed session time reaches the configured limit, new wagers are blocked. Withdrawal and verification actions remain available.</p>
               </div>
               <div>
                 <h3 className="text-lg font-semibold text-bone-white mb-1">Self-Exclusion</h3>
-                <p className="text-venetian-gold/70">Temporarily or permanently exclude yourself from the platform. Available periods: 24 hours, 1 week, 1 month, 6 months, 1 year, or permanent. Self-exclusion cannot be reversed during the exclusion period.</p>
+                <p className="text-venetian-gold/70">Enforced now. Temporarily or permanently exclude yourself from the platform. Available periods: 24 hours, 1 week, 1 month, 6 months, 1 year, or permanent. Self-exclusion cannot be reversed during the exclusion period.</p>
               </div>
             </div>
           </section>

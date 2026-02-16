@@ -28,65 +28,6 @@ export function createShoe(numDecks: number = 6): Card[] {
 }
 
 /**
- * Fisher-Yates shuffle algorithm
- * Takes a seed for provably fair shuffling
- */
-export function shuffleDeck(deck: Card[], seed: string): Card[] {
-  // Create a copy to avoid mutating original
-  const shuffled = [...deck]
-
-  // Use seed to generate deterministic random numbers
-  const random = seededRandom(seed)
-
-  // Fisher-Yates shuffle
-  for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = Math.floor(random() * (i + 1))
-    ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
-  }
-
-  return shuffled
-}
-
-/**
- * Generate a deterministic shuffle order from a seed
- * Returns array of indices representing card positions after shuffle
- */
-export function generateShuffleOrder(deckSize: number, seed: string): number[] {
-  const indices = Array.from({ length: deckSize }, (_, i) => i)
-  const random = seededRandom(seed)
-
-  // Fisher-Yates shuffle on indices
-  for (let i = indices.length - 1; i > 0; i--) {
-    const j = Math.floor(random() * (i + 1))
-    ;[indices[i], indices[j]] = [indices[j], indices[i]]
-  }
-
-  return indices
-}
-
-/**
- * Seeded random number generator (mulberry32)
- * Deterministic PRNG for provably fair shuffling
- */
-function seededRandom(seed: string): () => number {
-  // Convert seed string to 32-bit integer
-  let hash = 0
-  for (let i = 0; i < seed.length; i++) {
-    const char = seed.charCodeAt(i)
-    hash = ((hash << 5) - hash) + char
-    hash = hash & hash // Convert to 32bit integer
-  }
-
-  // Mulberry32 PRNG
-  return function() {
-    let t = hash += 0x6D2B79F5
-    t = Math.imul(t ^ t >>> 15, t | 1)
-    t ^= t + Math.imul(t ^ t >>> 7, t | 61)
-    return ((t ^ t >>> 14) >>> 0) / 4294967296
-  }
-}
-
-/**
  * Get the numeric value(s) of a card for blackjack
  * Aces can be 1 or 11
  */

@@ -25,6 +25,9 @@ const POOL_MIN_SIZE = 5 // Minimum available commitments before refill
 const POOL_TARGET_SIZE = 15 // Target number of available commitments
 const COMMITMENT_EXPIRY_HOURS = 24 // Commitments expire after 24 hours
 const REFILL_BATCH_SIZE = 5 // Number of commitments to generate per batch
+const CLAIM_STALE_TIMEOUT_MINUTES = 5 // Reclaim claimed commitments stuck past this age
+
+let refillInFlight: Promise<void> | null = null
 
 export interface PooledCommitment {
   id: string
@@ -147,8 +150,34 @@ export async function releaseClaimedCommitment(
     data: {
       status: 'available',
       usedAt: null,
+      usedByGameId: null,
     },
   })
+}
+
+/**
+ * Reclaim commitments stuck in 'claimed' state (e.g., crashed request before mark/release).
+ */
+export async function reclaimStaleClaimedCommitments(): Promise<number> {
+  const cutoff = new Date(Date.now() - CLAIM_STALE_TIMEOUT_MINUTES * 60 * 1000)
+  const result = await prisma.seedCommitment.updateMany({
+    where: {
+      status: 'claimed',
+      usedByGameId: null,
+      usedAt: { lt: cutoff },
+      expiresAt: { gt: new Date() },
+    },
+    data: {
+      status: 'available',
+      usedAt: null,
+    },
+  })
+
+  if (result.count > 0) {
+    console.warn(`[CommitmentPool] Reclaimed ${result.count} stale claimed commitments`)
+  }
+
+  return result.count
 }
 
 /**
@@ -161,13 +190,15 @@ export async function refillPool(
   let success = 0
   let failed = 0
 
-  // On mainnet, Sapling notes can only be spent after their witness is anchored
-  // in a block. Each commitment tx creates change that won't be spendable until
-  // the next block (~75s). So we only create ONE commitment per refill cycle
-  // and rely on the pool manager's periodic checks to build up the pool gradually.
-  const effectiveCount = Math.min(count, 1)
+  // Attempt a bounded batch. If Sapling witness constraints block subsequent
+  // spends, we detect "Missing witness" and stop early.
+  const effectiveCount = Math.max(0, Math.min(count, REFILL_BATCH_SIZE))
 
-  console.log(`[CommitmentPool] Refilling pool (creating ${effectiveCount} of ${count} needed)...`)
+  if (effectiveCount === 0) {
+    return { success: 0, failed: 0 }
+  }
+
+  console.log(`[CommitmentPool] Refilling pool (creating up to ${effectiveCount} of ${count} needed)...`)
 
   for (let i = 0; i < effectiveCount; i++) {
     try {
@@ -186,7 +217,7 @@ export async function refillPool(
         // No point retrying — must wait for the next block to anchor the witness.
         if (errorMsg.includes('Missing witness')) {
           console.log('[CommitmentPool] Waiting for Sapling note confirmation before next attempt')
-          failed += (count - i)
+          failed += (effectiveCount - i)
           break
         }
 
@@ -212,14 +243,6 @@ export async function refillPool(
 
       success++
       console.log(`[CommitmentPool] Commitment created: ${result.txHash.substring(0, 16)}...`)
-
-      // After a successful commitment, stop — the change output won't be
-      // spendable until the next block confirms it. The pool manager will
-      // call refillPool again on its next cycle.
-      if (i + 1 < effectiveCount) {
-        console.log('[CommitmentPool] Pausing refill — waiting for change to confirm')
-        break
-      }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error)
       console.error(`[CommitmentPool] Error creating commitment:`, errorMsg)
@@ -227,7 +250,7 @@ export async function refillPool(
       // Stop on witness errors
       if (errorMsg.includes('Missing witness')) {
         console.log('[CommitmentPool] Waiting for Sapling note confirmation before next attempt')
-        failed += (count - i)
+        failed += (effectiveCount - i)
         break
       }
 
@@ -298,12 +321,29 @@ export async function checkAndRefillPool(
     return
   }
 
-  const status = await getPoolStatus()
+  if (refillInFlight) {
+    await refillInFlight
+    return
+  }
 
-  if (status.available < POOL_MIN_SIZE) {
-    const needed = POOL_TARGET_SIZE - status.available
-    console.log(`[CommitmentPool] Pool low (${status.available}/${POOL_MIN_SIZE}), refilling ${needed} commitments`)
-    await refillPool(needed, network)
+  refillInFlight = (async () => {
+    await reclaimStaleClaimedCommitments().catch((error) => {
+      console.error('[CommitmentPool] Failed to reclaim stale claimed commitments:', error)
+    })
+
+    const status = await getPoolStatus()
+
+    if (status.available <= POOL_MIN_SIZE) {
+      const needed = POOL_TARGET_SIZE - status.available
+      console.log(`[CommitmentPool] Pool low (${status.available}/${POOL_MIN_SIZE}), refilling ${needed} commitments`)
+      await refillPool(needed, network)
+    }
+  })()
+
+  try {
+    await refillInFlight
+  } finally {
+    refillInFlight = null
   }
 }
 
@@ -312,6 +352,8 @@ export async function checkAndRefillPool(
  */
 export async function cleanupExpiredCommitments(): Promise<number> {
   try {
+    await reclaimStaleClaimedCommitments()
+
     const result = await prisma.seedCommitment.updateMany({
       where: {
         status: 'available',
@@ -384,7 +426,10 @@ export async function createFallbackCommitment(
       return null
     }
 
-    // Store in database as already used (no expiry needed)
+    // Store as claimed so normal mark/release flow works if game creation fails.
+    const expiresAt = new Date()
+    expiresAt.setHours(expiresAt.getHours() + COMMITMENT_EXPIRY_HOURS)
+
     const commitment = await prisma.seedCommitment.create({
       data: {
         serverSeed,
@@ -392,8 +437,9 @@ export async function createFallbackCommitment(
         txHash: result.txHash,
         blockHeight: result.blockHeight || 0,
         blockTimestamp: result.blockTimestamp || new Date(),
-        status: 'used', // Mark as used immediately
-        expiresAt: new Date() // Already expired/used
+        status: 'claimed',
+        usedAt: new Date(),
+        expiresAt,
       }
     })
 

@@ -106,7 +106,7 @@ export default function TermsPage() {
 
           <section>
             <h2 className="text-2xl font-display font-semibold text-bone-white mb-3">10. Responsible Gambling</h2>
-            <p>We encourage responsible gambling. You can set deposit limits, loss limits, and self-exclusion periods through the platform. For more information, visit our <Link href="/responsible-gambling" className="text-masque-gold hover:underline">Responsible Gambling</Link> page.</p>
+            <p>We encourage responsible gambling. Loss limits, session time limits, and self-exclusion periods are enforced for wager placement. Deposit-limit enforcement is on our roadmap and is not currently active. For more information, visit our <Link href="/responsible-gambling" className="text-masque-gold hover:underline">Responsible Gambling</Link> page.</p>
           </section>
 
           <section>

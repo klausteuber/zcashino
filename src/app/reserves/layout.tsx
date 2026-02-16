@@ -3,11 +3,11 @@ import type { Metadata } from 'next'
 export const metadata: Metadata = {
   title: 'Proof of Reserves',
   description:
-    'Verify that all CypherJester player funds are backed 1:1 by on-chain Zcash balances. Every deposit address is publicly auditable.',
+    'Track visible on-chain reserve balances and liabilities. Transparent balances are publicly verifiable; shielded balances remain private.',
   openGraph: {
     title: 'Proof of Reserves | CypherJester',
     description:
-      'All player funds backed 1:1 by on-chain balances. Verify any deposit address on the Zcash blockchain.',
+      'View transparent reserve balances and platform liabilities with clear visibility limits for private pools.',
     url: 'https://cypherjester.com/reserves',
   },
 }

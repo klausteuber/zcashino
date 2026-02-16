@@ -87,12 +87,21 @@ const completeGameState = {
   currentBet: 0.1,
   perfectPairsBet: 0,
   insuranceBet: 0,
+  dealerPeeked: true,
   serverSeedHash: 'seed-hash',
   clientSeed: 'client-seed',
   nonce: 0,
   lastPayout: 0,
   message: 'Round complete',
   perfectPairsResult: null,
+  settlement: {
+    totalStake: 0.1,
+    totalPayout: 0,
+    net: -0.1,
+    mainHandsPayout: 0,
+    insurancePayout: 0,
+    perfectPairsPayout: 0,
+  },
 }
 
 describe('BlackjackGame auto-bet timers', () => {
@@ -104,6 +113,7 @@ describe('BlackjackGame auto-bet timers', () => {
       if (key === 'zcashino_onboarding_seen') return 'true'
       if (key === 'zcashino_session_id') return 'session-1'
       if (key === 'zcashino_auto_bet') return 'true'
+      if (key === 'zcashino_client_seed') return 'seed-from-storage'
       return null
     })
 
@@ -203,5 +213,93 @@ describe('BlackjackGame auto-bet timers', () => {
       .filter(([url, init]) => url === '/api/game' && init?.method === 'POST').length
     expect(gameStarts).toBe(1)
     expect(screen.queryByText(/Auto-dealing in/)).not.toBeInTheDocument()
+  })
+
+  it('includes client seed in start payload', async () => {
+    render(<BlackjackGame />)
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'DEAL' })).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'DEAL' }))
+
+    await waitFor(() => {
+      const starts = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls
+        .filter(([url, init]) => url === '/api/game' && init?.method === 'POST')
+      expect(starts.length).toBeGreaterThan(0)
+    })
+
+    const [_, init] = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls
+      .find(([url, reqInit]) => url === '/api/game' && reqInit?.method === 'POST')!
+    const payload = JSON.parse(String(init?.body))
+
+    expect(payload.clientSeed).toBe('seed-from-storage')
+  })
+
+  it('keeps completed-round net display stable when next-bet controls change', async () => {
+    const losingCompleteState = {
+      ...completeGameState,
+      message: 'Dealer wins',
+      settlement: {
+        totalStake: 0.5,
+        totalPayout: 0,
+        net: -0.5,
+        mainHandsPayout: 0,
+        insurancePayout: 0,
+        perfectPairsPayout: 0,
+      },
+    }
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input.toString()
+
+      if (url.startsWith('/api/session')) {
+        return { ok: true, json: async () => sessionPayload } as Response
+      }
+
+      if (url.startsWith('/api/game?')) {
+        return { ok: true, json: async () => ({ games: [] }) } as Response
+      }
+
+      if (url === '/api/game' && init?.method === 'POST') {
+        return {
+          ok: true,
+          json: async () => ({
+            gameId: 'game-1',
+            gameState: losingCompleteState,
+            balance: 0.5,
+            totalWagered: 0.5,
+            totalWon: 0,
+            commitment: null,
+          }),
+        } as Response
+      }
+
+      return {
+        ok: false,
+        json: async () => ({ error: `Unexpected fetch url: ${url}` }),
+      } as Response
+    })
+    global.fetch = fetchMock as unknown as typeof fetch
+
+    render(<BlackjackGame />)
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'DEAL' })).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'DEAL' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('-0.5000 ZEC')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: '0.5' }))
+    const perfectPairsLabel = screen.getByText('Perfect Pairs').closest('label')
+    const perfectPairsCheckbox = perfectPairsLabel?.querySelector('input[type="checkbox"]') as HTMLInputElement
+    fireEvent.click(perfectPairsCheckbox)
+
+    expect(screen.getByText('-0.5000 ZEC')).toBeInTheDocument()
   })
 })

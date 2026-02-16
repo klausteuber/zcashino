@@ -119,6 +119,58 @@ export async function checkNodeStatus(
   }
 }
 
+interface RpcAccountResult {
+  account: number
+}
+
+interface RpcUnifiedAddressResult {
+  address: string
+}
+
+function extractAccountIndex(result: number | RpcAccountResult): number {
+  if (typeof result === 'number') return result
+  if (typeof result === 'object' && result !== null && typeof result.account === 'number') {
+    return result.account
+  }
+  throw new Error('Invalid account response from z_getnewaccount')
+}
+
+/**
+ * Generate a new deposit address set (unified + transparent companion receiver).
+ */
+export async function generateDepositAddressSet(
+  network: ZcashNetwork = DEFAULT_NETWORK
+): Promise<{
+  unifiedAddr: string
+  transparentAddr: string
+  accountIndex: number
+}> {
+  const accountResult = await rpcCall<number | RpcAccountResult>('z_getnewaccount', [], network)
+  const accountIndex = extractAccountIndex(accountResult)
+
+  const ua = await rpcCall<RpcUnifiedAddressResult>(
+    'z_getaddressforaccount',
+    [accountIndex, ['p2pkh', 'sapling']],
+    network
+  )
+
+  const receivers = await rpcCall<{ p2pkh?: string; sapling?: string; orchard?: string }>(
+    'z_listunifiedreceivers',
+    [ua.address],
+    network
+  )
+
+  if (!ua.address || !receivers.p2pkh) {
+    throw new Error('Failed to generate deposit address set with transparent receiver')
+  }
+
+  return {
+    unifiedAddr: ua.address,
+    transparentAddr: receivers.p2pkh,
+    accountIndex,
+  }
+}
+
 /**
  * Generate a new transparent address via unified account system.
  * zcashd 6.x deprecates getnewaddress — must use z_getaddressforaccount
@@ -127,41 +179,8 @@ export async function checkNodeStatus(
 export async function generateTransparentAddress(
   network: ZcashNetwork = DEFAULT_NETWORK
 ): Promise<string> {
-  // Use account 0 for all deposit addresses (created once on first call)
-  let account = 0
-  try {
-    const accounts = await rpcCall<{ account: number }[]>('z_listaccounts', [], network)
-    if (accounts.length === 0) {
-      const newAccount = await rpcCall<{ account: number }>('z_getnewaccount', [], network)
-      account = newAccount.account
-    } else {
-      account = accounts[0].account
-    }
-  } catch {
-    // If z_listaccounts fails, try creating account 0
-    const newAccount = await rpcCall<{ account: number }>('z_getnewaccount', [], network)
-    account = newAccount.account
-  }
-
-  // Generate unified address with p2pkh (transparent) + sapling receivers
-  const ua = await rpcCall<{ address: string }>(
-    'z_getaddressforaccount',
-    [account, ['p2pkh', 'sapling']],
-    network
-  )
-
-  // Extract the raw transparent (p2pkh) address from the unified address
-  const receivers = await rpcCall<{ p2pkh?: string; sapling?: string }>(
-    'z_listunifiedreceivers',
-    [ua.address],
-    network
-  )
-
-  if (!receivers.p2pkh) {
-    throw new Error('Failed to extract transparent address from unified address')
-  }
-
-  return receivers.p2pkh
+  const addresses = await generateDepositAddressSet(network)
+  return addresses.transparentAddr
 }
 
 /**
@@ -181,14 +200,8 @@ export async function generateUnifiedAddress(
   network: ZcashNetwork = DEFAULT_NETWORK
 ): Promise<string> {
   try {
-    // Try to create unified address (zcashd 5.0+)
-    const account = await rpcCall<number>('z_getnewaccount', [], network)
-    const ua = await rpcCall<{ address: string }>(
-      'z_getaddressforaccount',
-      [account, ['sapling', 'orchard']],
-      network
-    )
-    return ua.address
+    const addresses = await generateDepositAddressSet(network)
+    return addresses.unifiedAddr
   } catch {
     // Fallback to sapling address if unified not supported
     console.log('Unified addresses not supported, falling back to sapling')

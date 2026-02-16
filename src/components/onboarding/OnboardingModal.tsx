@@ -86,11 +86,12 @@ export function OnboardingModal({
     // Testnet addresses
     if (address.startsWith('tm') && address.length >= 35) return true // t-addr testnet
     if (address.startsWith('ztestsapling') && address.length >= 78) return true // z-addr testnet
+    if (address.startsWith('utest') && address.length >= 50) return true // unified addr testnet
     // Mainnet addresses
     if (address.startsWith('t1') && address.length >= 35) return true // t-addr mainnet
     if (address.startsWith('t3') && address.length >= 35) return true // t-addr mainnet (multisig)
     if (address.startsWith('zs') && address.length >= 78) return true // z-addr mainnet
-    if (address.startsWith('u1') && address.length >= 78) return true // unified addr mainnet
+    if (address.startsWith('u1') && address.length >= 50) return true // unified addr mainnet
     return false
   }
 
@@ -318,6 +319,8 @@ function DepositScreen({
     ? `${withdrawalAddress.slice(0, 10)}...${withdrawalAddress.slice(-8)}`
     : withdrawalAddress
 
+  const networkLabel = getAddressNetworkLabel(depositAddress)
+
   return (
     <div className="p-6">
       <button
@@ -342,7 +345,7 @@ function DepositScreen({
       {/* QR Code */}
       <div className="flex flex-col items-center mb-4">
         <div className="bg-bone-white p-3 rounded-xl mb-3">
-          <QRCode value={`zcash:${depositAddress}`} size={160} />
+          <QRCode value={depositAddress} size={160} />
         </div>
 
         {/* Deposit address */}
@@ -368,7 +371,7 @@ function DepositScreen({
         </div>
         <div className="flex items-center gap-2">
           <span className="text-masque-gold">•</span>
-          <span>Network: {depositAddress.startsWith('t1') ? 'mainnet' : 'testnet'}</span>
+          <span>Network: {networkLabel}</span>
         </div>
       </div>
 
@@ -385,6 +388,27 @@ function DepositScreen({
       </div>
     </div>
   )
+}
+
+function getAddressNetworkLabel(address: string): 'mainnet' | 'testnet' | 'unknown' {
+  if (
+    address.startsWith('t1') ||
+    address.startsWith('t3') ||
+    address.startsWith('zs') ||
+    address.startsWith('u1')
+  ) {
+    return 'mainnet'
+  }
+
+  if (
+    address.startsWith('tm') ||
+    address.startsWith('ztestsapling') ||
+    address.startsWith('utest')
+  ) {
+    return 'testnet'
+  }
+
+  return 'unknown'
 }
 
 // Confirming Screen Component

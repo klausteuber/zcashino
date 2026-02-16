@@ -6,9 +6,11 @@ import type {
   VideoPokerHandRank,
   JacksOrBetterHandRank,
   DeucesWildHandRank,
+  FairnessVersion,
 } from '@/types'
-import { createDeck, shuffleDeck, cardToString } from './deck'
+import { createDeck, cardToString } from './deck'
 import { roundZec } from '@/lib/wallet'
+import { LEGACY_FAIRNESS_VERSION, shuffleDeck } from './shuffle'
 
 // Game constants
 export const MIN_BET = 0.01    // 0.01 ZEC
@@ -469,7 +471,8 @@ export function startRound(
   serverSeed: string,
   serverSeedHash: string,
   clientSeed: string,
-  nonce: number
+  nonce: number,
+  fairnessVersion: FairnessVersion = LEGACY_FAIRNESS_VERSION
 ): VideoPokerGameState {
   // Validate bet
   if (baseBet < MIN_BET || baseBet > MAX_BET) {
@@ -487,7 +490,7 @@ export function startRound(
   // Create single 52-card deck and shuffle with combined seed
   const combinedSeed = `${serverSeed}:${clientSeed}:${nonce}`
   const deck = createDeck()
-  const shuffledDeck = shuffleDeck(deck, combinedSeed)
+  const shuffledDeck = shuffleDeck(deck, combinedSeed, fairnessVersion)
 
   // Deal first 5 cards (all face-up to player)
   const hand = shuffledDeck.slice(0, HAND_SIZE).map(c => ({ ...c, faceUp: true }))

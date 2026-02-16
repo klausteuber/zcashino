@@ -50,14 +50,16 @@ model Session {
   @@index([withdrawalAddress])
 }
 
-// Deposit wallet - transparent addresses for proof of reserves
+// Deposit wallet - unified deposit + transparent audit/sweep address
 model DepositWallet {
   id              String   @id @default(cuid())
   sessionId       String   @unique
   session         Session  @relation(fields: [sessionId], references: [id])
 
-  // Transparent address only (for proof of reserves)
-  transparentAddr String   @unique  // t-address - publicly verifiable
+  // User-facing deposit receiver (u-address) for wallet compatibility
+  unifiedAddr     String?  @unique
+  // Transparent companion address used for reserve visibility/sweeps
+  transparentAddr String   @unique
 
   // Network configuration
   network         String   @default("testnet") // mainnet, testnet
@@ -82,6 +84,7 @@ model DepositWallet {
   sweepLogs       SweepLog[]
 
   @@index([transparentAddr])
+  @@index([unifiedAddr])
 }
 
 // Individual blackjack game/hand
@@ -105,6 +108,7 @@ model BlackjackGame {
   serverSeedHash  String
   clientSeed      String
   nonce           Int
+  fairnessVersion String   @default("legacy_mulberry_v1")
 
   // Blockchain commitment (provably fair on-chain)
   commitmentTxHash    String?   // Zcash tx hash of commitment
@@ -245,6 +249,7 @@ model VideoPokerGame {
   serverSeedHash  String
   clientSeed      String
   nonce           Int
+  fairnessVersion String   @default("legacy_mulberry_v1")
 
   // Blockchain commitment
   commitmentTxHash    String?

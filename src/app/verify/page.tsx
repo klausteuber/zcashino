@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import JesterLogo from '@/components/ui/JesterLogo'
-import type { FullVerificationResult, GameVerificationData } from '@/types'
+import type { FullVerificationResult, GameVerificationData, FairnessVersion } from '@/types'
 
 type VerificationMode = 'gameId' | 'manual'
 type GameType = 'blackjack' | 'video_poker'
@@ -35,6 +35,7 @@ function VerifyPageContent() {
   const [clientSeed, setClientSeed] = useState('')
   const [nonce, setNonce] = useState('')
   const [txHash, setTxHash] = useState('')
+  const [fairnessVersion, setFairnessVersion] = useState<FairnessVersion>('hmac_sha256_v1')
 
   const [isLoading, setIsLoading] = useState(false)
   const [result, setResult] = useState<VerificationResponse | null>(null)
@@ -62,6 +63,7 @@ function VerifyPageContent() {
             nonce: parseInt(nonce, 10),
             txHash: txHash || undefined,
             gameType,
+            fairnessVersion,
           }
 
       const res = await fetch('/api/verify', {
@@ -105,6 +107,7 @@ function VerifyPageContent() {
       setClientSeed(gameData.clientSeed)
       setNonce(gameData.nonce.toString())
       setGameType(gameData.gameType === 'video_poker' ? 'video_poker' : 'blackjack')
+      setFairnessVersion(gameData.fairnessVersion === 'legacy_mulberry_v1' ? 'legacy_mulberry_v1' : 'hmac_sha256_v1')
       if (gameData.commitment?.txHash) {
         setTxHash(gameData.commitment.txHash)
       }
@@ -193,6 +196,32 @@ function VerifyPageContent() {
             Video Poker
           </button>
         </div>
+
+        {mode === 'manual' && (
+          <div className="flex items-center gap-2 mb-6">
+            <span className="text-sm text-venetian-gold/60">Shuffle Version</span>
+            <button
+              onClick={() => setFairnessVersion('hmac_sha256_v1')}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                fairnessVersion === 'hmac_sha256_v1'
+                  ? 'bg-masque-gold text-midnight-black'
+                  : 'bg-midnight-black/40 text-venetian-gold/60 hover:text-bone-white border border-masque-gold/20'
+              }`}
+            >
+              HMAC-SHA256
+            </button>
+            <button
+              onClick={() => setFairnessVersion('legacy_mulberry_v1')}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                fairnessVersion === 'legacy_mulberry_v1'
+                  ? 'bg-masque-gold text-midnight-black'
+                  : 'bg-midnight-black/40 text-venetian-gold/60 hover:text-bone-white border border-masque-gold/20'
+              }`}
+            >
+              Legacy
+            </button>
+          </div>
+        )}
 
         {/* Input Form */}
         <div className="bg-midnight-black/40 rounded-lg p-6 border border-masque-gold/20 mb-8">

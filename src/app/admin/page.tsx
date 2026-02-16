@@ -64,6 +64,8 @@ interface AdminOverview {
   security: {
     failedLoginAttempts24h: number
     rateLimitedEvents24h: number
+    legacyPlayerAuthFallback24h: number
+    legacyPlayerAuthFallbackAllTime: number
   }
   auditLogs: Array<{
     id: string
@@ -542,7 +544,7 @@ export default function AdminPage() {
               <MetricCard
                 label="Failed Logins (24h)"
                 value={String(overview.security.failedLoginAttempts24h)}
-                detail={`${overview.security.rateLimitedEvents24h} rate-limited admin events`}
+                detail={`${overview.security.rateLimitedEvents24h} rate-limited admin events • ${overview.security.legacyPlayerAuthFallback24h} legacy auth fallbacks`}
               />
             </section>
 
@@ -610,6 +612,10 @@ export default function AdminPage() {
                   <InlineStat
                     label="Idempotency Replays"
                     value={`${overview.transactions.idempotencyReplays24h} (24h) / ${overview.transactions.idempotencyReplaysAllTime} total`}
+                  />
+                  <InlineStat
+                    label="Legacy Auth Fallbacks"
+                    value={`${overview.security.legacyPlayerAuthFallback24h} (24h) / ${overview.security.legacyPlayerAuthFallbackAllTime} total`}
                   />
                 </div>
                 <div className="text-xs text-venetian-gold/50 mt-3">

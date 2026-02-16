@@ -26,6 +26,18 @@ import { parseWithSchema, walletBodySchema } from '@/lib/validation/api-schemas'
 import { reserveFunds, releaseFunds, creditFunds } from '@/lib/services/ledger'
 import { logPlayerCounterEvent, PLAYER_COUNTER_ACTIONS } from '@/lib/telemetry/player-events'
 
+type DepositAddressType = 'unified' | 'transparent'
+
+function getPreferredDepositAddress(wallet: {
+  unifiedAddr: string | null
+  transparentAddr: string
+}): { depositAddress: string; depositAddressType: DepositAddressType } {
+  if (wallet.unifiedAddr) {
+    return { depositAddress: wallet.unifiedAddr, depositAddressType: 'unified' }
+  }
+  return { depositAddress: wallet.transparentAddr, depositAddressType: 'transparent' }
+}
+
 /**
  * GET /api/wallet
  * Get wallet info for a session including deposit address
@@ -59,10 +71,11 @@ export async function GET(request: NextRequest) {
       wallet = await createDepositWalletForSession(sessionId)
     }
 
-    // Get deposit info (transparent only for proof of reserves)
+    const { depositAddress, depositAddressType } = getPreferredDepositAddress(wallet)
+
     const depositInfo = getDepositInfo(
-      wallet.transparentAddr,
-      'transparent',
+      depositAddress,
+      depositAddressType,
       wallet.network as 'mainnet' | 'testnet'
     )
 
@@ -72,7 +85,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       wallet: {
         id: wallet.id,
-        depositAddress: wallet.transparentAddr,
+        depositAddress,
+        depositAddressType,
+        transparentAddress: wallet.transparentAddr,
         network: wallet.network,
       },
       depositInfo,
@@ -195,12 +210,15 @@ async function handleCreateWallet(session: { id: string; wallet: unknown }) {
   }
 
   const wallet = await createDepositWalletForSession(session.id)
+  const { depositAddress, depositAddressType } = getPreferredDepositAddress(wallet)
 
   return NextResponse.json({
     success: true,
     wallet: {
       id: wallet.id,
-      depositAddress: wallet.transparentAddr,
+      depositAddress,
+      depositAddressType,
+      transparentAddress: wallet.transparentAddr,
       network: wallet.network,
     },
   })
@@ -217,6 +235,7 @@ async function handleCheckDeposits(session: {
   withdrawalAddress: string | null
   wallet: {
     transparentAddr: string
+    unifiedAddr: string | null
     network: string
   } | null
 }) {
@@ -225,6 +244,7 @@ async function handleCheckDeposits(session: {
   }
 
   const network = session.wallet.network as 'mainnet' | 'testnet'
+  const { depositAddress: monitorAddress, depositAddressType } = getPreferredDepositAddress(session.wallet)
 
   // Check node status
   const nodeStatus = await checkNodeStatus(network)
@@ -233,15 +253,23 @@ async function handleCheckDeposits(session: {
       success: false,
       error: 'Zcash node not connected',
       deposits: [],
+      pendingDeposits: [],
+      newDeposit: false,
+      depositAmount: null,
+      authenticated: session.isAuthenticated,
+      session: {
+        isAuthenticated: session.isAuthenticated,
+        balance: session.balance,
+      },
     })
   }
 
   // Keep an address-level balance snapshot for reserves UI only.
   const tBalance = await getAddressBalance(session.wallet.transparentAddr, network)
-  const totalConfirmed = tBalance.confirmed
-  const totalPending = tBalance.pending
+  let totalConfirmed = 0
+  let totalPending = 0
 
-  const chainTxs = await listAddressTransactions(session.wallet.transparentAddr, 200, network)
+  const chainTxs = await listAddressTransactions(monitorAddress, 200, network)
   const receiveMap = new Map<string, { amount: number; confirmations: number }>()
   for (const tx of chainTxs) {
     if (tx.category !== 'receive' || !tx.txid || tx.amount <= 0) continue
@@ -256,6 +284,19 @@ async function handleCheckDeposits(session: {
 
     current.amount = roundZec(current.amount + tx.amount)
     current.confirmations = Math.max(current.confirmations, tx.confirmations)
+  }
+
+  if (depositAddressType === 'transparent') {
+    totalConfirmed = tBalance.confirmed
+    totalPending = tBalance.pending
+  } else {
+    for (const tx of receiveMap.values()) {
+      if (tx.confirmations >= CONFIRMATIONS_REQUIRED) {
+        totalConfirmed = roundZec(totalConfirmed + tx.amount)
+      } else {
+        totalPending = roundZec(totalPending + tx.amount)
+      }
+    }
   }
 
   const txHashes = Array.from(receiveMap.keys())
@@ -301,7 +342,7 @@ async function handleCheckDeposits(session: {
               sessionId: session.id,
               type: 'deposit',
               amount: tx.amount,
-              address: session.wallet!.transparentAddr,
+              address: monitorAddress,
               txHash,
               confirmations: tx.confirmations,
               status: isConfirmedOnChain ? 'confirmed' : 'pending',
@@ -339,7 +380,7 @@ async function handleCheckDeposits(session: {
         newDeposits.push({
           amount: tx.amount,
           confirmations: tx.confirmations,
-          address: session.wallet.transparentAddr,
+          address: monitorAddress,
           isAuthDeposit: authenticatedThisTx,
         })
       }
@@ -403,7 +444,7 @@ async function handleCheckDeposits(session: {
       newDeposits.push({
         amount: existing.amount,
         confirmations: tx.confirmations,
-        address: session.wallet.transparentAddr,
+        address: monitorAddress,
         isAuthDeposit: authenticatedThisTx,
       })
     }
@@ -412,7 +453,7 @@ async function handleCheckDeposits(session: {
   await prisma.depositWallet.update({
     where: { sessionId: session.id },
     data: {
-      cachedBalance: totalConfirmed,
+      cachedBalance: tBalance.confirmed,
       balanceUpdatedAt: new Date(),
     },
   })
@@ -430,6 +471,19 @@ async function handleCheckDeposits(session: {
     where: { id: session.id },
   })
 
+  const pendingDeposits = Array.from(receiveMap.entries())
+    .filter(([, tx]) => tx.confirmations < CONFIRMATIONS_REQUIRED)
+    .map(([txHash, tx]) => ({
+      txHash,
+      amount: tx.amount,
+      confirmations: tx.confirmations,
+      address: monitorAddress,
+    }))
+
+  const authenticated = updatedSession?.isAuthenticated ?? session.isAuthenticated
+  const sessionBalance = updatedSession?.balance ?? session.balance
+  const depositAmount = newDeposits.length > 0 ? newDeposits[0].amount : null
+
   return NextResponse.json({
     success: true,
     balance: {
@@ -437,12 +491,21 @@ async function handleCheckDeposits(session: {
       pending: totalPending,
       total: totalConfirmed + totalPending,
     },
-    sessionBalance: updatedSession?.balance ?? session.balance,
+    sessionBalance,
     deposits: newDeposits,
     pendingCount,
+    // Compatibility fields for onboarding polling hook
+    pendingDeposits,
+    newDeposit: newDeposits.length > 0,
+    depositAmount,
+    authenticated,
+    session: {
+      isAuthenticated: authenticated,
+      balance: sessionBalance,
+    },
     // Authentication status
     auth: {
-      isAuthenticated: updatedSession?.isAuthenticated ?? session.isAuthenticated,
+      isAuthenticated: authenticated,
       justAuthenticated,
       withdrawalAddress: updatedSession?.withdrawalAddress,
       authTxHash: updatedSession?.authTxHash,

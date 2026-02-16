@@ -53,7 +53,7 @@ curl http://localhost:3000/api/health
 |----------|-------------|---------|
 | `FORCE_HTTPS` | Set to `true` for secure cookies (required behind TLS proxy) | `false` |
 | `PLAYER_SESSION_AUTH_MODE` | Player auth rollout mode: `compat` or `strict` | `compat` |
-| `WITHDRAWAL_APPROVAL_THRESHOLD` | Withdrawals >= this amount require admin approval (ZEC) | `5.0` |
+| `WITHDRAWAL_APPROVAL_THRESHOLD` | Withdrawals >= this amount require admin approval (ZEC) | `1.0` |
 | `KILL_SWITCH` | Set to `true` to block new games/withdrawals at startup | `false` |
 | `NEXT_PUBLIC_SENTRY_DSN` | Sentry error tracking DSN | (disabled) |
 | `SENTRY_AUTH_TOKEN` | Sentry source map upload token | (disabled) |
@@ -178,11 +178,22 @@ docker compose exec app npx prisma migrate deploy
 - `transactions.raceRejectionsAllTime`
 - `transactions.idempotencyReplays24h`
 - `transactions.idempotencyReplaysAllTime`
+- `security.legacyPlayerAuthFallback24h`
+- `security.legacyPlayerAuthFallbackAllTime`
 - Negative balances must remain zero
 
 5. Flip to strict mode after metrics are clean:
 - Set `PLAYER_SESSION_AUTH_MODE=strict`
 - Reject legacy body/query-only player session access
+
+## Live Guardrails (2026-02-16 onward)
+
+Production is already live. Use this section and `notes/mainnet-guarded-live-runbook.md` for post-launch operations.
+
+- Initial real-money smoke test (deposit -> play -> verify -> withdraw) has passed.
+- Commitment pool refill is intentionally one commitment per cycle (~5 minutes) because fresh Sapling notes cannot be spent until witness data is anchored in a block.
+- Health balance warning logic uses confirmed + pending house balance totals to avoid false alerts during commitment self-send cycles.
+- Keep `PLAYER_SESSION_AUTH_MODE=compat` until strict cutover preconditions pass for a full 48-hour window.
 
 ## Zcash Node Setup
 
@@ -377,6 +388,7 @@ TELEGRAM_CHAT_ID=your-chat-id
 BACKUP_PASSPHRASE=your-gpg-passphrase
 MIN_HOUSE_BALANCE=0.5
 DISK_THRESHOLD=85
+APP_BASE_URL=http://127.0.0.1:3000
 ```
 
 Install cron jobs:
@@ -391,6 +403,12 @@ crontab -e
 0 * * * *    /opt/zcashino/scripts/check-disk.sh     >> /var/log/zcashino-monitor.log 2>&1
 0 3 * * *    /opt/zcashino/scripts/backup-db.sh      >> /var/log/zcashino-backup.log 2>&1
 0 4 * * 0    /opt/zcashino/scripts/backup-wallet.sh  >> /var/log/zcashino-backup.log 2>&1
+# Guarded-live window:
+# First 6h (keep this line enabled):
+*/15 * * * * /opt/zcashino/scripts/guarded-live-monitor.js --alert >> /var/log/zcashino-guarded-live.log 2>&1
+# After first 6h, disable the 15m line above and enable this hourly line:
+# 0 * * * *    /opt/zcashino/scripts/guarded-live-monitor.js --alert >> /var/log/zcashino-guarded-live.log 2>&1
+0 5 * * *    /opt/zcashino/scripts/guarded-live-reconcile.js >> /var/log/zcashino-reconcile.log 2>&1
 ```
 
 | Script | Schedule | What it checks |
@@ -400,7 +418,12 @@ crontab -e
 | `check-disk.sh` | Hourly | Disk usage below 85% |
 | `backup-db.sh` | Daily 3am | SQLite backup, gzipped, 30-day retention |
 | `backup-wallet.sh` | Weekly Sun 4am | wallet.dat backup, GPG encrypted, 4-copy retention |
+| `guarded-live-baseline.js` | Manual at launch | Captures day-zero invariants for diffing |
+| `guarded-live-monitor.js` | 15 min (first 6h), then hourly | Checks `/api/health`, `/api/admin/overview`, and DB invariants against alert gates |
+| `guarded-live-reconcile.js` | Daily | Logs liabilities vs house balance + withdrawal queues |
 | `send-alert.sh` | (shared) | Telegram notification delivery |
+
+Detailed guarded-live cadence and cutover gates: `notes/mainnet-guarded-live-runbook.md`.
 
 ### External Monitoring
 
@@ -408,6 +431,7 @@ crontab -e
 - **Errors**: Configure `NEXT_PUBLIC_SENTRY_DSN` for Sentry error tracking
 - **Admin dashboard**: `https://yourdomain.com/admin` for operational oversight
 - **Race/idempotency telemetry**: track `raceRejections24h` and `idempotencyReplays24h` from `GET /api/admin/overview`
+- **Compat fallback telemetry**: track `legacyPlayerAuthFallback24h` from `GET /api/admin/overview` before strict auth cutover
 
 ## Backups
 
@@ -537,7 +561,9 @@ curl -X POST http://127.0.0.1:3000/api/admin/pool \
 
 State persists across container restarts (stored in `/app/data/kill-switch.json`). The `KILL_SWITCH` env var takes precedence over file state.
 
-## Pre-Launch Checklist
+## Launch Checklist (Fresh Environment / DR Restore)
+
+Use this checklist when launching a new environment or restoring to a fresh host. Production may already be live.
 
 ### Security
 - [ ] Strong credentials set in `.env.mainnet` (all generated with `openssl rand`)
@@ -568,9 +594,11 @@ State persists across container restarts (stored in `/app/data/kill-switch.json`
 - [ ] Legal pages reviewed (/terms, /privacy, /responsible-gambling)
 - [ ] Smoke test: deposit, play, withdraw with real ZEC
 
-### Post-Launch (First 30 Days)
+### Live Environment (First 30 Days)
 - [ ] Daily reconciliation: `sum(session.balance)` vs on-chain house balance
+- [ ] Daily canary for first 7 days: deposit tiny amount, play one hand, verify, withdraw
 - [ ] Monitor race/idempotency counters in admin overview for first 48h
+- [ ] Monitor legacy compat-auth fallback counter (`security.legacyPlayerAuthFallback24h`) before strict cutover
 - [ ] Flip `PLAYER_SESSION_AUTH_MODE=strict` after clean metrics
 - [ ] Weekly dependency/security patch review
 - [ ] Backup restore drill completed at least once

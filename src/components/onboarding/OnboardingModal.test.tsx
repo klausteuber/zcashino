@@ -187,6 +187,35 @@ describe('OnboardingModal', () => {
         expect(mockSetAddress).toHaveBeenCalledWith('tmTestAddress123456789012345678901234567890')
       })
     })
+
+    it('should accept valid unified testnet withdrawal address', async () => {
+      const user = userEvent.setup()
+      const mockSetAddress = vi.fn().mockResolvedValue(true)
+      const unifiedTestnetAddress = `utest${'a'.repeat(50)}`
+
+      render(
+        <OnboardingModal
+          {...defaultProps}
+          sessionId="session-123"
+          onSetWithdrawalAddress={mockSetAddress}
+        />
+      )
+
+      const realButton = screen.getByText('Real ZEC').closest('button')!
+      await user.click(realButton)
+
+      await waitFor(() => {
+        expect(screen.getByPlaceholderText(/zs1|t1|tm/i)).toBeInTheDocument()
+      })
+
+      const input = screen.getByPlaceholderText(/zs1|t1|tm/i)
+      await user.type(input, unifiedTestnetAddress)
+      await user.click(screen.getByText('Continue to Deposit'))
+
+      await waitFor(() => {
+        expect(mockSetAddress).toHaveBeenCalledWith(unifiedTestnetAddress)
+      })
+    })
   })
 
   describe('Deposit Screen', () => {
@@ -253,6 +282,55 @@ describe('OnboardingModal', () => {
       await waitFor(() => {
         expect(screen.getByText(/minimum.*0\.001/i)).toBeInTheDocument()
         expect(screen.getByText(/3 confirmations/i)).toBeInTheDocument()
+      })
+    })
+
+    it('should render QR code with raw address value', async () => {
+      const user = userEvent.setup()
+      const mockSetAddress = vi.fn().mockResolvedValue(true)
+      const depositAddress = 'tmDeposit123456789012345678901234'
+
+      render(
+        <OnboardingModal
+          {...defaultProps}
+          sessionId="session-123"
+          depositAddress={depositAddress}
+          onSetWithdrawalAddress={mockSetAddress}
+        />
+      )
+
+      const realButton = screen.getByText('Real ZEC').closest('button')!
+      await user.click(realButton)
+      await user.type(screen.getByPlaceholderText(/zs1|t1|tm/i), 'tmTestAddress123456789012345678901234567890')
+      await user.click(screen.getByText('Continue to Deposit'))
+
+      await waitFor(() => {
+        expect(screen.getByTestId('qr-code')).toHaveTextContent(depositAddress)
+      })
+      expect(screen.getByTestId('qr-code')).not.toHaveTextContent('zcash:')
+    })
+
+    it('should label unified mainnet deposit addresses as mainnet', async () => {
+      const user = userEvent.setup()
+      const mockSetAddress = vi.fn().mockResolvedValue(true)
+      const unifiedMainnetAddress = `u1${'a'.repeat(100)}`
+
+      render(
+        <OnboardingModal
+          {...defaultProps}
+          sessionId="session-123"
+          depositAddress={unifiedMainnetAddress}
+          onSetWithdrawalAddress={mockSetAddress}
+        />
+      )
+
+      const realButton = screen.getByText('Real ZEC').closest('button')!
+      await user.click(realButton)
+      await user.type(screen.getByPlaceholderText(/zs1|t1|tm/i), 'tmTestAddress123456789012345678901234567890')
+      await user.click(screen.getByText('Continue to Deposit'))
+
+      await waitFor(() => {
+        expect(screen.getByText('Network: mainnet')).toBeInTheDocument()
       })
     })
   })

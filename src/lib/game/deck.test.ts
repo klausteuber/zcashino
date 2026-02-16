@@ -3,8 +3,6 @@ import type { Card, Suit, Rank } from '@/types'
 import {
   createDeck,
   createShoe,
-  shuffleDeck,
-  generateShuffleOrder,
   getCardValue,
   calculateHandValue,
   isSoftHand,
@@ -73,68 +71,6 @@ describe('createShoe', () => {
     for (const count of counts.values()) {
       expect(count).toBe(6)
     }
-  })
-})
-
-describe('shuffleDeck', () => {
-  it('returns same number of cards as input', () => {
-    const deck = createDeck()
-    expect(shuffleDeck(deck, 'seed1')).toHaveLength(52)
-  })
-
-  it('same seed produces same order (deterministic)', () => {
-    const deck = createDeck()
-    const a = shuffleDeck(deck, 'test-seed-123')
-    const b = shuffleDeck(deck, 'test-seed-123')
-    expect(a.map(cardToString)).toEqual(b.map(cardToString))
-  })
-
-  it('different seeds produce different orders', () => {
-    const deck = createDeck()
-    const a = shuffleDeck(deck, 'seed-alpha')
-    const b = shuffleDeck(deck, 'seed-beta')
-    // Very unlikely to be the same
-    const aStr = a.map(cardToString).join(',')
-    const bStr = b.map(cardToString).join(',')
-    expect(aStr).not.toBe(bStr)
-  })
-
-  it('does not mutate original deck', () => {
-    const deck = createDeck()
-    const original = deck.map(cardToString)
-    shuffleDeck(deck, 'some-seed')
-    expect(deck.map(cardToString)).toEqual(original)
-  })
-
-  it('preserves all cards (no loss or duplication)', () => {
-    const deck = createDeck()
-    const shuffled = shuffleDeck(deck, 'preserve-test')
-    const originalKeys = deck.map((c) => `${c.rank}_${c.suit}`).sort()
-    const shuffledKeys = shuffled.map((c) => `${c.rank}_${c.suit}`).sort()
-    expect(shuffledKeys).toEqual(originalKeys)
-  })
-})
-
-describe('generateShuffleOrder', () => {
-  it('returns array of correct length', () => {
-    expect(generateShuffleOrder(52, 'seed')).toHaveLength(52)
-  })
-
-  it('contains every index exactly once (valid permutation)', () => {
-    const order = generateShuffleOrder(10, 'perm-test')
-    expect(order.sort((a, b) => a - b)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
-  })
-
-  it('same seed is deterministic', () => {
-    const a = generateShuffleOrder(52, 'det-seed')
-    const b = generateShuffleOrder(52, 'det-seed')
-    expect(a).toEqual(b)
-  })
-
-  it('different seeds produce different orders', () => {
-    const a = generateShuffleOrder(52, 'order-a')
-    const b = generateShuffleOrder(52, 'order-b')
-    expect(a).not.toEqual(b)
   })
 })
 

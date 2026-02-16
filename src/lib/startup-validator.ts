@@ -62,6 +62,8 @@ export function validateStartupConfig(): StartupValidationResult {
   // ── Admin credentials ───────────────────────────────────────────────
   const adminPassword = process.env.ADMIN_PASSWORD
   const sessionSecret = process.env.ADMIN_SESSION_SECRET
+  const playerSessionSecret = process.env.PLAYER_SESSION_SECRET
+  const playerAuthMode = process.env.PLAYER_SESSION_AUTH_MODE
 
   if (isMainnet) {
     if (!adminPassword || adminPassword.length < 12) {
@@ -76,6 +78,21 @@ export function validateStartupConfig(): StartupValidationResult {
         `Current length: ${sessionSecret?.length ?? 0}`
       )
     }
+    if (!playerSessionSecret || playerSessionSecret.length < 32) {
+      errors.push(
+        'PLAYER_SESSION_SECRET must be at least 32 characters on mainnet. ' +
+        `Current length: ${playerSessionSecret?.length ?? 0}`
+      )
+    }
+    if (!playerAuthMode) {
+      errors.push(
+        'PLAYER_SESSION_AUTH_MODE must be set on mainnet ("compat" or "strict").'
+      )
+    } else if (playerAuthMode !== 'compat' && playerAuthMode !== 'strict') {
+      errors.push(
+        `PLAYER_SESSION_AUTH_MODE="${playerAuthMode}" is invalid. Must be "compat" or "strict".`
+      )
+    }
   } else {
     if (!adminPassword) {
       warnings.push('ADMIN_PASSWORD not set. Admin dashboard will be inaccessible.')
@@ -84,6 +101,17 @@ export function validateStartupConfig(): StartupValidationResult {
       warnings.push(
         `ADMIN_SESSION_SECRET is weak (${sessionSecret?.length ?? 0} chars). ` +
         'Use 32+ characters in production.'
+      )
+    }
+    if (playerSessionSecret && playerSessionSecret.length < 16) {
+      warnings.push(
+        `PLAYER_SESSION_SECRET is weak (${playerSessionSecret.length} chars). ` +
+        'Use 32+ characters in production.'
+      )
+    }
+    if (playerAuthMode && playerAuthMode !== 'compat' && playerAuthMode !== 'strict') {
+      warnings.push(
+        `PLAYER_SESSION_AUTH_MODE="${playerAuthMode}" is invalid. Use "compat" or "strict".`
       )
     }
   }

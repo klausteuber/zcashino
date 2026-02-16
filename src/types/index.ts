@@ -24,9 +24,19 @@ export type GamePhase =
   | 'betting'      // Player placing bets
   | 'dealing'      // Cards being dealt
   | 'playerTurn'   // Player making decisions
-  | 'dealerTurn'   // Dealer revealing and hitting
   | 'payout'       // Game resolving and paying out
   | 'complete'     // Round finished
+
+export type FairnessVersion = 'legacy_mulberry_v1' | 'hmac_sha256_v1'
+
+export interface BlackjackSettlement {
+  totalStake: number
+  totalPayout: number
+  net: number
+  mainHandsPayout: number
+  insurancePayout: number
+  perfectPairsPayout: number
+}
 
 export interface BlackjackGameState {
   phase: GamePhase
@@ -38,6 +48,7 @@ export interface BlackjackGameState {
   currentBet: number
   perfectPairsBet: number
   insuranceBet: number
+  dealerPeeked: boolean
   serverSeedHash: string  // Committed before round
   clientSeed: string
   nonce: number
@@ -48,6 +59,7 @@ export interface BlackjackGameState {
     outcome: PerfectPairsOutcome
     payout: number
   }
+  settlement?: BlackjackSettlement
 }
 
 // Action types
@@ -81,6 +93,7 @@ export interface ProvablyFairData {
   clientSeed: string
   nonce: number
   deckOrder: number[]
+  fairnessVersion?: FairnessVersion
 }
 
 // Blockchain commitment types (provably fair on-chain)
@@ -97,6 +110,7 @@ export interface GameVerificationData {
   serverSeedHash: string
   clientSeed: string
   nonce: number
+  fairnessVersion?: FairnessVersion
 
   // Blockchain proof
   commitment?: BlockchainCommitment
@@ -151,6 +165,7 @@ export interface VerificationResult {
   nonce: number
   expectedDeckOrder: number[]
   message: string
+  fairnessVersion?: FairnessVersion
 }
 
 // Zcash Wallet Types
@@ -171,6 +186,7 @@ export interface WalletInfo {
   id: string
   sessionId: string
   depositAddress: string      // Unified address for deposits
+  depositAddressType: 'unified' | 'transparent'
   transparentAddress: string  // Backup t-address
   network: ZcashNetwork
   accountIndex: number

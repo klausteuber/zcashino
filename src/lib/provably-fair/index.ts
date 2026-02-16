@@ -1,5 +1,12 @@
-import type { ProvablyFairData, VerificationResult, BlackjackAction, VideoPokerVariant, VideoPokerHandRank } from '@/types'
-import { generateShuffleOrder, cardToString } from '@/lib/game/deck'
+import type {
+  ProvablyFairData,
+  VerificationResult,
+  BlackjackAction,
+  VideoPokerVariant,
+  VideoPokerHandRank,
+  FairnessVersion
+} from '@/types'
+import { cardToString } from '@/lib/game/deck'
 import {
   createInitialState,
   startRound,
@@ -12,6 +19,11 @@ import {
   holdAndDraw as vpHoldAndDraw,
 } from '@/lib/game/video-poker'
 import { randomBytes, createHash } from 'node:crypto'
+import {
+  HMAC_FAIRNESS_VERSION,
+  generateShuffleOrder,
+  normalizeFairnessVersion,
+} from '@/lib/game/shuffle'
 
 /**
  * Generate a cryptographically secure random server seed (32 bytes as hex)
@@ -51,7 +63,8 @@ export async function verifyGame(
   serverSeedHash: string,
   clientSeed: string,
   nonce: number,
-  deckSize: number
+  deckSize: number,
+  fairnessVersion: FairnessVersion = HMAC_FAIRNESS_VERSION
 ): Promise<VerificationResult> {
   // Step 1: Verify the server seed hashes to the committed hash
   const computedHash = await hashServerSeed(serverSeed)
@@ -70,7 +83,7 @@ export async function verifyGame(
 
   // Step 2: Generate the expected deck order from the seeds
   const combinedSeed = combineSeed(serverSeed, clientSeed, nonce)
-  const expectedDeckOrder = generateShuffleOrder(deckSize, combinedSeed)
+  const expectedDeckOrder = generateShuffleOrder(deckSize, combinedSeed, fairnessVersion)
 
   return {
     valid: true,
@@ -79,7 +92,8 @@ export async function verifyGame(
     clientSeed,
     nonce,
     expectedDeckOrder,
-    message: 'Verification successful! The game outcome was provably fair.'
+    message: 'Verification successful! The game outcome was provably fair.',
+    fairnessVersion,
   }
 }
 
@@ -122,6 +136,7 @@ export function replayGame(params: {
   perfectPairsBet: number
   insuranceBet: number
   actionHistory: BlackjackAction[]
+  fairnessVersion: FairnessVersion
 }): {
   playerCards: string[][]
   dealerCards: string[]
@@ -137,7 +152,8 @@ export function replayGame(params: {
     params.serverSeed,
     params.serverSeedHash,
     params.clientSeed,
-    params.nonce
+    params.nonce,
+    params.fairnessVersion
   )
 
   // Restore insurance if taken
@@ -188,6 +204,7 @@ export function replayVideoPokerGame(params: {
   betMultiplier: number
   variant: VideoPokerVariant
   heldIndices: number[]
+  fairnessVersion: FairnessVersion
 }): {
   initialHand: string[]
   finalHand: string[]
@@ -216,7 +233,8 @@ export function replayVideoPokerGame(params: {
     params.serverSeed,
     params.serverSeedHash,
     params.clientSeed,
-    params.nonce
+    params.nonce,
+    params.fairnessVersion
   )
 
   const initialHand = holdState.hand.map(c => cardToString(c))
@@ -243,6 +261,7 @@ Server Seed Hash: ${data.serverSeedHash}
 Client Seed: ${data.clientSeed}
 Nonce: ${data.nonce}
 Combined Seed: ${combineSeed(data.serverSeed, data.clientSeed, data.nonce)}
+Fairness Version: ${normalizeFairnessVersion(data.fairnessVersion)}
 `.trim()
 }
 
@@ -262,8 +281,9 @@ export function getVerificationInstructions(): string {
 3. **The nonce**: Each game increments a nonce counter, ensuring every game is unique
    even with the same seeds.
 
-4. **Game outcome**: The deck is shuffled using the combined seed:
-   \`SHA256(serverSeed:clientSeed:nonce)\`
+4. **Game outcome**: The deck is shuffled using Fisher-Yates with randomness
+   derived from the combined seed. The shuffle is versioned so historical
+   games can replay with legacy logic and new games can use HMAC-SHA256.
 
 5. **After the game**: We reveal the server seed. You can verify:
    - The seed hashes to the previously committed hash

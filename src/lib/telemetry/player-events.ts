@@ -9,6 +9,7 @@ export const PLAYER_COUNTER_ACTIONS = {
   BLACKJACK_DUPLICATE_COMPLETION: 'player.game.duplicate_completion_blocked',
   VIDEO_POKER_RESERVE_REJECTED: 'player.video_poker.reserve_rejected',
   VIDEO_POKER_DUPLICATE_COMPLETION: 'player.video_poker.duplicate_completion_blocked',
+  LEGACY_SESSION_FALLBACK: 'player.auth.legacy_fallback',
 } as const
 
 type PlayerCounterAction =

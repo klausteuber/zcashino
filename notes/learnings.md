@@ -1,6 +1,6 @@
 # Project Learnings
 
-Last updated: 2026-02-14
+Last updated: 2026-02-16
 
 ## Launch-Critical Learnings
 
@@ -155,6 +155,20 @@ In-memory limits and remote font fetches are acceptable in dev, but must be call
 
 7. **`updateMany` returns a count, not the updated record.**
    Unlike `update()` which returns the full record, `updateMany()` returns `{ count: number }`. When using it for atomic status transitions, you check `count === 0` to detect that another caller already transitioned the record. You cannot access the updated fields from the return value — fetch separately if needed.
+
+## Guarded-Live Launch Learnings (2026-02-16)
+
+1. **Commitment pool refill must respect Sapling witness anchoring.**
+   Creating many commitments in a single refill batch can fail because newly created Sapling notes cannot be immediately re-spent until witness data is anchored in a block. Refilling one commitment per cycle avoids this failure mode and recovers the pool steadily.
+
+2. **House balance health warnings must use confirmed + pending total.**
+   Commitment self-sends move funds through a temporary confirmed -> pending -> confirmed cycle. Alerting on confirmed balance alone creates false warnings during normal operation.
+
+3. **Post-launch safety needs explicit invariant scripts, not ad-hoc checks.**
+   Baseline/monitor/reconcile scripts provide consistent day-over-day evidence for negative balance checks, duplicate prevention, and liabilities reconciliation.
+
+4. **Strict auth cutover should be telemetry-gated, not date-gated.**
+   Keeping compat mode until legacy fallback traffic is near-zero reduces customer-impact risk during migration to cookie-only auth.
 
 ## Next Hardening Learnings To Capture
 

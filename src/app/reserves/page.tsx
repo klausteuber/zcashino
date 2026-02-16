@@ -111,8 +111,8 @@ export default function ReservesPage() {
           </button>
         </div>
         <p className="text-venetian-gold/60 mb-8">
-          Verify that all user funds are backed 1:1 by transparent on-chain balances.
-          Every deposit address is publicly auditable.
+          Track visible on-chain reserves against platform liabilities. Balances shown here are
+          from transparent addresses only and do not include shielded receiver balances.
         </p>
 
         {/* Error State */}
@@ -154,10 +154,12 @@ export default function ReservesPage() {
                 </div>
                 <div>
                   <h2 className="text-2xl font-bold text-bone-white">
-                    {data.reserves.isFullyBacked ? 'Fully Backed' : 'Warning: Under-Reserved'}
+                    {data.reserves.isFullyBacked
+                      ? 'Visible Reserves Cover Liabilities'
+                      : 'Visible Reserves Below Liabilities'}
                   </h2>
                   <p className="text-venetian-gold/60">
-                    Reserve ratio: {(data.reserves.reserveRatio * 100).toFixed(2)}%
+                    Visible reserve ratio: {(data.reserves.reserveRatio * 100).toFixed(2)}%
                   </p>
                 </div>
               </div>
@@ -166,7 +168,7 @@ export default function ReservesPage() {
                 <StatCard
                   label="On-Chain Balance"
                   value={`${data.reserves.totalOnChainBalance.toFixed(8)} ZEC`}
-                  description="Total in transparent deposit addresses"
+                  description="Transparent balances tracked by this page"
                 />
                 <StatCard
                   label="User Liabilities"
@@ -176,7 +178,7 @@ export default function ReservesPage() {
                 <StatCard
                   label="Reserve Ratio"
                   value={`${(data.reserves.reserveRatio * 100).toFixed(2)}%`}
-                  description="On-chain / Liabilities"
+                  description="Visible on-chain / Liabilities"
                   highlight={data.reserves.isFullyBacked}
                 />
               </div>
@@ -304,10 +306,10 @@ export default function ReservesPage() {
               <h3 className="text-lg font-bold text-bone-white mb-4">How Proof of Reserves Works</h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm text-venetian-gold/70">
                 <div>
-                  <h4 className="text-bone-white font-medium mb-2">1. Transparent Deposits</h4>
+                  <h4 className="text-bone-white font-medium mb-2">1. Visible Balances</h4>
                   <p>
-                    All user deposits go to transparent t-addresses on the Zcash blockchain.
-                    These addresses are publicly viewable by anyone.
+                    This page tracks balances on transparent addresses that can be verified on
+                    public explorers.
                   </p>
                 </div>
                 <div>
@@ -318,10 +320,10 @@ export default function ReservesPage() {
                   </p>
                 </div>
                 <div>
-                  <h4 className="text-bone-white font-medium mb-2">3. 1:1 Backing</h4>
+                  <h4 className="text-bone-white font-medium mb-2">3. Interpretation</h4>
                   <p>
-                    The sum of all on-chain balances should equal or exceed total user
-                    liabilities. A ratio below 100% indicates a problem.
+                    Unified and shielded receiver balances are private. Use this dashboard as a
+                    visible reserve signal, not a complete proof of all private pool balances.
                   </p>
                 </div>
               </div>

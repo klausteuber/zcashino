@@ -24,6 +24,16 @@ const PERFECT_PAIRS_INFO = {
   mixed: { name: 'Mixed Pair', multiplier: '6:1', description: 'Same rank, different color' }
 }
 
+function generateClientSeedHex(bytes: number = 16): string {
+  const cryptoApi = globalThis.crypto
+  if (!cryptoApi?.getRandomValues) {
+    return `${Date.now().toString(16)}${Math.random().toString(16).slice(2)}`
+  }
+  const random = new Uint8Array(bytes)
+  cryptoApi.getRandomValues(random)
+  return Array.from(random).map((value) => value.toString(16).padStart(2, '0')).join('')
+}
+
 interface SessionData {
   id: string
   walletAddress: string
@@ -44,6 +54,7 @@ export default function BlackjackGame() {
   const [commitment, setCommitment] = useState<BlockchainCommitment | null>(null)
   const [selectedBet, setSelectedBet] = useState<number>(0.1)
   const [perfectPairsBet, setPerfectPairsBet] = useState<number>(0)
+  const [clientSeedInput, setClientSeedInput] = useState<string>('')
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -82,6 +93,7 @@ export default function BlackjackGame() {
   const sessionRef = useRef<SessionData | null>(null)
   const selectedBetRef = useRef<number>(0.1)
   const perfectPairsBetRef = useRef<number>(0)
+  const clientSeedRef = useRef<string>('')
   const gameIdRef = useRef<string | null>(null)
 
   // Sound effects
@@ -103,6 +115,19 @@ export default function BlackjackGame() {
     }
   }, [])
 
+  // Load client seed from localStorage or generate one
+  useEffect(() => {
+    const savedClientSeed = localStorage.getItem('zcashino_client_seed')
+    if (savedClientSeed && savedClientSeed.trim().length > 0) {
+      setClientSeedInput(savedClientSeed)
+      return
+    }
+
+    const generatedSeed = generateClientSeedHex()
+    setClientSeedInput(generatedSeed)
+    localStorage.setItem('zcashino_client_seed', generatedSeed)
+  }, [])
+
   // Keep auto-bet refs in sync with state
   useEffect(() => {
     sessionRef.current = session
@@ -115,6 +140,10 @@ export default function BlackjackGame() {
   useEffect(() => {
     perfectPairsBetRef.current = perfectPairsBet
   }, [perfectPairsBet])
+
+  useEffect(() => {
+    clientSeedRef.current = clientSeedInput
+  }, [clientSeedInput])
 
   useEffect(() => {
     gameIdRef.current = gameId
@@ -384,7 +413,8 @@ export default function BlackjackGame() {
           action: 'start',
           sessionId: session.id,
           bet: selectedBet,
-          perfectPairsBet
+          perfectPairsBet,
+          clientSeed: clientSeedInput.trim() || undefined,
         })
       })
 
@@ -408,7 +438,7 @@ export default function BlackjackGame() {
     } finally {
       setIsLoading(false)
     }
-  }, [session, selectedBet, perfectPairsBet, isLoading])
+  }, [session, selectedBet, perfectPairsBet, clientSeedInput, isLoading])
 
   const handleAction = useCallback(async (action: BlackjackAction) => {
     if (!session || !gameId || isLoading) return
@@ -564,6 +594,7 @@ export default function BlackjackGame() {
     const currentSession = sessionRef.current
     const currentBet = selectedBetRef.current
     const currentPerfectPairs = perfectPairsBetRef.current
+    const currentClientSeed = clientSeedRef.current
     const totalBetNeeded = currentBet + currentPerfectPairs
     const canAutoBet =
       isAutoBetEnabled &&
@@ -608,6 +639,7 @@ export default function BlackjackGame() {
       const capturedSession = currentSession
       const capturedBet = currentBet
       const capturedPerfectPairs = currentPerfectPairs
+      const capturedClientSeed = currentClientSeed
 
       const timerId = setTimeout(async () => {
         // Clear the countdown interval
@@ -638,7 +670,8 @@ export default function BlackjackGame() {
               action: 'start',
               sessionId: capturedSession.id,
               bet: capturedBet,
-              perfectPairsBet: capturedPerfectPairs
+              perfectPairsBet: capturedPerfectPairs,
+              clientSeed: capturedClientSeed || undefined,
             })
           })
           const data = await res.json()
@@ -735,12 +768,10 @@ export default function BlackjackGame() {
     return null
   }
 
-  // Is it the dealer's turn?
-  const isDealerTurn = gameState?.phase === 'dealerTurn'
-
   // Should we show insurance offer?
   const showInsuranceOffer = gameState?.phase === 'playerTurn' &&
     !insuranceDeclined &&
+    !gameState?.dealerPeeked &&
     (gameState?.insuranceBet ?? 0) === 0 &&
     gameState?.dealerHand?.cards?.[0]?.rank === 'A' &&
     gameState?.playerHands?.[0]?.cards?.length === 2  // Only on initial deal
@@ -917,7 +948,6 @@ export default function BlackjackGame() {
               size="lg"
               animateDealing={true}
               previousCardCount={previousCardCounts.dealer}
-              isDealerTurn={isDealerTurn}
               result={getDealerResult()}
               isBust={fullDealerValue > 21 && gameState.phase === 'complete'}
             />
@@ -1107,6 +1137,38 @@ export default function BlackjackGame() {
                 )}
               </div>
 
+              {/* Client seed controls */}
+              <div className="w-full max-w-md bg-midnight-black/40 rounded-lg border border-masque-gold/10 px-4 py-3">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs text-venetian-gold/40 uppercase tracking-wide">Client Seed</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const nextSeed = generateClientSeedHex()
+                      setClientSeedInput(nextSeed)
+                      localStorage.setItem('zcashino_client_seed', nextSeed)
+                      playSound('buttonClick')
+                    }}
+                    className="text-xs text-masque-gold hover:text-venetian-gold transition-colors"
+                  >
+                    Randomize
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  value={clientSeedInput}
+                  onChange={(e) => {
+                    const nextValue = e.target.value.slice(0, 128)
+                    setClientSeedInput(nextValue)
+                    localStorage.setItem('zcashino_client_seed', nextValue)
+                  }}
+                  placeholder="Enter client seed"
+                  className="w-full bg-midnight-black/60 border border-masque-gold/20 rounded-lg px-3 py-2 text-bone-white placeholder-venetian-gold/30 focus:outline-none focus:border-masque-gold font-mono text-xs"
+                  maxLength={128}
+                  disabled={isLoading}
+                />
+              </div>
+
               {/* Maintenance Banner */}
               {session?.maintenanceMode && (
                 <div className="bg-crimson-mask/20 border border-crimson-mask/40 text-crimson-mask px-4 py-2 rounded-lg text-sm text-center mb-2">
@@ -1253,8 +1315,11 @@ export default function BlackjackGame() {
               {/* Payout display */}
               {(() => {
                 const payout = gameState.lastPayout ?? 0
-                const totalBet = (gameState.playerHands?.[0]?.bet ?? 0) + (perfectPairsBet > 0 ? perfectPairsBet : 0)
-                const netResult = payout - totalBet
+                const totalStake = gameState.settlement?.totalStake
+                  ?? (gameState.playerHands?.reduce((sum, hand) => sum + hand.bet, 0) ?? 0)
+                  + (gameState.insuranceBet ?? 0)
+                  + (gameState.perfectPairsBet ?? 0)
+                const netResult = gameState.settlement?.net ?? (payout - totalStake)
                 const isPush = gameState.message?.toLowerCase().includes('push')
 
                 if (payout > 0) {
@@ -1277,7 +1342,7 @@ export default function BlackjackGame() {
                 } else {
                   return (
                     <div className="text-xl font-bold text-blood-ruby px-6 py-3 rounded-lg bg-blood-ruby/10 border border-blood-ruby/30 loss-shake">
-                      -{totalBet.toFixed(4)} ZEC
+                      -{totalStake.toFixed(4)} ZEC
                     </div>
                   )
                 }

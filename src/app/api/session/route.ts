@@ -22,6 +22,18 @@ function isDemoSession(walletAddress: string): boolean {
   return walletAddress.startsWith('demo_')
 }
 
+type SessionDepositWallet = {
+  transparentAddr: string
+  unifiedAddr: string | null
+} | null
+
+function getPreferredDepositAddress(wallet: SessionDepositWallet) {
+  const depositAddress = wallet?.unifiedAddr ?? wallet?.transparentAddr ?? null
+  const depositAddressType = wallet?.unifiedAddr ? 'unified' : wallet ? 'transparent' : null
+  const transparentAddress = wallet?.transparentAddr ?? null
+  return { depositAddress, depositAddressType, transparentAddress }
+}
+
 function createSessionResponse(session: {
   id: string
   walletAddress: string
@@ -34,8 +46,10 @@ function createSessionResponse(session: {
   isAuthenticated: boolean
   withdrawalAddress: string | null
   authTxHash: string | null
-  wallet: { transparentAddr: string } | null
+  wallet: SessionDepositWallet
 }) {
+  const { depositAddress, depositAddressType, transparentAddress } = getPreferredDepositAddress(session.wallet)
+
   const response = NextResponse.json({
     id: session.id,
     walletAddress: session.walletAddress,
@@ -48,7 +62,9 @@ function createSessionResponse(session: {
     isAuthenticated: session.isAuthenticated,
     withdrawalAddress: session.withdrawalAddress,
     authTxHash: session.authTxHash,
-    depositAddress: session.wallet?.transparentAddr,
+    depositAddress,
+    depositAddressType,
+    transparentAddress,
     isDemo: isDemoSession(session.walletAddress),
     maintenanceMode: isKillSwitchActive(),
   })
@@ -246,7 +262,7 @@ async function handleSetWithdrawalAddress(
   }
 
   // Create deposit wallet if one doesn't exist
-  let wallet = session.wallet as { transparentAddr: string } | null
+  let wallet = session.wallet as { transparentAddr: string; unifiedAddr: string | null } | null
   if (!wallet) {
     wallet = await createDepositWalletForSession(session.id)
   }
@@ -262,7 +278,9 @@ async function handleSetWithdrawalAddress(
     success: true,
     id: updatedSession.id,
     withdrawalAddress: updatedSession.withdrawalAddress,
-    depositAddress: wallet.transparentAddr,
+    depositAddress: wallet.unifiedAddr ?? wallet.transparentAddr,
+    depositAddressType: wallet.unifiedAddr ? 'unified' : 'transparent',
+    transparentAddress: wallet.transparentAddr,
     isAuthenticated: updatedSession.isAuthenticated,
     message: 'Withdrawal address set. Send ZEC to your deposit address to authenticate.',
   })

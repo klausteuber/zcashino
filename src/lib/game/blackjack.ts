@@ -4,19 +4,20 @@ import type {
   Hand,
   Card,
   GamePhase,
-  PayoutResult
+  PayoutResult,
+  FairnessVersion,
+  BlackjackSettlement,
 } from '@/types'
 import {
   createShoe,
-  shuffleDeck,
   calculateHandValue,
   isBlackjack,
-  isBusted,
   canSplit,
   canDouble,
   getPerfectPairsOutcome
 } from './deck'
 import { roundZec } from '@/lib/wallet'
+import { LEGACY_FAIRNESS_VERSION, shuffleDeck } from './shuffle'
 
 // Game constants - Vegas Strip Rules
 export const BLACKJACK_PAYOUT = 1.5  // 3:2 for blackjack
@@ -48,6 +49,7 @@ export function createInitialState(balance: number): BlackjackGameState {
     currentBet: 0,
     perfectPairsBet: 0,
     insuranceBet: 0,
+    dealerPeeked: false,
     serverSeedHash: '',
     clientSeed: '',
     nonce: 0,
@@ -66,7 +68,8 @@ export function startRound(
   serverSeed: string,
   serverSeedHash: string,
   clientSeed: string,
-  nonce: number
+  nonce: number,
+  fairnessVersion: FairnessVersion = LEGACY_FAIRNESS_VERSION
 ): BlackjackGameState {
   // Validate bets
   if (mainBet < MIN_BET || mainBet > MAX_BET) {
@@ -76,7 +79,7 @@ export function startRound(
     }
   }
 
-  const totalBet = mainBet + perfectPairsBet
+  const totalBet = roundZec(mainBet + perfectPairsBet)
   if (totalBet > state.balance) {
     return {
       ...state,
@@ -87,7 +90,7 @@ export function startRound(
   // Create and shuffle deck using combined seed
   const combinedSeed = `${serverSeed}:${clientSeed}:${nonce}`
   const shoe = createShoe(NUM_DECKS)
-  const shuffledDeck = shuffleDeck(shoe, combinedSeed)
+  const shuffledDeck = shuffleDeck(shoe, combinedSeed, fairnessVersion)
 
   // Deal initial cards
   const playerCards: Card[] = [shuffledDeck[0], shuffledDeck[2]]
@@ -119,15 +122,13 @@ export function startRound(
   // Remove dealt cards from deck
   const remainingDeck = shuffledDeck.slice(4)
 
-  // Calculate perfect pairs result immediately
-  let perfectPairsPayout = 0
+  // Calculate perfect pairs result immediately (settled at end of round)
   let perfectPairsResult: BlackjackGameState['perfectPairsResult'] = undefined
   if (perfectPairsBet > 0) {
     const ppResult = getPerfectPairsOutcome(playerCards)
-    perfectPairsPayout = roundZec(perfectPairsBet * ppResult.multiplier)
     perfectPairsResult = {
       outcome: ppResult.outcome,
-      payout: perfectPairsPayout
+      payout: roundZec(perfectPairsBet * ppResult.multiplier)
     }
   }
 
@@ -135,19 +136,21 @@ export function startRound(
   let phase: GamePhase = 'playerTurn'
   let message = 'Your turn - hit, stand, double, or split'
 
+  const shouldOfferInsurance = dealerCards[0].rank === 'A' && !playerHand.isBlackjack
+
   // Check for immediate blackjack scenarios
   if (playerHand.isBlackjack && dealerHand.isBlackjack) {
     phase = 'payout'
     message = 'Both have Blackjack - Push!'
-  } else if (dealerHand.isBlackjack) {
+  } else if (dealerHand.isBlackjack && !shouldOfferInsurance) {
     // Dealer has blackjack, player doesn't - dealer wins immediately
     phase = 'payout'
     message = 'Dealer has Blackjack!'
   } else if (playerHand.isBlackjack) {
     phase = 'payout'
     message = 'Blackjack! You win 3:2'
-  } else if (dealerCards[0].rank === 'A') {
-    // Dealer showing Ace - offer insurance (dealer doesn't have blackjack at this point)
+  } else if (shouldOfferInsurance) {
+    // Dealer showing Ace - offer insurance before revealing blackjack peek result
     message = 'Dealer showing Ace. Insurance?'
   }
 
@@ -158,14 +161,15 @@ export function startRound(
     dealerHand,
     currentHandIndex: 0,
     deck: remainingDeck,
-    balance: roundZec(state.balance - totalBet + perfectPairsPayout),
+    balance: roundZec(state.balance - totalBet),
     currentBet: mainBet,
     perfectPairsBet,
     insuranceBet: 0,
+    dealerPeeked: !shouldOfferInsurance,
     serverSeedHash,
     clientSeed,
     nonce,
-    lastPayout: perfectPairsPayout,
+    lastPayout: 0,
     message,
     perfectPairsResult
   }
@@ -197,17 +201,36 @@ export function takeInsurance(
     return { ...state, message: 'Cannot take insurance now' }
   }
 
+  if (state.dealerHand.cards[0]?.rank !== 'A' || state.dealerPeeked) {
+    return { ...state, message: 'Insurance not available' }
+  }
+
   const maxInsurance = state.currentBet / 2
-  if (amount > maxInsurance || amount > state.balance) {
+  if (amount <= 0 || amount > maxInsurance || amount > state.balance) {
     return { ...state, message: 'Invalid insurance amount' }
   }
 
-  return {
+  const withInsurance: BlackjackGameState = {
     ...state,
-    balance: state.balance - amount,
+    balance: roundZec(state.balance - amount),
     insuranceBet: amount,
+    dealerPeeked: true,
     message: 'Insurance taken. Your turn.'
   }
+
+  if (!state.dealerHand.isBlackjack) {
+    return withInsurance
+  }
+
+  return resolveRound({
+    ...withInsurance,
+    phase: 'payout',
+    dealerHand: {
+      ...state.dealerHand,
+      cards: state.dealerHand.cards.map(c => ({ ...c, faceUp: true }))
+    },
+    message: 'Dealer has Blackjack!'
+  })
 }
 
 /**
@@ -221,23 +244,58 @@ export function executeAction(
     return { ...state, message: 'Not your turn' }
   }
 
-  const currentHand = state.playerHands[state.currentHandIndex]
+  let currentState = state
+  if (shouldPeekDealerForBlackjack(currentState)) {
+    currentState = peekDealerForBlackjack(currentState)
+    if (currentState.phase === 'complete') {
+      return currentState
+    }
+  }
+
+  const currentHand = currentState.playerHands[currentState.currentHandIndex]
   if (!currentHand || currentHand.isStood || currentHand.isBusted) {
-    return advanceToNextHand(state)
+    return advanceToNextHand(currentState)
   }
 
   switch (action) {
     case 'hit':
-      return executeHit(state)
+      return executeHit(currentState)
     case 'stand':
-      return executeStand(state)
+      return executeStand(currentState)
     case 'double':
-      return executeDouble(state)
+      return executeDouble(currentState)
     case 'split':
-      return executeSplit(state)
+      return executeSplit(currentState)
     default:
-      return { ...state, message: 'Invalid action' }
+      return { ...currentState, message: 'Invalid action' }
   }
+}
+
+function shouldPeekDealerForBlackjack(state: BlackjackGameState): boolean {
+  return state.phase === 'playerTurn'
+    && !state.dealerPeeked
+    && state.dealerHand.cards[0]?.rank === 'A'
+}
+
+function peekDealerForBlackjack(state: BlackjackGameState): BlackjackGameState {
+  if (!state.dealerHand.isBlackjack) {
+    return {
+      ...state,
+      dealerPeeked: true,
+      message: 'Dealer does not have Blackjack. Your turn.'
+    }
+  }
+
+  return resolveRound({
+    ...state,
+    dealerPeeked: true,
+    phase: 'payout',
+    dealerHand: {
+      ...state.dealerHand,
+      cards: state.dealerHand.cards.map(c => ({ ...c, faceUp: true }))
+    },
+    message: 'Dealer has Blackjack!'
+  })
 }
 
 /**
@@ -429,6 +487,7 @@ function playDealerHand(state: BlackjackGameState): BlackjackGameState {
     return resolveRound({
       ...state,
       phase: 'payout',
+      dealerPeeked: true,
       dealerHand: {
         ...state.dealerHand,
         cards: state.dealerHand.cards.map(c => ({ ...c, faceUp: true }))
@@ -460,6 +519,7 @@ function playDealerHand(state: BlackjackGameState): BlackjackGameState {
   return resolveRound({
     ...state,
     phase: 'payout',
+    dealerPeeked: true,
     dealerHand: updatedDealerHand,
     deck
   })
@@ -473,13 +533,14 @@ function resolveRound(state: BlackjackGameState): BlackjackGameState {
   const dealerBlackjack = state.dealerHand.isBlackjack
   const dealerBusted = state.dealerHand.isBusted
 
-  let totalPayout = 0
+  const perfectPairsPayout = roundZec(state.perfectPairsResult?.payout ?? 0)
+  let mainHandsPayout = 0
+  let insurancePayout = 0
   const results: PayoutResult[] = []
 
   // Process insurance bet
   if (state.insuranceBet > 0 && dealerBlackjack) {
-    const insurancePayout = roundZec(state.insuranceBet * (1 + INSURANCE_PAYOUT))
-    totalPayout += insurancePayout
+    insurancePayout = roundZec(state.insuranceBet * (1 + INSURANCE_PAYOUT))
   }
 
   // Process each player hand
@@ -521,7 +582,7 @@ function resolveRound(state: BlackjackGameState): BlackjackGameState {
       reason = 'Push - tie'
     }
 
-    totalPayout += payout
+    mainHandsPayout += payout
     results.push({
       handIndex: i,
       outcome,
@@ -530,20 +591,42 @@ function resolveRound(state: BlackjackGameState): BlackjackGameState {
     })
   }
 
+  const totalPayout = roundZec(mainHandsPayout + insurancePayout + perfectPairsPayout)
+  const totalStake = roundZec(
+    state.playerHands.reduce((sum, hand) => sum + hand.bet, 0)
+    + state.insuranceBet
+    + state.perfectPairsBet
+  )
+  const settlement: BlackjackSettlement = {
+    totalStake,
+    totalPayout,
+    net: roundZec(totalPayout - totalStake),
+    mainHandsPayout: roundZec(mainHandsPayout),
+    insurancePayout,
+    perfectPairsPayout
+  }
+
   // Build result message
   const winningHands = results.filter(r => r.outcome === 'win' || r.outcome === 'blackjack')
-  const message = winningHands.length > 0
+  const onlyPushes = results.length > 0
+    && results.every(r => r.outcome === 'push')
+    && insurancePayout === 0
+    && perfectPairsPayout === 0
+
+  const message = totalPayout > 0
     ? `You won ${totalPayout.toFixed(4)} ZEC!`
-    : results.every(r => r.outcome === 'push')
+    : onlyPushes
       ? 'Push - bet returned'
       : 'Dealer wins'
 
   return {
     ...state,
     phase: 'complete',
+    dealerPeeked: true,
     balance: roundZec(state.balance + totalPayout),
     lastPayout: roundZec(totalPayout),
-    message
+    settlement,
+    message,
   }
 }
 

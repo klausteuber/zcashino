@@ -2,17 +2,19 @@ import { z } from 'zod'
 
 const nonEmptyString = z.string().trim().min(1)
 const finiteNumber = z.number().finite()
+const nonNegativeNumber = z.number().finite().min(0)
 const nonNegativeInt = z.number().int().min(0)
 
 const gameTypeSchema = z.enum(['blackjack', 'video_poker'])
+const fairnessVersionSchema = z.enum(['legacy_mulberry_v1', 'hmac_sha256_v1'])
 
 export const blackjackBodySchema = z.discriminatedUnion('action', [
   z.object({
     action: z.literal('start'),
     sessionId: nonEmptyString,
     bet: finiteNumber,
-    perfectPairsBet: finiteNumber.optional(),
-    clientSeed: nonEmptyString.optional(),
+    perfectPairsBet: nonNegativeNumber.optional(),
+    clientSeed: nonEmptyString.max(128).optional(),
   }).strict(),
   z.object({
     action: z.literal('hit'),
@@ -48,7 +50,7 @@ export const videoPokerBodySchema = z.discriminatedUnion('action', [
     variant: z.enum(['jacks_or_better', 'deuces_wild']),
     baseBet: finiteNumber,
     betMultiplier: z.number().int(),
-    clientSeed: nonEmptyString.optional(),
+    clientSeed: nonEmptyString.max(128).optional(),
   }).strict(),
   z.object({
     action: z.literal('draw'),
@@ -103,6 +105,7 @@ export const verifyPostSchema = z.union([
     nonce: nonNegativeInt,
     txHash: nonEmptyString.optional(),
     gameType: gameTypeSchema.optional(),
+    fairnessVersion: fairnessVersionSchema.optional(),
   }).strict(),
 ])
 

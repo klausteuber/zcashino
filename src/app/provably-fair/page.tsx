@@ -160,7 +160,7 @@ export default function ProvablyFairPage() {
             <div className="p-4 bg-midnight-black/60 rounded-lg border border-masque-gold/20">
               <h3 className="text-lg font-semibold text-bone-white mb-2">Proof of Reserves</h3>
               <p className="text-sm text-venetian-gold/70">
-                Transparent deposit addresses let anyone verify the house holds enough funds to cover all player balances. <Link href="/reserves" className="text-masque-gold hover:text-venetian-gold underline">View reserves</Link>.
+                Transparent balances are publicly verifiable, while shielded pools remain private by design. <Link href="/reserves" className="text-masque-gold hover:text-venetian-gold underline">View reserves</Link>.
               </p>
             </div>
           </div>
@@ -184,7 +184,7 @@ export default function ProvablyFairPage() {
             </div>
             <div>
               <div className="text-venetian-gold/50 mb-1">Deck Shuffle</div>
-              <code className="text-masque-gold">Fisher-Yates shuffle seeded by HMAC-SHA256(combinedSeed)</code>
+              <code className="text-masque-gold">Versioned Fisher-Yates shuffle (hmac_sha256_v1 + legacy replay support)</code>
             </div>
             <div>
               <div className="text-venetian-gold/50 mb-1">Blockchain Commitment</div>

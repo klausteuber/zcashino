@@ -26,9 +26,9 @@ describe('getDepositInfo', () => {
     expect(info.confirmationsRequired).toBe(CONFIRMATIONS_REQUIRED)
   })
 
-  it('generates qrCodeData as "zcash:{address}"', () => {
+  it('generates qrCodeData as raw address text', () => {
     const info = getDepositInfo('tmABC123')
-    expect(info.qrCodeData).toBe('zcash:tmABC123')
+    expect(info.qrCodeData).toBe('tmABC123')
   })
 })
 

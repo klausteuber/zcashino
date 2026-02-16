@@ -2,13 +2,20 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { QRCode, CopyButton } from './QRCode'
 
+const { toCanvasMock } = vi.hoisted(() => ({
+  toCanvasMock: vi.fn().mockResolvedValue(undefined),
+}))
+
+vi.mock('qrcode', () => ({
+  default: {
+    toCanvas: toCanvasMock,
+  },
+}))
+
 describe('QRCode', () => {
   beforeEach(() => {
-    // Mock canvas context
-    HTMLCanvasElement.prototype.getContext = vi.fn().mockReturnValue({
-      fillStyle: '',
-      fillRect: vi.fn(),
-    })
+    vi.clearAllMocks()
+    toCanvasMock.mockResolvedValue(undefined)
   })
 
   it('should render a canvas element', () => {
@@ -43,19 +50,38 @@ describe('QRCode', () => {
     expect(canvas).toHaveClass('rounded-lg')
   })
 
-  it('should call getContext on render', () => {
-    render(<QRCode value="test-address" />)
-    expect(HTMLCanvasElement.prototype.getContext).toHaveBeenCalledWith('2d')
+  it('should call qrcode.toCanvas with expected options', async () => {
+    const { container } = render(<QRCode value="test-address" size={240} />)
+    const canvas = container.querySelector('canvas')
+
+    await waitFor(() => {
+      expect(toCanvasMock).toHaveBeenCalledWith(
+        canvas,
+        'test-address',
+        expect.objectContaining({
+          width: 240,
+          margin: 2,
+          errorCorrectionLevel: 'M',
+          color: {
+            dark: '#000000',
+            light: '#ffffff',
+          },
+        })
+      )
+    })
   })
 
-  it('should show error message when canvas context fails', () => {
-    HTMLCanvasElement.prototype.getContext = vi.fn().mockReturnValue(null)
+  it('should show error message when QR rendering fails', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    toCanvasMock.mockRejectedValueOnce(new Error('QR failed'))
 
-    const { container } = render(<QRCode value="test-address" />)
-    // When context is null, nothing renders (based on implementation)
-    // The component returns early if !ctx
-    const canvas = container.querySelector('canvas')
-    expect(canvas).toBeInTheDocument() // Canvas still exists, just empty
+    render(<QRCode value="test-address" />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Failed to generate QR code')).toBeInTheDocument()
+    })
+
+    consoleError.mockRestore()
   })
 })
 

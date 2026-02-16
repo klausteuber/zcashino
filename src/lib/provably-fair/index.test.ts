@@ -110,6 +110,47 @@ describe('verifyGame', () => {
     const b = await verifyGame(serverSeed, hash, 'client', 1, 52)
     expect(a.expectedDeckOrder).not.toEqual(b.expectedDeckOrder)
   })
+
+  it('defaults manual verification to hmac_sha256_v1', async () => {
+    const serverSeed = 'default-hmac-seed'
+    const hash = await hashServerSeed(serverSeed)
+    const result = await verifyGame(serverSeed, hash, 'client', 2, 52)
+    expect(result.fairnessVersion).toBe('hmac_sha256_v1')
+  })
+
+  it('supports legacy_mulberry_v1 replay compatibility for historical games', async () => {
+    const serverSeed = 'server'
+    const clientSeed = 'client'
+    const nonce = 42
+    const hash = await hashServerSeed(serverSeed)
+
+    const legacy = await verifyGame(
+      serverSeed,
+      hash,
+      clientSeed,
+      nonce,
+      52,
+      'legacy_mulberry_v1'
+    )
+    const modern = await verifyGame(
+      serverSeed,
+      hash,
+      clientSeed,
+      nonce,
+      52,
+      'hmac_sha256_v1'
+    )
+
+    expect(legacy.valid).toBe(true)
+    expect(legacy.fairnessVersion).toBe('legacy_mulberry_v1')
+    expect(legacy.expectedDeckOrder.slice(0, 10)).toEqual([
+      16, 43, 13, 10, 35, 24, 36, 33, 42, 49,
+    ])
+    expect(modern.expectedDeckOrder.slice(0, 10)).toEqual([
+      51, 3, 8, 46, 35, 50, 0, 14, 28, 17,
+    ])
+    expect(legacy.expectedDeckOrder).not.toEqual(modern.expectedDeckOrder)
+  })
 })
 
 describe('createProvablyFairSession', () => {

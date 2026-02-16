@@ -18,7 +18,8 @@ export async function reserveFunds(
 ): Promise<boolean> {
   const normalizedAmount = roundZec(amount)
   const normalizedCounter = roundZec(counterAmount ?? amount)
-  if (normalizedAmount <= 0) return true
+  if (normalizedAmount < 0) return false
+  if (normalizedAmount === 0) return true
 
   const data: Prisma.SessionUpdateManyMutationInput = {
     balance: { decrement: normalizedAmount },

@@ -12,6 +12,8 @@ Play in Private. Verify in Public. A provably fair, privacy-focused online casin
 
 ## Current Status
 
+As of February 16, 2026, production is live on mainnet and operating in a guarded-live hardening window through March 18, 2026.
+
 Blackjack and Video Poker are fully playable with server-side game logic, atomic ledger writes, and database persistence. Supports both **demo mode** (mock commitments, instant withdrawals) and **real Zcash node connections** (on-chain commitments, async RPC withdrawals via `z_sendmany`). Configure via environment variables.
 
 ### Implemented
@@ -28,6 +30,7 @@ Blackjack and Video Poker are fully playable with server-side game logic, atomic
 - ✅ **Admin Overview API** (`/api/admin/overview`) for operations + finance metrics
 - ✅ **Admin Dashboard UI** (`/admin`) for pool management and withdrawal recovery
 - ✅ **Admin Hardening** - per-IP rate limits and persistent admin audit logs
+- ✅ **Guarded-Live Ops Tooling** - baseline/monitor/reconcile scripts for post-launch invariants
 - ✅ **Race Safety + Atomicity** - conditional debits/credits and guarded completion transitions
 - ✅ **Withdrawal Idempotency** - `idempotencyKey` support for safe client retries
 - ✅ **Deposit Credit Hardening** - credits based on confirmed txids, resilient to sweeps
@@ -51,6 +54,7 @@ Blackjack and Video Poker are fully playable with server-side game logic, atomic
 - ✅ **Public API Rate Limiting** - Bucket-based per-IP rate limits on `/api/game`, `/api/session`, `/api/wallet`
 - ✅ **Health Check** - `/api/health` endpoint for liveness probes (DB connectivity + uptime)
 - ✅ **Sentry Error Tracking** - Full coverage across server, client, edge, and instrumentation runtimes
+- ✅ **Responsible Gambling Enforcement** - wager gating for self-exclusion, session limits, and loss limits
 - ✅ **Legal Pages** - `/terms`, `/privacy`, `/responsible-gambling` static routes
 - ✅ **Deployment Ready** - `Dockerfile`, `docker-compose.yml`, `.github/workflows/ci.yml`, `DEPLOYMENT.md`
 
@@ -59,7 +63,6 @@ Blackjack and Video Poker are fully playable with server-side game logic, atomic
 - ✅ **3D Card Flip** - Enhanced perspective-based flip animation when dealer reveals hole card
 - ✅ **Active Hand Highlight** - Gold pulsing glow indicates current player hand during turn
 - ✅ **Winner/Loser Effects** - Green glow for winning hands, grayscale fade for losing hands
-- ✅ **Dealer Turn Indicator** - Visual pulse effect while dealer is drawing cards
 - ✅ **Insurance Prompt** - Interactive Yes/No buttons when dealer shows Ace (pays 2:1)
 - ✅ **Balance Feedback** - Visual animations for wins (green pulse) and losses (red pulse)
 - ✅ **Floating Payouts** - "+X.XXXX" floats up from balance on wins
@@ -76,7 +79,7 @@ Blackjack and Video Poker are fully playable with server-side game logic, atomic
 - 🔄 Zcash testnet integration testing (requires running zcashd)
 - 🔄 Load testing (requires deployed instance)
 - 🔄 Geo-blocking (UIGEA compliance)
-- 🔄 Responsible gambling UI tools (limits, self-exclusion)
+- 🔄 Deposit-limit enforcement and expanded responsible-gambling UI controls
 - 🔄 Admin MFA and IP allowlist
 - 🔄 Redis-backed rate limiting for multi-instance deploys
 - 📋 E2E tests (Playwright)
@@ -191,9 +194,28 @@ The app uses SQLite locally and is Turso-ready for production. Switch by changin
 ### Monitoring
 
 - **Sentry** - Error tracking across all Next.js runtimes (server, client, edge). Configure via `SENTRY_DSN` environment variable. No DSN = silently disabled.
-- **Health check** - `GET /api/health` returns DB status, uptime, and timestamp.
+- **Health check** - `GET /api/health` returns DB status, node sync state, commitment pool status, house balance (confirmed + pending), and overall severity.
 
 See `DEPLOYMENT.md` for full deployment guide.
+
+## Operations (Mainnet Guarded-Live)
+
+Initial real-money smoke test passed on February 16, 2026. Use these guarded-live helper commands for day-0 baseline, ongoing monitoring, and daily reconciliation:
+
+```bash
+# Day-0 baseline invariants
+npm run ops:baseline
+
+# Ongoing health/overview/invariant monitor
+npm run ops:monitor
+
+# Daily liabilities vs house-balance reconciliation snapshot
+npm run ops:reconcile
+```
+
+These commands produce JSONL logs for operations review and are documented in:
+- `notes/mainnet-guarded-live-runbook.md`
+- `DEPLOYMENT.md`
 
 ## Zcash Node Connection
 
@@ -215,6 +237,9 @@ HOUSE_ZADDR_TESTNET=ztestsapling1...
 
 # Demo mode: set to false when connecting a real node
 DEMO_MODE=true
+
+# Fairness algorithm for NEW games
+FAIRNESS_DEFAULT_VERSION=hmac_sha256_v1
 
 # Admin dashboard access
 ADMIN_USERNAME=admin
@@ -293,6 +318,7 @@ The admin dashboard lives at [`/admin`](http://localhost:3000/admin) and is prot
 - Shows infrastructure health (node sync + commitment pool status)
 - Lists pending withdrawals for operations triage
 - Shows recent admin audit events + security counters
+  - Includes race rejection, idempotency replay, and legacy compat-auth fallback counters
 - Provides one-click admin actions:
   - `refill`
   - `cleanup`
@@ -312,6 +338,7 @@ The admin dashboard lives at [`/admin`](http://localhost:3000/admin) and is prot
 ### Related docs
 - `notes/admin-dashboard-architecture.md` - implementation and threat model notes
 - `notes/learnings.md` - launch and security learnings log
+- `notes/mainnet-guarded-live-runbook.md` - post-launch guarded-live operations plan
 
 ## Tech Stack
 
@@ -437,6 +464,7 @@ zcashino-app/
 │   │   ├── services/
 │   │   │   ├── ledger.ts   # Atomic reserve/credit/release helpers
 │   │   │   └── commitment-pool-manager.ts # Background pool service
+│   │   ├── telemetry/      # Player telemetry counters for guarded-live monitoring
 │   │   └── wallet/         # Zcash wallet integration
 │   │       ├── index.ts    # Core utilities, address validation
 │   │       ├── addresses.ts # Address generation, deposit info
@@ -446,6 +474,7 @@ zcashino-app/
 ├── instrumentation-client.ts # Sentry client instrumentation
 ├── sentry.server.config.ts # Sentry server config
 ├── sentry.edge.config.ts   # Sentry edge config
+├── scripts/                # Operational scripts (monitoring, backups, guarded-live)
 ├── Dockerfile              # Multi-stage production build
 ├── docker-compose.yml      # Container orchestration
 ├── DEPLOYMENT.md           # Production deployment guide

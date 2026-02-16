@@ -13,7 +13,7 @@ import {
   MIN_BET,
   MAX_BET,
 } from './blackjack'
-import { calculateHandValue } from './deck'
+import { calculateHandValue, isBlackjack } from './deck'
 
 // Helper to create a card
 const card = (rank: Rank, suit: Suit = 'spades', faceUp = true): Card => ({ rank, suit, faceUp })
@@ -37,16 +37,29 @@ function playerTurnState(
   remainingDeck: Card[],
   overrides: Partial<BlackjackGameState> = {}
 ): BlackjackGameState {
+  const playerIsBlackjack = isBlackjack(playerCards)
+  const playerValue = calculateHandValue(playerCards)
+  const dealerIsBlackjack = isBlackjack(dealerCards)
+  const dealerValue = calculateHandValue(dealerCards)
+
   return {
     phase: 'playerTurn',
-    playerHands: [hand(playerCards, { bet: 0.1 })],
-    dealerHand: hand(dealerCards),
+    playerHands: [hand(playerCards, {
+      bet: 0.1,
+      isBlackjack: playerIsBlackjack,
+      isBusted: playerValue > 21,
+    })],
+    dealerHand: hand(dealerCards, {
+      isBlackjack: dealerIsBlackjack,
+      isBusted: dealerValue > 21,
+    }),
     currentHandIndex: 0,
     deck: remainingDeck,
     balance: 1.0,
     currentBet: 0.1,
     perfectPairsBet: 0,
     insuranceBet: 0,
+    dealerPeeked: false,
     serverSeedHash: '',
     clientSeed: '',
     nonce: 0,
@@ -133,7 +146,7 @@ describe('startRound', () => {
   })
 
   it('rejects bet exceeding balance', () => {
-    const result = startRound(initialState, 0.5, 0.6, seed, hash, clientSeed, 0)
+    const result = startRound(initialState, 0.8, 0.3, seed, hash, clientSeed, 0)
     expect(result.message).toBe('Insufficient balance')
   })
 
@@ -188,7 +201,7 @@ describe('takeInsurance', () => {
   it('deducts insurance from balance', () => {
     const state = playerTurnState(
       [card('5'), card('6')],
-      [card('A'), card('Q', 'hearts', false)],
+      [card('A'), card('9', 'hearts', false)],
       [card('3')],
       { balance: 1.0, currentBet: 0.1 }
     )
@@ -576,5 +589,126 @@ describe('payout scenarios', () => {
       // Final: 0.9 + 0.25 = 1.15
       expect(0.1 * (1 + BLACKJACK_PAYOUT)).toBe(0.25)
     }
+  })
+})
+
+describe('settlement and insurance flows', () => {
+  it('settles perfect pairs exactly once at round completion', () => {
+    const state = playerTurnState(
+      [card('10'), card('8')],
+      [card('9'), card('7', 'hearts', false)],
+      [card('2')],
+      {
+        balance: 0.85,
+        perfectPairsBet: 0.05,
+        perfectPairsResult: {
+          outcome: 'mixed',
+          payout: 0.3,
+        },
+      }
+    )
+
+    const result = executeAction(state, 'stand')
+    expect(result.phase).toBe('complete')
+    expect(result.settlement).toBeDefined()
+    expect(result.settlement?.perfectPairsPayout).toBe(0.3)
+    expect(result.settlement?.mainHandsPayout).toBe(0.1)
+    expect(result.settlement?.totalStake).toBe(0.15)
+    expect(result.settlement?.totalPayout).toBe(0.4)
+    expect(result.settlement?.net).toBe(0.25)
+  })
+
+  it('insurance can complete immediately when dealer has blackjack', () => {
+    const state = playerTurnState(
+      [card('9'), card('7')],
+      [card('A'), card('K', 'hearts', false)],
+      [],
+      {
+        balance: 0.9,
+        currentBet: 0.1,
+        dealerPeeked: false,
+      }
+    )
+
+    const result = takeInsurance(state, 0.05)
+    expect(result.phase).toBe('complete')
+    expect(result.dealerPeeked).toBe(true)
+    expect(result.insuranceBet).toBe(0.05)
+    expect(result.settlement?.insurancePayout).toBe(0.15)
+    expect(result.settlement?.totalStake).toBe(0.15)
+    expect(result.settlement?.totalPayout).toBe(0.15)
+    expect(result.settlement?.net).toBe(0)
+  })
+
+  it('insurance can lose and game continues when dealer has no blackjack', () => {
+    const state = playerTurnState(
+      [card('9'), card('7')],
+      [card('A'), card('9', 'hearts', false)],
+      [],
+      {
+        balance: 0.9,
+        currentBet: 0.1,
+        dealerPeeked: false,
+      }
+    )
+
+    const withInsurance = takeInsurance(state, 0.05)
+    expect(withInsurance.phase).toBe('playerTurn')
+    expect(withInsurance.dealerPeeked).toBe(true)
+    expect(withInsurance.insuranceBet).toBe(0.05)
+
+    const settled = executeAction(withInsurance, 'stand')
+    expect(settled.phase).toBe('complete')
+    expect(settled.settlement?.insurancePayout).toBe(0)
+    expect(settled.settlement?.totalStake).toBe(0.15)
+    expect(settled.settlement?.totalPayout).toBe(0)
+    expect(settled.settlement?.net).toBe(-0.15)
+  })
+
+  it('first non-insurance action peeks and can terminate before action executes', () => {
+    const state = playerTurnState(
+      [card('10'), card('8')],
+      [card('A'), card('K', 'hearts', false)],
+      [card('3')],
+      {
+        balance: 0.9,
+        dealerPeeked: false,
+      }
+    )
+
+    const result = executeAction(state, 'hit')
+    expect(result.phase).toBe('complete')
+    expect(result.dealerPeeked).toBe(true)
+    expect(result.playerHands[0].cards).toHaveLength(2)
+    expect(result.dealerHand.cards.every((c) => c.faceUp)).toBe(true)
+  })
+
+  it('computes total stake and net for split + double + insurance combinations', () => {
+    const state = playerTurnState(
+      [card('8', 'hearts'), card('8', 'spades')],
+      [card('A'), card('9', 'hearts', false)],
+      [card('3'), card('2'), card('A')],
+      {
+        balance: 0.9,
+        currentBet: 0.1,
+        dealerPeeked: false,
+      }
+    )
+
+    const withInsurance = takeInsurance(state, 0.05)
+    const split = executeAction(withInsurance, 'split')
+    const doubled = executeAction(split, 'double')
+    const firstStand = executeAction(doubled, 'stand')
+    const settled = executeAction(firstStand, 'stand')
+
+    expect(settled.phase).toBe('complete')
+    expect(settled.settlement).toMatchObject({
+      totalStake: 0.35,
+      totalPayout: 0.4,
+      net: 0.05,
+      insurancePayout: 0,
+      perfectPairsPayout: 0,
+      mainHandsPayout: 0.4,
+    })
   })
 })

@@ -5,6 +5,7 @@ import {
   startRound,
   executeAction,
   takeInsurance,
+  getAvailableActions,
   MIN_BET,
   MAX_BET
 } from '@/lib/game/blackjack'
@@ -21,15 +22,29 @@ import { getExplorerUrl } from '@/lib/provably-fair/blockchain'
 import { checkPublicRateLimit, createRateLimitResponse } from '@/lib/admin/rate-limit'
 import { isKillSwitchActive } from '@/lib/kill-switch'
 import { roundZec } from '@/lib/wallet'
-import type { BlackjackAction, BlackjackGameState, BlockchainCommitment } from '@/types'
+import type {
+  BlackjackAction,
+  BlackjackGameState,
+  BlockchainCommitment,
+  FairnessVersion
+} from '@/types'
 import { requirePlayerSession } from '@/lib/auth/player-session'
 import { parseWithSchema, blackjackBodySchema } from '@/lib/validation/api-schemas'
 import { reserveFunds, creditFunds } from '@/lib/services/ledger'
 import { logPlayerCounterEvent, PLAYER_COUNTER_ACTIONS } from '@/lib/telemetry/player-events'
+import { getDefaultFairnessVersion, normalizeFairnessVersion } from '@/lib/game/shuffle'
+import { checkWagerAllowed } from '@/lib/services/responsible-gambling'
 
 // Check if this is a demo session
 function isDemoSession(walletAddress: string): boolean {
   return walletAddress.startsWith('demo_')
+}
+
+function createWagerLimitResponse(result: ReturnType<typeof checkWagerAllowed>) {
+  return NextResponse.json({
+    error: result.message,
+    code: result.code,
+  }, { status: 403 })
 }
 
 // POST /api/game - Start new game or execute action
@@ -43,6 +58,17 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const parsed = parseWithSchema(blackjackBodySchema, body)
     if (!parsed.success) {
+      const isInvalidSideBet = body
+        && typeof body === 'object'
+        && (body as Record<string, unknown>).action === 'start'
+        && !!parsed.payload.details.perfectPairsBet
+
+      if (isInvalidSideBet) {
+        return NextResponse.json({
+          ...parsed.payload,
+          code: 'INVALID_SIDE_BET',
+        }, { status: 400 })
+      }
       return NextResponse.json(parsed.payload, { status: 400 })
     }
 
@@ -51,6 +77,17 @@ export async function POST(request: NextRequest) {
 
     const playerSession = requirePlayerSession(request, sessionId)
     if (!playerSession.ok) return playerSession.response
+    if (playerSession.legacyFallback) {
+      await logPlayerCounterEvent({
+        request,
+        action: PLAYER_COUNTER_ACTIONS.LEGACY_SESSION_FALLBACK,
+        details: 'Compat mode accepted legacy sessionId for blackjack action',
+        metadata: {
+          sessionId,
+          action: payload.action,
+        },
+      })
+    }
 
     // Get session
     const session = await prisma.session.findUnique({
@@ -117,33 +154,60 @@ export async function POST(request: NextRequest) {
 
 async function handleStartGame(
   request: NextRequest,
-  session: { id: string; balance: number; walletAddress: string },
+  session: {
+    id: string
+    balance: number
+    walletAddress: string
+    totalWagered: number
+    totalWon: number
+    lossLimit: number | null
+    sessionLimit: number | null
+    createdAt: Date
+  },
   mainBet: number,
   perfectPairsBet: number = 0,
   clientSeedInput?: string
 ) {
+  const normalizedMainBet = roundZec(mainBet)
+  const normalizedPerfectPairsBet = roundZec(perfectPairsBet)
+
   // Validate bet amounts
-  if (mainBet < MIN_BET || mainBet > MAX_BET) {
+  if (normalizedMainBet < MIN_BET || normalizedMainBet > MAX_BET) {
     return NextResponse.json({
       error: `Bet must be between ${MIN_BET} and ${MAX_BET} ZEC`
     }, { status: 400 })
   }
 
-  const totalBet = roundZec(mainBet + perfectPairsBet)
+  if (normalizedPerfectPairsBet < 0 || normalizedPerfectPairsBet > normalizedMainBet) {
+    return NextResponse.json({
+      error: 'Invalid side bet amount. Perfect Pairs must be between 0 and the main bet.',
+      code: 'INVALID_SIDE_BET',
+    }, { status: 400 })
+  }
+
+  const totalBet = roundZec(normalizedMainBet + normalizedPerfectPairsBet)
   if (totalBet > session.balance) {
     return NextResponse.json({ error: 'Insufficient balance' }, { status: 400 })
+  }
+
+  const wagerCheck = checkWagerAllowed(session, totalBet)
+  if (!wagerCheck.allowed) {
+    return createWagerLimitResponse(wagerCheck)
   }
 
   // Get pre-committed server seed from blockchain commitment pool
   const commitment = await getOrCreateCommitment()
   if (!commitment) {
+    // Trigger an immediate background refill so retries recover faster.
+    checkAndRefillPool().catch((err) => console.error('Pool refill error after commitment failure:', err))
     return NextResponse.json({
       error: 'Unable to create provably fair commitment. Please try again.'
     }, { status: 503 })
   }
 
   const { serverSeed, serverSeedHash, txHash, blockHeight, blockTimestamp } = commitment
-  const clientSeed = clientSeedInput || generateClientSeed()
+  const clientSeed = clientSeedInput?.trim() || generateClientSeed()
+  const fairnessVersion = getDefaultFairnessVersion()
 
   // Get next nonce for this session
   const lastGame = await prisma.blackjackGame.findFirst({
@@ -156,12 +220,13 @@ async function handleStartGame(
   const initialState = createInitialState(session.balance)
   const gameState = startRound(
     initialState,
-    mainBet,
-    perfectPairsBet,
+    normalizedMainBet,
+    normalizedPerfectPairsBet,
     serverSeed,
     serverSeedHash,
     clientSeed,
-    nonce
+    nonce,
+    fairnessVersion
   )
 
   let gameId = ''
@@ -181,12 +246,13 @@ async function handleStartGame(
       const game = await tx.blackjackGame.create({
         data: {
           sessionId: session.id,
-          mainBet,
-          perfectPairsBet,
+          mainBet: normalizedMainBet,
+          perfectPairsBet: normalizedPerfectPairsBet,
           serverSeed,
           serverSeedHash,
           clientSeed,
           nonce,
+          fairnessVersion,
           commitmentTxHash: txHash,
           commitmentBlock: blockHeight,
           commitmentTimestamp: blockTimestamp,
@@ -270,7 +336,15 @@ async function handleStartGame(
 
 async function handleGameAction(
   request: NextRequest,
-  session: { id: string; balance: number },
+  session: {
+    id: string
+    balance: number
+    totalWagered: number
+    totalWon: number
+    lossLimit: number | null
+    sessionLimit: number | null
+    createdAt: Date
+  },
   gameId: string,
   action: BlackjackAction
 ) {
@@ -299,7 +373,9 @@ async function handleGameAction(
   const actionHistory: BlackjackAction[] = JSON.parse(game.actionHistory || '[]')
 
   // Reconstruct game state from initial deal
-  const initialState = createInitialState(session.balance + game.mainBet + game.perfectPairsBet)
+  const initialState = createInitialState(
+    session.balance + game.mainBet + game.perfectPairsBet + game.insuranceBet
+  )
 
   // Start round to get initial dealt cards (same seeds = same deck order)
   let gameState = startRound(
@@ -309,7 +385,8 @@ async function handleGameAction(
     game.serverSeed,
     game.serverSeedHash,
     game.clientSeed,
-    game.nonce
+    game.nonce,
+    normalizeFairnessVersion(game.fairnessVersion)
   )
 
   // Restore insurance bet if it was taken (insurance is not in actionHistory)
@@ -323,10 +400,22 @@ async function handleGameAction(
     gameState = executeAction(gameState, previousAction)
   }
 
+  const dealerPeekWillAutoComplete =
+    gameState.phase === 'playerTurn' &&
+    !gameState.dealerPeeked &&
+    gameState.dealerHand.cards[0]?.rank === 'A' &&
+    gameState.dealerHand.isBlackjack
+
   // Check if action requires additional funds (double, split)
   // Only charge for the NEW action, not replayed ones
-  if (action === 'double' || action === 'split') {
+  const canTakeAction = getAvailableActions(gameState).includes(action)
+  if ((action === 'double' || action === 'split') && canTakeAction && !dealerPeekWillAutoComplete) {
     const additionalBet = roundZec(game.mainBet)
+    const wagerCheck = checkWagerAllowed(session, additionalBet)
+    if (!wagerCheck.allowed) {
+      return createWagerLimitResponse(wagerCheck)
+    }
+
     const reserved = await prisma.$transaction((tx) =>
       reserveFunds(tx, session.id, additionalBet, 'totalWagered')
     )
@@ -350,7 +439,8 @@ async function handleGameAction(
   gameState = executeAction(gameState, action)
 
   // Append new action to history for future replays
-  const newActionHistory = [...actionHistory, action]
+  const shouldAppendAction = canTakeAction && !dealerPeekWillAutoComplete
+  const newActionHistory = shouldAppendAction ? [...actionHistory, action] : actionHistory
 
   // Update game state with action history
   const updateData: Record<string, unknown> = {
@@ -359,7 +449,10 @@ async function handleGameAction(
       playerHands: gameState.playerHands,
       dealerHand: gameState.dealerHand,
       phase: gameState.phase,
-      message: gameState.message
+      message: gameState.message,
+      insuranceBet: gameState.insuranceBet,
+      dealerPeeked: gameState.dealerPeeked,
+      settlement: gameState.settlement ?? null,
     })
   }
 
@@ -393,7 +486,15 @@ async function handleGameAction(
 
 async function handleInsuranceAction(
   request: NextRequest,
-  session: { id: string; balance: number },
+  session: {
+    id: string
+    balance: number
+    totalWagered: number
+    totalWon: number
+    lossLimit: number | null
+    sessionLimit: number | null
+    createdAt: Date
+  },
   gameId: string
 ) {
   if (!gameId) {
@@ -431,7 +532,8 @@ async function handleInsuranceAction(
     game.serverSeed,
     game.serverSeedHash,
     game.clientSeed,
-    game.nonce
+    game.nonce,
+    normalizeFairnessVersion(game.fairnessVersion)
   )
 
   // Check if insurance can be taken (dealer showing Ace, no insurance yet)
@@ -439,12 +541,15 @@ async function handleInsuranceAction(
     return NextResponse.json({ error: 'Insurance not available' }, { status: 400 })
   }
 
-  if (gameState.insuranceBet > 0) {
+  if (game.insuranceBet > 0) {
     return NextResponse.json({ error: 'Insurance already taken' }, { status: 400 })
   }
 
   // Apply insurance
-  gameState = takeInsurance(gameState, insuranceAmount)
+  const wagerCheck = checkWagerAllowed(session, insuranceAmount)
+  if (!wagerCheck.allowed) {
+    return createWagerLimitResponse(wagerCheck)
+  }
 
   const reserved = await prisma.$transaction((tx) =>
     reserveFunds(tx, session.id, insuranceAmount, 'totalWagered')
@@ -463,19 +568,29 @@ async function handleInsuranceAction(
     return NextResponse.json({ error: 'Insufficient balance for insurance' }, { status: 400 })
   }
 
-  // Update game with insurance bet
+  gameState = takeInsurance(gameState, insuranceAmount)
+
+  const updateData: Record<string, unknown> = {
+    insuranceBet: insuranceAmount,
+    finalState: JSON.stringify({
+      playerHands: gameState.playerHands,
+      dealerHand: gameState.dealerHand,
+      phase: gameState.phase,
+      message: gameState.message,
+      insuranceBet: insuranceAmount,
+      dealerPeeked: gameState.dealerPeeked,
+      settlement: gameState.settlement ?? null,
+    })
+  }
+
+  if (gameState.phase === 'complete') {
+    await processGameCompletion(request, gameId, session.id, gameState)
+    updateData.outcome = determineOutcome(gameState)
+  }
+
   await prisma.blackjackGame.update({
     where: { id: gameId },
-    data: {
-      insuranceBet: insuranceAmount,
-      finalState: JSON.stringify({
-        playerHands: gameState.playerHands,
-        dealerHand: gameState.dealerHand,
-        phase: gameState.phase,
-        message: gameState.message,
-        insuranceBet: insuranceAmount
-      })
-    }
+    data: updateData
   })
 
   // Get updated balance
@@ -547,12 +662,14 @@ function sanitizeGameState(state: BlackjackGameState): Partial<BlackjackGameStat
     currentBet: state.currentBet,
     perfectPairsBet: state.perfectPairsBet,
     insuranceBet: state.insuranceBet,
+    dealerPeeked: state.dealerPeeked,
     serverSeedHash: state.serverSeedHash,
     clientSeed: state.clientSeed,
     nonce: state.nonce,
     lastPayout: state.lastPayout,
     message: state.message,
-    perfectPairsResult: state.perfectPairsResult
+    perfectPairsResult: state.perfectPairsResult,
+    settlement: state.settlement
     // Note: deck and serverSeed are NOT sent to client
   }
 }
@@ -600,6 +717,7 @@ export async function GET(request: NextRequest) {
       serverSeedHash: game.serverSeedHash,
       clientSeed: game.clientSeed,
       nonce: game.nonce,
+      fairnessVersion: normalizeFairnessVersion(game.fairnessVersion) as FairnessVersion,
       status: game.status,
       outcome: game.outcome,
       payout: game.payout,

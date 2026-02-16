@@ -25,9 +25,18 @@ import { requirePlayerSession } from '@/lib/auth/player-session'
 import { parseWithSchema, videoPokerBodySchema } from '@/lib/validation/api-schemas'
 import { reserveFunds, creditFunds } from '@/lib/services/ledger'
 import { logPlayerCounterEvent, PLAYER_COUNTER_ACTIONS } from '@/lib/telemetry/player-events'
+import { checkWagerAllowed } from '@/lib/services/responsible-gambling'
+import { getDefaultFairnessVersion, normalizeFairnessVersion } from '@/lib/game/shuffle'
 
 function isDemoSession(walletAddress: string): boolean {
   return walletAddress.startsWith('demo_')
+}
+
+function createWagerLimitResponse(result: ReturnType<typeof checkWagerAllowed>) {
+  return NextResponse.json({
+    error: result.message,
+    code: result.code,
+  }, { status: 403 })
 }
 
 const VALID_VARIANTS: VideoPokerVariant[] = ['jacks_or_better', 'deuces_wild']
@@ -51,6 +60,17 @@ export async function POST(request: NextRequest) {
 
     const playerSession = requirePlayerSession(request, sessionId)
     if (!playerSession.ok) return playerSession.response
+    if (playerSession.legacyFallback) {
+      await logPlayerCounterEvent({
+        request,
+        action: PLAYER_COUNTER_ACTIONS.LEGACY_SESSION_FALLBACK,
+        details: 'Compat mode accepted legacy sessionId for video poker action',
+        metadata: {
+          sessionId,
+          action: payload.action,
+        },
+      })
+    }
 
     const session = await prisma.session.findUnique({
       where: { id: sessionId },
@@ -108,7 +128,16 @@ export async function POST(request: NextRequest) {
 
 async function handleStartGame(
   request: NextRequest,
-  session: { id: string; balance: number; walletAddress: string },
+  session: {
+    id: string
+    balance: number
+    walletAddress: string
+    totalWagered: number
+    totalWon: number
+    lossLimit: number | null
+    sessionLimit: number | null
+    createdAt: Date
+  },
   variant: string,
   baseBet: number,
   betMultiplier: number,
@@ -137,16 +166,24 @@ async function handleStartGame(
     return NextResponse.json({ error: 'Insufficient balance' }, { status: 400 })
   }
 
+  const wagerCheck = checkWagerAllowed(session, totalBet)
+  if (!wagerCheck.allowed) {
+    return createWagerLimitResponse(wagerCheck)
+  }
+
   // Get pre-committed server seed
   const commitment = await getOrCreateCommitment()
   if (!commitment) {
+    // Trigger an immediate background refill so retries recover faster.
+    checkAndRefillPool().catch((err) => console.error('Pool refill error after commitment failure:', err))
     return NextResponse.json({
       error: 'Unable to create provably fair commitment. Please try again.',
     }, { status: 503 })
   }
 
   const { serverSeed, serverSeedHash, txHash, blockHeight, blockTimestamp } = commitment
-  const clientSeed = clientSeedInput || generateClientSeed()
+  const clientSeed = clientSeedInput?.trim() || generateClientSeed()
+  const fairnessVersion = getDefaultFairnessVersion()
 
   // Get next nonce for this session (video poker games)
   const lastGame = await prisma.videoPokerGame.findFirst({
@@ -164,7 +201,8 @@ async function handleStartGame(
     serverSeed,
     serverSeedHash,
     clientSeed,
-    nonce
+    nonce,
+    fairnessVersion
   )
 
   let gameId = ''
@@ -192,6 +230,7 @@ async function handleStartGame(
           serverSeedHash,
           clientSeed,
           nonce,
+          fairnessVersion,
           commitmentTxHash: txHash,
           commitmentBlock: blockHeight,
           commitmentTimestamp: blockTimestamp,
@@ -313,7 +352,8 @@ async function handleDraw(
     game.serverSeed,
     game.serverSeedHash,
     game.clientSeed,
-    game.nonce
+    game.nonce,
+    normalizeFairnessVersion(game.fairnessVersion)
   )
 
   // Execute draw with held cards

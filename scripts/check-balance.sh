@@ -38,13 +38,15 @@ if ! command -v jq &> /dev/null; then
   exit 1
 fi
 
-SEVERITY=$(echo "$RESPONSE" | jq -r '.severity // "unknown"')
+SEVERITY=$(echo "$RESPONSE" | jq -r '.status // .severity // "unknown"')
 HOUSE_BALANCE=$(echo "$RESPONSE" | jq -r '.houseBalance.confirmed // "0"')
+PENDING_BALANCE=$(echo "$RESPONSE" | jq -r '.houseBalance.pending // "0"')
 PENDING_WITHDRAWALS=$(echo "$RESPONSE" | jq -r '.pendingWithdrawals // "0"')
+TOTAL_BALANCE=$(echo "$HOUSE_BALANCE + $PENDING_BALANCE" | bc -l 2>/dev/null || echo "$HOUSE_BALANCE")
 
 # Check if balance is below threshold
-if [[ "$HOUSE_BALANCE" != "null" ]] && (( $(echo "$HOUSE_BALANCE < $MIN_BALANCE" | bc -l 2>/dev/null || echo "0") )); then
-  alert "LOW BALANCE: House wallet has ${HOUSE_BALANCE} ZEC (threshold: ${MIN_BALANCE} ZEC). Pending withdrawals: ${PENDING_WITHDRAWALS}"
+if [[ "$TOTAL_BALANCE" != "null" ]] && (( $(echo "$TOTAL_BALANCE < $MIN_BALANCE" | bc -l 2>/dev/null || echo "0") )); then
+  alert "LOW BALANCE: House wallet total is ${TOTAL_BALANCE} ZEC (${HOUSE_BALANCE} confirmed, ${PENDING_BALANCE} pending). Threshold: ${MIN_BALANCE} ZEC. Pending withdrawals: ${PENDING_WITHDRAWALS}"
 fi
 
 # Also alert on critical severity
@@ -52,4 +54,4 @@ if [[ "$SEVERITY" == "critical" ]]; then
   alert "CRITICAL: Health check reports critical severity. Response: $(echo "$RESPONSE" | jq -c '.')"
 fi
 
-echo "[$(date -u)] Balance check: ${HOUSE_BALANCE} ZEC, severity: ${SEVERITY}, pending withdrawals: ${PENDING_WITHDRAWALS}"
+echo "[$(date -u)] Balance check: total=${TOTAL_BALANCE} ZEC (${HOUSE_BALANCE} confirmed, ${PENDING_BALANCE} pending), severity: ${SEVERITY}, pending withdrawals: ${PENDING_WITHDRAWALS}"
