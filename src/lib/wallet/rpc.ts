@@ -214,7 +214,8 @@ export async function generateUnifiedAddress(
  */
 export async function getAddressBalance(
   address: string,
-  network: ZcashNetwork = DEFAULT_NETWORK
+  network: ZcashNetwork = DEFAULT_NETWORK,
+  minConfirmations: number = 3
 ): Promise<WalletBalance> {
   try {
     // For z-addresses, use z_gettotalbalance (z_getbalance is deprecated in zcashd 6.x)
@@ -223,7 +224,7 @@ export async function getAddressBalance(
     if (address.startsWith('z') || address.startsWith('u')) {
       try {
         const totals = await rpcCall<{ transparent: string; private: string; total: string }>(
-          'z_gettotalbalance', [3], network
+          'z_gettotalbalance', [minConfirmations], network
         )
         const confirmed = parseFloat(totals.private) + parseFloat(totals.transparent)
         const totalsUnconfirmed = await rpcCall<{ transparent: string; private: string; total: string }>(
@@ -238,7 +239,7 @@ export async function getAddressBalance(
       } catch (e) {
         console.error('[RPC] z_gettotalbalance failed, trying deprecated z_getbalance:', e)
         // Fallback to z_getbalance with -allowdeprecated flag
-        const confirmed = await rpcCall<number>('z_getbalance', [address, 3], network)
+        const confirmed = await rpcCall<number>('z_getbalance', [address, minConfirmations], network)
         const total = await rpcCall<number>('z_getbalance', [address, 0], network)
         return {
           confirmed,
@@ -259,7 +260,7 @@ export async function getAddressBalance(
     let pending = 0
 
     for (const utxo of utxos) {
-      if (utxo.confirmations >= 3) {
+      if (utxo.confirmations >= minConfirmations) {
         confirmed += utxo.amount
       } else {
         pending += utxo.amount

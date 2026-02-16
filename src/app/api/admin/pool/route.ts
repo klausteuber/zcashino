@@ -296,7 +296,8 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: 'Zcash node not connected' }, { status: 503 })
         }
 
-        const houseBalance = await getAddressBalance(houseAddress, network)
+        // Match z_sendmany minconf=1 to avoid false "insufficient house balance" checks.
+        const houseBalance = await getAddressBalance(houseAddress, network, 1)
         if (houseBalance.confirmed < txToApprove.amount) {
           return NextResponse.json({
             error: `Insufficient house balance: ${houseBalance.confirmed} ZEC available, ${txToApprove.amount} ZEC needed`,

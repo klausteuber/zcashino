@@ -730,7 +730,8 @@ async function handleWithdraw(
 
   // SAFETY: Check house wallet has sufficient balance before sending
   try {
-    const houseBalance = await getAddressBalance(houseAddress, network)
+    // Match z_sendmany minconf=1 to avoid false negatives from stricter prechecks.
+    const houseBalance = await getAddressBalance(houseAddress, network, 1)
     if (houseBalance.confirmed < amount) {
       console.error(
         `[Withdrawal] House wallet insufficient balance: ${houseBalance.confirmed} ZEC available, ` +
