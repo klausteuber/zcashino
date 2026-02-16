@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { sendZec } from './rpc'
+import { checkNodeStatus, sendZec } from './rpc'
 
 function mockRpcResponse(result: unknown, error: { code: number; message: string } | null = null) {
   return {
@@ -51,5 +51,61 @@ describe('sendZec fee retry behavior', () => {
 
     await expect(sendZec('zsfromaddress', 'u1destinationaddress', 0.55)).rejects.toThrow('insufficient funds')
     expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('checkNodeStatus sync gate behavior', () => {
+  it('treats node as synced when initial_block_download_complete is true', async () => {
+    const fetchMock = global.fetch as ReturnType<typeof vi.fn>
+    fetchMock.mockResolvedValueOnce(
+      mockRpcResponse({
+        blocks: 3242101,
+        headers: 3242675,
+        verificationprogress: 0.9993,
+        initial_block_download_complete: true,
+      })
+    )
+
+    const status = await checkNodeStatus()
+
+    expect(status).toEqual({
+      connected: true,
+      synced: true,
+      blockHeight: 3242101,
+    })
+  })
+
+  it('treats node as not synced when initial_block_download_complete is false', async () => {
+    const fetchMock = global.fetch as ReturnType<typeof vi.fn>
+    fetchMock.mockResolvedValueOnce(
+      mockRpcResponse({
+        blocks: 3242101,
+        headers: 3242675,
+        verificationprogress: 0.99999,
+        initial_block_download_complete: false,
+      })
+    )
+
+    const status = await checkNodeStatus()
+
+    expect(status).toEqual({
+      connected: true,
+      synced: false,
+      blockHeight: 3242101,
+    })
+  })
+
+  it('falls back to verificationprogress when IBD field is unavailable', async () => {
+    const fetchMock = global.fetch as ReturnType<typeof vi.fn>
+    fetchMock.mockResolvedValueOnce(
+      mockRpcResponse({
+        blocks: 100,
+        headers: 100,
+        verificationprogress: 0.99995,
+      })
+    )
+
+    const status = await checkNodeStatus()
+    expect(status.synced).toBe(true)
   })
 })

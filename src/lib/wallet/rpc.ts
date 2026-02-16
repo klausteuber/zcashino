@@ -126,9 +126,15 @@ export async function checkNodeStatus(
       blocks: number
       headers: number
       verificationprogress: number
+      initial_block_download_complete?: boolean
     }>('getblockchaininfo', [], network)
 
-    const synced = info.verificationprogress > 0.9999
+    // Prefer zcashd's IBD-complete signal for operational readiness.
+    // Fall back to the legacy heuristic only if the field is unavailable.
+    const synced = typeof info.initial_block_download_complete === 'boolean'
+      ? info.initial_block_download_complete
+      : info.verificationprogress > 0.9999
+
     return {
       connected: true,
       synced,
