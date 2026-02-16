@@ -192,3 +192,17 @@ In-memory limits and remote font fetches are acceptable in dev, but must be call
 
 4. **Build hangs can be environment artifacts, not code defects.**
    A stale `.next/lock` can mimic a hanging build. Clear lock files before deeper diagnosis and then rerun build with deterministic env (`CI=1`, telemetry disabled) to get a clean pass/fail signal.
+
+## Withdrawal Reliability Learnings (2026-02-16)
+
+1. **Display precision and ledger precision must not diverge.**
+   Showing `0.5500` in UI while storing `0.5499999999999996` in the session record creates false "insufficient balance" errors. For money UIs, if you round for display, normalize for validation and persistence too.
+
+2. **Normalize money fields at ledger boundaries, not ad hoc in UI.**
+   Rounding `balance`, `totalWagered`, `totalWon`, `totalDeposited`, and `totalWithdrawn` after each ledger mutation prevents float dust from accumulating and breaking later checks.
+
+3. **Use the same confirmation depth for liquidity precheck and send path.**
+   Withdrawal precheck used stricter balance criteria than the actual `z_sendmany` call, causing false "temporarily unavailable" refunds even when funds were spendable. Precheck and send must evaluate the same spendability rule.
+
+4. **Persisted session state must be mirrored in local UI state immediately.**
+   After setting withdrawal address during onboarding, local session state must update right away. Otherwise withdrawal modal can show "Not set" until refresh even though backend data is correct.

@@ -381,3 +381,37 @@ if (result.count > 0) {
 **Root Cause:** A naive kill switch implementation that blocks all POST /api/wallet requests also blocks the deposit polling/detection flow.
 
 **Fix:** The kill switch should only gate specific actions (`action === 'start'` for games, `action === 'withdraw'` for wallet), not entire endpoints. Deposit detection (`action === 'deposit-status'` or similar) must continue working during maintenance.
+
+---
+
+## Withdrawal Reliability — Gotchas (2026-02-16)
+
+### UI shows 0.5500 but withdrawal still says insufficient
+
+**Symptom:** Withdrawal modal shows `Available Balance: 0.5500 ZEC`, `Amount: 0.5499`, fee `0.0001`, but button remains disabled with "Insufficient balance (need 0.5500 ZEC including fee)".
+
+**Root Cause:** Session balance in DB drifted to a float-dust value (`0.5499999999999996`) while UI displayed rounded 4 decimals. Validation compared against the real underlying value, not the displayed value.
+
+**Fix:**
+- Validate withdrawal amounts in zatoshi-style integer math in UI.
+- Add ledger-level normalization after each mutation:
+  - `balance`
+  - `totalWagered`
+  - `totalWon`
+  - `totalDeposited`
+  - `totalWithdrawn`
+- Allow sub-zatoshi tolerance in atomic reserve checks to avoid IEEE754 dust false negatives.
+- Round API response balances to 8 decimals before returning to clients.
+
+### "Withdrawal temporarily unavailable. Balance has been refunded." with healthy house funds
+
+**Symptom:** Withdrawal request is accepted, then fails with temporary unavailability and refunds user balance.
+
+**Root Cause:** House liquidity precheck used stricter confirmation behavior than the actual `z_sendmany` operation (which runs with `minconf=1`), so precheck could reject funds that were actually spendable by the send path.
+
+**Fix:**
+- Add `minConfirmations` parameter to `getAddressBalance(...)`.
+- Use `getAddressBalance(houseAddress, network, 1)` in both:
+  - user withdrawal precheck (`/api/wallet`)
+  - admin approval send path (`/api/admin/pool`)
+- Keep deposit confirmation requirements unchanged; this fix is only for house-spend prechecks.
