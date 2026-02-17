@@ -28,13 +28,29 @@ const suitClasses: Record<Suit, string> = {
 }
 
 const sizeClasses = {
-  sm: 'w-12 h-[4.2rem] text-sm',
-  md: 'w-16 h-[5.6rem] text-base',
-  lg: 'w-20 h-[7rem] text-lg',
-  xl: 'w-28 h-[9.8rem] text-xl'
+  sm: 'w-12 h-[4.2rem] text-[0.65rem]',
+  md: 'w-16 h-[5.6rem] text-xs',
+  lg: 'w-20 h-[7rem] text-sm',
+  xl: 'w-28 h-[9.8rem] text-base'
+}
+
+const centerSuitSize: Record<string, string> = {
+  sm: 'text-lg',
+  md: 'text-xl',
+  lg: 'text-2xl',
+  xl: 'text-3xl',
+}
+
+const cornerSuitSize: Record<string, string> = {
+  sm: 'text-xs',
+  md: 'text-sm',
+  lg: 'text-base',
+  xl: 'text-lg',
 }
 
 export default function Card({ card, size = 'md', className = '', dealDelay = 0, isNew = false, dealFromShoe = true }: CardProps) {
+  const cSuit = centerSuitSize[size]
+  const crSuit = cornerSuitSize[size]
   const [isDealt, setIsDealt] = useState(!isNew)
   const [isFlipping, setIsFlipping] = useState(false)
   const [showFace, setShowFace] = useState(card.faceUp)
@@ -124,18 +140,18 @@ export default function Card({ card, size = 'md', className = '', dealDelay = 0,
       {/* Top left */}
       <div className={`flex flex-col items-start leading-none ${suitClass}`}>
         <span className="font-bold">{card.rank}</span>
-        <span className="text-lg -mt-1">{symbol}</span>
+        <span className={`${crSuit} -mt-0.5`}>{symbol}</span>
       </div>
 
       {/* Center */}
       <div className={`flex items-center justify-center ${suitClass}`}>
-        <span className="text-3xl">{symbol}</span>
+        <span className={cSuit}>{symbol}</span>
       </div>
 
       {/* Bottom right (rotated) */}
       <div className={`flex flex-col items-end leading-none rotate-180 ${suitClass}`}>
         <span className="font-bold">{card.rank}</span>
-        <span className="text-lg -mt-1">{symbol}</span>
+        <span className={`${crSuit} -mt-0.5`}>{symbol}</span>
       </div>
     </>
   )
@@ -155,7 +171,7 @@ export default function Card({ card, size = 'md', className = '', dealDelay = 0,
   // Card is face up
   return (
     <div
-      className={`${sizeClasses[size]} playing-card card-face-up rounded-lg shadow-lg flex flex-col justify-between p-1.5 border border-venetian-gold/50 ${transitionClass} ${dealAnimationClass} ${flipAnimationClass} ${className}`}
+      className={`${sizeClasses[size]} playing-card card-face-up rounded-lg shadow-lg flex flex-col justify-between p-1.5 overflow-hidden border border-venetian-gold/50 ${transitionClass} ${dealAnimationClass} ${flipAnimationClass} ${className}`}
       style={{ transformStyle: 'preserve-3d' }}
     >
       {renderCardFace()}
