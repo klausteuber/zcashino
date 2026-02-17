@@ -863,8 +863,8 @@ function determineOutcome(gameState: BlackjackGameState): string {
   if (gameState.playerHands[0]?.isBlackjack) return 'blackjack'
   if (gameState.playerHands[0]?.isBusted) return 'lose'
   if (gameState.dealerHand.isBusted) return 'win'
-  if (gameState.lastPayout > 0) return 'win'
   if (gameState.message.includes('Push')) return 'push'
+  if (gameState.lastPayout > 0) return 'win'
   return 'lose'
 }
 
