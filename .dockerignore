@@ -7,3 +7,5 @@ prisma/dev.db
 notes/
 *.md
 !README.md
+playwright.config.ts
+tests/
