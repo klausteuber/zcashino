@@ -63,10 +63,6 @@ export default async function BlackjackPage() {
                   Split a pair into two separate hands
                 </li>
                 <li>
-                  <strong className="text-bone-white">Surrender</strong> &mdash;
-                  Fold your initial two-card hand and get half your bet back
-                </li>
-                <li>
                   <strong className="text-bone-white">Insurance</strong> &mdash;
                   Side bet when dealer shows an Ace (pays 2:1)
                 </li>
