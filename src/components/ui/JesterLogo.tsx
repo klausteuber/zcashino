@@ -6,9 +6,9 @@ interface JesterLogoProps {
 }
 
 const sizeDimensions = {
-  sm: { width: 32, height: 32, textClass: 'text-[1.25rem]' },
-  md: { width: 48, height: 48, textClass: 'text-[1.8rem]' },
-  lg: { width: 64, height: 64, textClass: 'text-[2.3rem]' },
+  sm: { width: 32, height: 32 },
+  md: { width: 48, height: 48 },
+  lg: { width: 64, height: 64 },
 }
 
 /**
@@ -26,10 +26,13 @@ export default function JesterLogo({ className = '', size = 'md' }: JesterLogoPr
         height={dims.height}
         className="brand-logo-cypher"
       />
-      <span className={`brand-logo-21z font-display leading-none ${dims.textClass}`} aria-label="21z">
-        <span className="font-bold tracking-tight text-accent-primary glitch-text">21</span>
-        <sub className="relative -bottom-0.5 ml-0.5 text-xs font-normal text-accent-secondary/70">z</sub>
-      </span>
+      <Image
+        src="/images/21z-logo.png"
+        alt="21z"
+        width={dims.width}
+        height={dims.height}
+        className="brand-logo-21z"
+      />
     </span>
   )
 }
@@ -75,10 +78,13 @@ export function JesterIcon({ className = '' }: { className?: string }) {
         height={24}
         className="brand-logo-cypher"
       />
-      <span className="brand-logo-21z font-display text-sm leading-none" aria-label="21z">
-        <span className="font-bold text-accent-primary">21</span>
-        <sub className="relative -bottom-0.5 text-[0.55rem] text-accent-secondary/70">z</sub>
-      </span>
+      <Image
+        src="/images/21z-logo.png"
+        alt="21z"
+        width={24}
+        height={24}
+        className="brand-logo-21z"
+      />
     </span>
   )
 }

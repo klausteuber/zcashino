@@ -243,3 +243,32 @@ In-memory limits and remote font fetches are acceptable in dev, but must be call
 
 4. **Keep Dockerfile build command aligned with supported Next.js CLI flags.**
    On Next.js 16.1.4, `--no-turbopack` is invalid. Use a supported build invocation (`next build` via `npm run build`) unless a compatible explicit flag is confirmed.
+
+5. **Never rsync source files directly to VPS — use git pull.**
+   An `rsync` from local to VPS overwrote deployment-specific patches (Dockerfile, next.config.ts) that had been specifically fixed for Docker builds. The correct deploy flow: commit → push → `git pull` on VPS → rebuild. Direct file sync bypasses version control and can silently reintroduce fixed bugs.
+
+6. **Verify ALL pending changes are deployed, not just the hotfix.**
+   After Codex fixed the route prefix bug and rebuilt, the CSS changes (cyberpunk theme) were missing from production because they hadn't been pushed/pulled yet. The fix commit only contained `.dockerignore` and `Dockerfile` — the CSS was a separate commit. Always check that the full intended changeset is on the VPS before rebuilding.
+
+## 21z Cyberpunk Visual Refinement Learnings (2026-02-17)
+
+1. **CSS-only brand overrides via `body[data-brand="21z"]` selectors are zero-risk.**
+   All 21z visual changes (~180 lines of CSS) were scoped to `body[data-brand="21z"]`. CypherJester rendering was completely unaffected — verified both locally and in production. This dual-brand CSS architecture makes visual experiments safe.
+
+2. **Three-layer box-shadow creates convincing glow with minimal performance cost.**
+   The pattern `0 0 5px (strong), 0 0 15px (medium), 0 0 30px (faint)` creates realistic light falloff. GPU-composited, no layout thrashing. Used consistently across buttons, panels, cards, and game state indicators for brand coherence.
+
+3. **Button state machines need explicit `transition` properties.**
+   Setting `transition: background 0.2s, box-shadow 0.2s, border-color 0.2s` (specific properties) rather than `transition: all 0.3s` prevents unintended transitions on `clip-path`, `color`, and other properties that shouldn't animate.
+
+4. **Pair every `:hover` state with `:focus-visible` for keyboard accessibility.**
+   Every 21z glow effect on hover was duplicated for `:focus-visible`. This ensures keyboard-only users get the same interactive feedback without triggering glow on every tab press (`:focus` would fire on click too).
+
+5. **Game animation overrides need matching `@keyframes` — can't just restyle the class.**
+   Changing `.active-hand` colors from gold to cyan required a new `@keyframes activeHandPulse21z` because the animation references specific color values. A CSS variable approach would have been more maintainable, but the keyframe approach keeps brand specificity explicit and avoids variable cascade issues.
+
+6. **`prefers-reduced-motion` media query respects all new animations automatically.**
+   The existing `@media (prefers-reduced-motion: reduce)` rule uses `animation-duration: 0.01ms !important` which catches all new 21z keyframes without any additional work. A single well-placed accessibility rule scales to unlimited animations.
+
+7. **Verify deployed CSS by checking bundle hash, not just route health.**
+   After deployment, routes returning 200 doesn't mean your CSS changes are live. The CSS bundle hash (e.g., `321fafd1c4b23bb6.css` vs `b065e617b503309a.css`) changes when CSS is updated. Grep the bundle for specific class names or keyframe identifiers to confirm.

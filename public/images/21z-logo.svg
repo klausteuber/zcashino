@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-10 -40 260 340" fill="none">
+  <!-- Mask face — shield shape, pointed chin -->
+  <path d="
+    M120 285
+    L88 248
+    Q54 210 48 172
+    Q42 140 46 115
+    L46 82
+    L68 66
+    L120 58
+    L172 66
+    L194 82
+    L194 115
+    Q198 140 192 172
+    Q186 210 152 248
+    Z
+  " fill="white"/>
+
+  <!-- Hat band — flush with top of face -->
+  <rect x="46" y="56" width="148" height="8" fill="white"/>
+  <line x1="48" y1="60" x2="192" y2="60" stroke="#05050a" stroke-width="2.5"/>
+
+  <!-- Left hat prong — large angular, drooping outward -->
+  <polygon points="
+    68,56
+    48,18
+    30,38
+    2,-12
+    24,-24
+    46,12
+    58,-16
+    84,56
+  " fill="white"/>
+
+  <!-- Center hat prong — tallest angular crown -->
+  <polygon points="
+    94,56
+    86,18
+    100,-22
+    120,-36
+    140,-22
+    154,18
+    146,56
+  " fill="white"/>
+
+  <!-- Right hat prong — mirror of left -->
+  <polygon points="
+    172,56
+    192,18
+    210,38
+    238,-12
+    216,-24
+    194,12
+    182,-16
+    156,56
+  " fill="white"/>
+
+  <!-- Cyan diamond — left tip -->
+  <polygon points="2,-20 9,-12 2,-4 -5,-12" fill="#00F0FF"/>
+  <!-- Cyan diamond — center tip -->
+  <polygon points="120,-44 128,-36 120,-28 112,-36" fill="#00F0FF"/>
+  <!-- Cyan diamond — right tip -->
+  <polygon points="238,-20 245,-12 238,-4 231,-12" fill="#00F0FF"/>
+
+  <!-- Left eye — almond, upturned outer corner -->
+  <path d="M80 122 Q94 110 106 118 Q94 130 80 122Z" fill="#05050a"/>
+  <!-- Right eye — almond, upturned outer corner -->
+  <path d="M160 122 Q146 110 134 118 Q146 130 160 122Z" fill="#05050a"/>
+
+  <!-- Left eyebrow — bold arch -->
+  <path d="M74 107 Q88 94 104 102" stroke="#05050a" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+  <!-- Right eyebrow — bold arch -->
+  <path d="M166 107 Q152 94 136 102" stroke="#05050a" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+
+  <!-- Nose ridge — subtle vertical hint -->
+  <line x1="120" y1="120" x2="120" y2="150" stroke="#05050a" stroke-width="1.2" stroke-linecap="round" opacity="0.35"/>
+
+  <!-- Smirk — single clean Guy Fawkes grin, upturned ends -->
+  <path d="M76 170 Q96 186 120 178 Q144 186 164 170" stroke="#05050a" stroke-width="3" fill="none" stroke-linecap="round"/>
+
+  <!-- Mustache — simple handlebar, sits above smirk -->
+  <path d="M94 162 Q107 154 120 158 Q133 154 146 162" stroke="#05050a" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+
+  <!-- Chin triangle / goatee -->
+  <polygon points="115,200 120,226 125,200" fill="#05050a"/>
+
+  <!-- Cheek seams — subtle cyberpunk panel lines -->
+  <line x1="66" y1="126" x2="74" y2="178" stroke="#05050a" stroke-width="1.3" opacity="0.3"/>
+  <line x1="174" y1="126" x2="166" y2="178" stroke="#05050a" stroke-width="1.3" opacity="0.3"/>
+</svg>

@@ -193,6 +193,9 @@ npm run test:e2e:smoke
 
 The app includes production-ready deployment configuration.
 
+For AI-assisted production releases, use the GitHub-only deploy prompt at:
+- `notes/github-only-deploy-prompt.md`
+
 ### Docker
 
 ```bash

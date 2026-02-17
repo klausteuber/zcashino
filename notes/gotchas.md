@@ -490,3 +490,54 @@ if (result.count > 0) {
 **Fix:**
 - Use the supported build command (`npm run build`, which maps to `next build` in this repo).
 - Confirm valid CLI options before pushing Dockerfile flag changes.
+
+### rsync to VPS overwrites deployment-specific patches
+
+**Symptom:** After rsyncing local source to VPS, Docker build fails or produces broken routes — even though local builds work fine.
+
+**Root Cause:** Direct `rsync` from local development machine to VPS overwrites files that had been specifically patched for production Docker builds (e.g., Dockerfile, next.config.ts). It can also create nested directories that pollute the Docker build context.
+
+**Fix:**
+- **NEVER** rsync source files directly to VPS.
+- Always use the git workflow: commit → push → `git pull` on VPS → rebuild.
+- The `.dockerignore` file protects against known stale directories (`app/`, `data/`), but new rsync artifacts can introduce new problems.
+
+### CSS changes deployed but not visible in production
+
+**Symptom:** Routes return 200, pages render, but visual changes (e.g., cyberpunk theme overrides) are missing from the page.
+
+**Root Cause:** The Docker rebuild used source code that was missing the CSS changes — they were committed locally but not yet pushed/pulled to the VPS.
+
+**Fix:**
+1. After deploying, check the CSS bundle hash in `<link>` tags — it should differ from the previous deployment.
+2. Grep the production CSS bundle for specific identifiers (e.g., `activeHandPulse21z`) to confirm changes are present.
+3. Before rebuilding, always verify `git log` on VPS matches the expected commit hash.
+
+---
+
+## Dual-Brand CSS — Gotchas (2026-02-17)
+
+### 21z overrides not applying despite correct CSS
+
+**Symptom:** CSS rules with `body[data-brand="21z"]` prefix have no effect on the page.
+
+**Possible Causes:**
+1. `data-brand` attribute not set on `<body>` — check `src/lib/brand/server.ts` and `src/app/layout.tsx`.
+2. Specificity issue — the 21z override selector must be at least as specific as the base rule. Use `!important` only for properties that truly need it (e.g., `border-radius: 0 !important` for beveled shapes).
+3. CSS rule order — 21z overrides must appear AFTER the base rule in `globals.css`.
+
+### clip-path bevels don't clip overflow content
+
+**Symptom:** Content overflows past the beveled corner on 21z panels/buttons.
+
+**Root Cause:** `clip-path` creates a visual clip but doesn't affect layout or overflow behavior. If a child element has `overflow: visible` or positioned content extends beyond the parent, it won't be clipped by the parent's `clip-path`.
+
+**Fix:** Ensure the parent has `overflow: hidden` if child content might extend past the bevel, or apply the clip-path to a wrapper that contains all content.
+
+### Hover glow visible on mobile (touch devices)
+
+**Symptom:** On mobile, tapping a button shows the hover glow that stays visible after releasing.
+
+**Root Cause:** Many mobile browsers trigger `:hover` on tap and leave it active until the user taps elsewhere.
+
+**Note:** This is a known browser behavior. The glow is subtle enough that it's acceptable. A `@media (hover: hover)` wrapper could restrict glow to pointer devices only, but this would also exclude stylus users.

@@ -7,6 +7,14 @@
 - TLS certificate (Let's Encrypt recommended)
 - Zcash testnet or mainnet node (included in docker-compose)
 
+## GitHub-Only Deploy Prompt
+
+For AI-assisted deploys, use the reusable prompt at:
+
+- `notes/github-only-deploy-prompt.md`
+
+This enforces GitHub-first deployment (commit/push first, server only pulls and rebuilds).
+
 ## Quick Start (Docker)
 
 ```bash

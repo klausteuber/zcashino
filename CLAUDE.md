@@ -9,10 +9,11 @@
 - **Blockchain:** Zcash mainnet via zcashd v6.11.0 RPC
 
 ## Deployment
-- **Live:** https://cypherjester.com (mainnet, real ZEC)
+- **Live:** https://cypherjester.com + https://21z.cash (mainnet, real ZEC, dual-brand)
 - **VPS:** 93.95.226.186 (1984.hosting, Iceland)
 - **Docker:** `docker compose -p mainnet -f docker-compose.mainnet.yml up -d`
 - **DB on host:** `/var/lib/docker/volumes/mainnet_app-data/_data/zcashino.db`
+- **Deploy flow:** `git pull` on VPS then rebuild — never rsync source files directly
 
 ## Design System Colors
 **Always use these - NEVER use zinc/amber/blue/gray:**
@@ -20,6 +21,14 @@
 - `masque-gold`, `venetian-gold`
 - `midnight-black`, `bone-white`
 - `crimson-mask`, `blood-ruby`
+
+## Dual-Brand System
+- **CypherJester** (cypherjester.com): Venetian masquerade, green felt/gold palette, Cinzel/Inter/IBM Plex Mono
+- **21z** (21z.cash): Cyberpunk futurist, void-black/cyan glow, Orbitron/Rajdhani/Space Mono
+- Brand detection: `src/lib/brand/server.ts` reads hostname → sets `body[data-brand="cypher"|"21z"]`
+- All 21z CSS overrides scoped to `body[data-brand="21z"]` in `globals.css`
+- Design doc: `DESIGN_SYSTEM.md` covers both brands
+- 21z rules: No textures/grid/scanlines, radial vignette, clip-path bevels (no border-radius), three-layer cyan glow on hover/focus only, no glow at rest
 
 ## Mistakes to Avoid
 
@@ -74,6 +83,27 @@ setInterval(() => {
 **Problem:** Variables assigned inside `prisma.$transaction()` callbacks get narrowed to `never` by TypeScript.
 **Fix:** Use type assertions at usage sites: `(variable as { balance: number } | null)?.balance ?? 0`
 
+### [2026-02-16] House UA Must Include Orchard Receiver
+**Problem:** Withdrawal approved by admin but `z_sendmany` failed with "Insufficient funds" — house wallet showed 5.41 ZEC but only 0.009 ZEC was spendable.
+**Root Cause:** House UA only had a Sapling receiver. Funds migrated to Orchard pool via internal change outputs from prior withdrawals. `z_sendmany` from a UA only spends from pools with receivers in that UA.
+**Fix:** Generate house UA with both pools: `z_getaddressforaccount 0 '["sapling","orchard"]'`. Update `HOUSE_ZADDR_MAINNET` in `.env.mainnet`.
+**Also fixed:** Added 3-second opid polling after admin withdrawal approval (`src/app/api/admin/pool/route.ts`) to catch immediate failures and auto-refund users, instead of silently leaving withdrawals stuck as "pending".
+
+### [2026-02-16] z_sendmany Async Failure Detection
+**Problem:** Admin approves withdrawal, `z_sendmany` returns opid "successfully", but the operation fails 1-2 seconds later. Client stopped polling when status was `pending_approval`, so nobody detected the failure.
+**Fix:** After `z_sendmany` in the approval handler, wait 3 seconds and call `z_getoperationstatus`. If failed, immediately refund user via `prisma.$transaction` and return error to admin.
+
+### [2026-02-17] Docker Build Context Poisoned by Nested Directory
+**Problem:** All routes returned 404 after deploy. Build log showed `/src/app/*` prefixed routes instead of `/blackjack`, `/api/health`, etc.
+**Root Cause:** Untracked `app/` directory at `/opt/zcashino/app` (containing a full project copy) was COPY'd into Docker build context. Next.js compiled routes from both the root `src/app/` and the nested `app/src/app/`.
+**Fix:** Add `app/` and `data/` to `.dockerignore`. Never rsync source files directly to VPS — always use git pull.
+**Verification:** Check build log route table. Healthy output shows `/`, `/blackjack`, `/api/health`. Broken output has `/src/app/*` prefix.
+
+### [2026-02-17] CSS Changes Not in Deployed Bundle After Docker Fix
+**Problem:** Codex fixed the route prefix bug and rebuilt, but the CSS changes (cyberpunk theme) weren't in the production bundle.
+**Root Cause:** CSS changes were committed locally but not pushed/pulled to VPS before rebuild. The fix commit only included `.dockerignore` and `Dockerfile` changes.
+**Fix:** Always verify that ALL pending changes are pushed and pulled before rebuilding: `git pull origin main` on VPS, then rebuild. Check deployed CSS bundle hash changes after rebuild.
+
 ## Code Patterns
 
 ### Auto-bet Feature Pattern
@@ -117,9 +147,11 @@ useEffect(() => { sessionRef.current = session }, [session])
 # Deploy code changes (app only, keeps zcashd running):
 ssh root@93.95.226.186
 cd /opt/zcashino && git pull origin main
-set -a && source .env.mainnet && set +a
-docker compose -p mainnet -f docker-compose.mainnet.yml build app
-docker compose -p mainnet -f docker-compose.mainnet.yml up -d --no-deps app
+docker compose -p mainnet -f docker-compose.mainnet.yml --env-file .env.mainnet up -d --no-deps --build app
+
+# Verify both domains:
+curl -s -o /dev/null -w '%{http_code}' https://cypherjester.com/api/health
+curl -s -o /dev/null -w '%{http_code}' https://21z.cash/api/health
 
 # Check health:
 curl -s http://127.0.0.1:3000/api/health | python3 -m json.tool
@@ -129,10 +161,14 @@ RPC_USER=$(grep ZCASH_RPC_USER .env.mainnet | cut -d= -f2)
 RPC_PASS=$(grep ZCASH_RPC_PASSWORD .env.mainnet | cut -d= -f2)
 docker exec mainnet-zcashd-1 zcash-cli -rpcuser=$RPC_USER -rpcpassword=$RPC_PASS getblockchaininfo
 docker exec mainnet-zcashd-1 zcash-cli -rpcuser=$RPC_USER -rpcpassword=$RPC_PASS z_gettotalbalance
+# Per-pool breakdown (important — z_gettotalbalance hides pool distribution):
+docker exec mainnet-zcashd-1 zcash-cli -rpcuser=$RPC_USER -rpcpassword=$RPC_PASS z_getbalanceforaccount 0 1
 
 # Check DB from host:
 sqlite3 /var/lib/docker/volumes/mainnet_app-data/_data/zcashino.db "SELECT status, count(*) FROM SeedCommitment GROUP BY status;"
 ```
+
+**CRITICAL: Never rsync source files directly to VPS.** Always commit → push → git pull on VPS → rebuild. Direct rsync can overwrite deployment-specific patches and introduce stale files into the Docker build context.
 
 ## Testing
 - 293 tests across 12 files
