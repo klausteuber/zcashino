@@ -1,6 +1,13 @@
 import type { MetadataRoute } from 'next'
+import { getCanonicalOrigin } from '@/lib/brand/config'
+import { getServerBrand } from '@/lib/brand/server'
 
-export default function robots(): MetadataRoute.Robots {
+export const dynamic = 'force-dynamic'
+
+export default async function robots(): Promise<MetadataRoute.Robots> {
+  const brand = await getServerBrand()
+  const canonicalOrigin = getCanonicalOrigin(brand.id)
+
   return {
     rules: [
       {
@@ -9,6 +16,6 @@ export default function robots(): MetadataRoute.Robots {
         disallow: ['/admin', '/api/'],
       },
     ],
-    sitemap: 'https://cypherjester.com/sitemap.xml',
+    sitemap: `${canonicalOrigin}/sitemap.xml`,
   }
 }

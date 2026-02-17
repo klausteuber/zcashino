@@ -1,13 +1,19 @@
 import VideoPokerGame from '@/components/game/VideoPokerGame'
 import { BreadcrumbJsonLd } from '@/components/seo/JsonLd'
+import { getBrandUrlForPath } from '@/lib/brand/config'
+import { getServerBrand } from '@/lib/brand/server'
 
-export default function VideoPokerPage() {
+export default async function VideoPokerPage() {
+  const brand = await getServerBrand()
+  const homeUrl = getBrandUrlForPath(brand.id, '/')
+  const pageUrl = getBrandUrlForPath(brand.id, '/video-poker')
+
   return (
     <>
       <BreadcrumbJsonLd
         items={[
-          { name: 'Home', url: 'https://cypherjester.com' },
-          { name: 'Video Poker', url: 'https://cypherjester.com/video-poker' },
+          { name: 'Home', url: homeUrl },
+          { name: 'Video Poker', url: pageUrl },
         ]}
       />
 
@@ -17,7 +23,7 @@ export default function VideoPokerPage() {
       <section className="felt-texture border-t border-masque-gold/20">
         <div className="container mx-auto px-4 py-16 max-w-4xl">
           <h2 className="text-3xl font-display font-bold text-bone-white mb-8 text-center">
-            How to Play Video Poker at CypherJester
+            How to Play Video Poker at {brand.config.name}
           </h2>
 
           <div className="grid md:grid-cols-2 gap-8 mb-12">

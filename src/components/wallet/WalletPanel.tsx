@@ -205,7 +205,7 @@ export function WalletPanel({ sessionId, onBalanceUpdate, onAuthUpdate }: Wallet
 
   if (isLoading) {
     return (
-      <div className="bg-midnight-black/40 rounded-lg p-4 border border-masque-gold/20">
+      <div className="bg-midnight-black/40 rounded-lg cyber-panel p-4 border border-masque-gold/20">
         <div className="text-venetian-gold/60">Loading wallet...</div>
       </div>
     )
@@ -213,7 +213,7 @@ export function WalletPanel({ sessionId, onBalanceUpdate, onAuthUpdate }: Wallet
 
   if (error && !walletData) {
     return (
-      <div className="bg-midnight-black/40 rounded-lg p-4 border border-blood-ruby/50">
+      <div className="bg-midnight-black/40 rounded-lg cyber-panel p-4 border border-blood-ruby/50">
         <div className="text-blood-ruby">{error}</div>
       </div>
     )
@@ -223,7 +223,7 @@ export function WalletPanel({ sessionId, onBalanceUpdate, onAuthUpdate }: Wallet
   const hasWithdrawalAddress = !!walletData?.auth.withdrawalAddress
 
   return (
-    <div className="bg-midnight-black/40 rounded-lg p-4 border border-masque-gold/20">
+    <div className="bg-midnight-black/40 rounded-lg cyber-panel p-4 border border-masque-gold/20">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-semibold text-bone-white">Wallet</h3>
@@ -268,7 +268,7 @@ export function WalletPanel({ sessionId, onBalanceUpdate, onAuthUpdate }: Wallet
 
       {/* Withdrawal Address */}
       {hasWithdrawalAddress && (
-        <div className="mb-4 p-3 bg-midnight-black/60 rounded-lg border border-masque-gold/10">
+        <div className="mb-4 p-3 bg-midnight-black/60 rounded-lg cyber-panel border border-masque-gold/10">
           <div className="text-xs text-venetian-gold/60 mb-1">Withdrawal Address</div>
           <div className="font-mono text-xs text-bone-white break-all">
             {walletData?.auth.withdrawalAddress}
@@ -278,7 +278,7 @@ export function WalletPanel({ sessionId, onBalanceUpdate, onAuthUpdate }: Wallet
 
       {/* Authentication Required Message */}
       {!isAuthenticated && !hasWithdrawalAddress && (
-        <div className="mb-4 p-3 bg-masque-gold/10 rounded-lg border border-masque-gold/30">
+        <div className="mb-4 p-3 bg-masque-gold/10 rounded-lg cyber-panel border border-masque-gold/30">
           <div className="text-sm text-masque-gold font-medium mb-1">
             Authentication Required
           </div>
@@ -289,7 +289,7 @@ export function WalletPanel({ sessionId, onBalanceUpdate, onAuthUpdate }: Wallet
       )}
 
       {!isAuthenticated && hasWithdrawalAddress && (
-        <div className="mb-4 p-3 bg-masque-gold/10 rounded-lg border border-masque-gold/30">
+        <div className="mb-4 p-3 bg-masque-gold/10 rounded-lg cyber-panel border border-masque-gold/30">
           <div className="text-sm text-masque-gold font-medium mb-1">
             Deposit Required
           </div>
@@ -337,7 +337,7 @@ export function WalletPanel({ sessionId, onBalanceUpdate, onAuthUpdate }: Wallet
 
       {/* Set Withdrawal Address Panel */}
       {showSetAddress && (
-        <div className="bg-midnight-black/60 rounded-lg p-4 mb-4 border border-masque-gold/10">
+        <div className="bg-midnight-black/60 rounded-lg cyber-panel p-4 mb-4 border border-masque-gold/10">
           <div className="text-sm text-venetian-gold/60 mb-2">
             Enter your Zcash address for withdrawals:
           </div>
@@ -370,7 +370,7 @@ export function WalletPanel({ sessionId, onBalanceUpdate, onAuthUpdate }: Wallet
 
       {/* Deposit Panel */}
       {showDeposit && walletData && (
-        <div className="bg-midnight-black/60 rounded-lg p-4 mb-4 border border-masque-gold/10">
+        <div className="bg-midnight-black/60 rounded-lg cyber-panel p-4 mb-4 border border-masque-gold/10">
           <div className="text-sm text-venetian-gold/60 mb-2">
             Send ZEC to this address:
           </div>
@@ -400,7 +400,7 @@ export function WalletPanel({ sessionId, onBalanceUpdate, onAuthUpdate }: Wallet
 
       {/* Withdraw Panel */}
       {showWithdraw && isAuthenticated && (
-        <div className="bg-midnight-black/60 rounded-lg p-4 border border-masque-gold/10">
+        <div className="bg-midnight-black/60 rounded-lg cyber-panel p-4 border border-masque-gold/10">
           <div className="space-y-3">
             <div className="text-sm text-venetian-gold/60">
               Withdrawing to: <span className="text-bone-white font-mono text-xs">
@@ -439,7 +439,7 @@ export function WalletPanel({ sessionId, onBalanceUpdate, onAuthUpdate }: Wallet
 
       {/* Withdrawal Status */}
       {pendingWithdrawal && (
-        <div className={`rounded-lg p-3 mb-4 border ${
+        <div className={`rounded-lg cyber-panel p-3 mb-4 border ${
           pendingWithdrawal.status === 'confirmed'
             ? 'bg-jester-purple/10 border-jester-purple/30'
             : pendingWithdrawal.status === 'failed'

@@ -94,6 +94,7 @@ export default function VideoPokerGame() {
 
   // Check localStorage for onboarding
   useEffect(() => {
+    // TODO(brand-migration): keep zcashino_* keys until a coordinated live-session migration to 21z_* is planned.
     const seen = localStorage.getItem('zcashino_onboarding_seen')
     if (seen) setHasSeenOnboarding(true)
   }, [])
@@ -537,18 +538,18 @@ export default function VideoPokerGame() {
           {[0, 1, 2, 3, 4].map(i => (
             <div
               key={i}
-              className="w-14 h-[4.9rem] sm:w-16 sm:h-[5.6rem] bg-gradient-to-br from-jester-purple-dark via-jester-purple to-jester-purple-dark rounded-lg border-2 border-masque-gold/25 flex items-center justify-center shadow-lg"
+              className="w-14 h-[4.9rem] sm:w-16 sm:h-[5.6rem] playing-card-back bg-gradient-to-br from-jester-purple-dark via-jester-purple to-jester-purple-dark rounded-lg border-2 border-masque-gold/25 flex items-center justify-center shadow-lg"
               style={{
                 animation: `shuffle-bob 1.2s ease-in-out ${i * 0.15}s infinite`,
               }}
             >
               <div className="w-8 h-8 sm:w-10 sm:h-10 border border-masque-gold/20 rounded-full flex items-center justify-center">
-                <span className="text-masque-gold/40 text-xs font-cinzel">CJ</span>
+                <span className="text-masque-gold/40 text-xs font-display">21z</span>
               </div>
             </div>
           ))}
         </div>
-        <p className="text-venetian-gold/50 font-cinzel text-sm tracking-wider">Shuffling the deck...</p>
+        <p className="text-venetian-gold/50 font-display text-sm tracking-wider">Shuffling the deck...</p>
       </div>
     )
   }
@@ -578,7 +579,7 @@ export default function VideoPokerGame() {
             <JesterLogo size="sm" />
           </Link>
           <div>
-            <h1 className="text-lg font-cinzel font-bold text-masque-gold">Video Poker</h1>
+            <h1 className="text-lg font-display font-bold text-masque-gold">Video Poker</h1>
             <p className="text-xs text-venetian-gold/50">Provably Fair</p>
           </div>
         </div>
@@ -621,7 +622,7 @@ export default function VideoPokerGame() {
       </div>
 
       {/* === GAME ZONE === */}
-      <div className="bg-midnight-black/15 rounded-2xl p-3 sm:p-5 space-y-4">
+      <div className="bg-midnight-black/15 rounded-2xl cyber-panel p-3 sm:p-5 space-y-4">
         {/* Variant selector */}
         <div className="flex justify-center gap-2">
           <button
@@ -660,7 +661,7 @@ export default function VideoPokerGame() {
           {/* Result overlay */}
           {resultDisplay && (
             <div className="absolute inset-0 flex items-center justify-center z-30 pointer-events-none">
-              <div className={`text-3xl sm:text-4xl lg:text-5xl font-cinzel font-bold ${resultDisplay.className} ${resultDisplay.animClass}`}>
+              <div className={`text-3xl sm:text-4xl lg:text-5xl font-display font-bold ${resultDisplay.className} ${resultDisplay.animClass}`}>
                 {resultDisplay.text}
                 {gameState && gameState.lastPayout > 0 && (
                   <div className="text-lg mt-1 font-mono text-center">

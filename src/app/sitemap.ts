@@ -1,59 +1,64 @@
 import type { MetadataRoute } from 'next'
+import { getCanonicalOrigin } from '@/lib/brand/config'
+import { getServerBrand } from '@/lib/brand/server'
 
-export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = 'https://cypherjester.com'
+export const dynamic = 'force-dynamic'
+
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const brand = await getServerBrand()
+  const canonicalOrigin = getCanonicalOrigin(brand.id)
 
   return [
     {
-      url: baseUrl,
+      url: canonicalOrigin,
       lastModified: new Date(),
       changeFrequency: 'weekly',
       priority: 1.0,
     },
     {
-      url: `${baseUrl}/blackjack`,
+      url: `${canonicalOrigin}/blackjack`,
       lastModified: new Date(),
       changeFrequency: 'weekly',
       priority: 0.9,
     },
     {
-      url: `${baseUrl}/video-poker`,
+      url: `${canonicalOrigin}/video-poker`,
       lastModified: new Date(),
       changeFrequency: 'weekly',
       priority: 0.9,
     },
     {
-      url: `${baseUrl}/provably-fair`,
+      url: `${canonicalOrigin}/provably-fair`,
       lastModified: new Date(),
       changeFrequency: 'monthly',
       priority: 0.8,
     },
     {
-      url: `${baseUrl}/verify`,
+      url: `${canonicalOrigin}/verify`,
       lastModified: new Date(),
       changeFrequency: 'monthly',
       priority: 0.6,
     },
     {
-      url: `${baseUrl}/reserves`,
+      url: `${canonicalOrigin}/reserves`,
       lastModified: new Date(),
       changeFrequency: 'daily',
       priority: 0.5,
     },
     {
-      url: `${baseUrl}/responsible-gambling`,
+      url: `${canonicalOrigin}/responsible-gambling`,
       lastModified: new Date(),
       changeFrequency: 'monthly',
       priority: 0.4,
     },
     {
-      url: `${baseUrl}/terms`,
+      url: `${canonicalOrigin}/terms`,
       lastModified: new Date(),
       changeFrequency: 'yearly',
       priority: 0.3,
     },
     {
-      url: `${baseUrl}/privacy`,
+      url: `${canonicalOrigin}/privacy`,
       lastModified: new Date(),
       changeFrequency: 'yearly',
       priority: 0.3,

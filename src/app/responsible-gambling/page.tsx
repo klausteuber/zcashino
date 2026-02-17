@@ -1,15 +1,28 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
+import { BrandWordmark } from '@/components/brand/BrandWordmark'
 import JesterLogo from '@/components/ui/JesterLogo'
+import { getBrandUrlForPath, getCanonicalUrlForPath } from '@/lib/brand/config'
+import { getServerBrand } from '@/lib/brand/server'
 
-export const metadata: Metadata = {
-  title: 'Responsible Gambling',
-  description:
-    'Tools and resources for responsible gambling at CypherJester. Enforced session limits, loss limits, and self-exclusion.',
-  openGraph: {
-    title: 'Responsible Gambling | CypherJester',
-    url: 'https://cypherjester.com/responsible-gambling',
-  },
+export async function generateMetadata(): Promise<Metadata> {
+  const brand = await getServerBrand()
+  const brandUrl = getBrandUrlForPath(brand.id, '/responsible-gambling')
+  const canonicalUrl = getCanonicalUrlForPath(brand.id, '/responsible-gambling')
+  const brandTitle = brand.id === '21z' ? '21z' : 'CypherJester'
+
+  return {
+    title: 'Responsible Gambling',
+    description:
+      `Tools and resources for responsible gambling at ${brandTitle}. Enforced session limits, loss limits, and self-exclusion.`,
+    alternates: {
+      canonical: canonicalUrl,
+    },
+    openGraph: {
+      title: `Responsible Gambling | ${brandTitle}`,
+      url: brandUrl,
+    },
+  }
 }
 
 export default function ResponsibleGamblingPage() {
@@ -19,10 +32,7 @@ export default function ResponsibleGamblingPage() {
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
           <Link href="/" className="flex items-center gap-3">
             <JesterLogo size="md" className="text-jester-purple-light" />
-            <span className="text-xl font-display font-bold tracking-tight">
-              <span className="text-masque-gold">Cypher</span>
-              <span className="text-bone-white">Jester</span>
-            </span>
+            <BrandWordmark />
           </Link>
           <Link href="/blackjack" className="btn-gold-shimmer text-midnight-black px-4 py-2 rounded-lg font-semibold">
             Play Now

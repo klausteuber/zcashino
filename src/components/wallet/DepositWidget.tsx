@@ -28,7 +28,7 @@ export function DepositWidget({
       <div className="flex items-center gap-4">
         {/* Demo Mode Badge */}
         <div
-          className="flex items-center gap-2 px-3 py-1.5 bg-masque-gold/10 border border-masque-gold/30 rounded-lg"
+          className="flex items-center gap-2 px-3 py-1.5 bg-masque-gold/10 border border-masque-gold/30 rounded-lg cyber-panel"
           onMouseEnter={() => setShowTooltip(true)}
           onMouseLeave={() => setShowTooltip(false)}
         >
@@ -55,7 +55,7 @@ export function DepositWidget({
 
         {/* Tooltip */}
         {showTooltip && (
-          <div className="absolute top-full mt-2 right-0 w-48 p-2 bg-midnight-black border border-masque-gold/30 rounded-lg shadow-xl text-xs text-venetian-gold z-50">
+          <div className="absolute top-full mt-2 right-0 w-48 p-2 bg-midnight-black border border-masque-gold/30 rounded-lg cyber-panel shadow-xl text-xs text-venetian-gold z-50">
             Demo mode uses play money. Switch to real ZEC to play for real.
           </div>
         )}
@@ -68,12 +68,12 @@ export function DepositWidget({
     <div className="flex items-center gap-4">
       {/* Auth Status Badge */}
       {isAuthenticated ? (
-        <div className="flex items-center gap-1.5 px-2 py-1 bg-jester-purple/10 border border-jester-purple/30 rounded-lg">
+        <div className="flex items-center gap-1.5 px-2 py-1 bg-jester-purple/10 border border-jester-purple/30 rounded-lg cyber-panel">
           <span className="text-jester-purple-light text-xs">✓</span>
           <span className="text-jester-purple-light text-xs font-medium">Verified</span>
         </div>
       ) : (
-        <div className="flex items-center gap-1.5 px-2 py-1 bg-masque-gold/10 border border-masque-gold/30 rounded-lg animate-pulse">
+        <div className="flex items-center gap-1.5 px-2 py-1 bg-masque-gold/10 border border-masque-gold/30 rounded-lg cyber-panel animate-pulse">
           <span className="text-venetian-gold text-xs">○</span>
           <span className="text-venetian-gold text-xs font-medium">Pending</span>
         </div>
@@ -88,7 +88,7 @@ export function DepositWidget({
 
       {/* Pending Deposit Indicator */}
       {pendingDeposit && (
-        <div className="flex items-center gap-2 px-3 py-1.5 bg-jester-purple-light/10 border border-jester-purple-light/30 rounded-lg">
+        <div className="flex items-center gap-2 px-3 py-1.5 bg-jester-purple-light/10 border border-jester-purple-light/30 rounded-lg cyber-panel">
           <div className="w-2 h-2 bg-jester-purple-light rounded-full animate-pulse" />
           <span className="text-jester-purple-light text-sm">
             +{pendingDeposit.amount.toFixed(4)} incoming

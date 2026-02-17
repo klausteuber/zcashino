@@ -13,9 +13,9 @@ function timeAgo(date: Date | string): string {
 
 const OUTCOME_CONFIG = {
   blackjack: { icon: '\u2605', label: 'BJ', color: 'text-masque-gold' },
-  win: { icon: '\u2713', label: 'Win', color: 'text-green-400' },
-  lose: { icon: '\u2717', label: 'Loss', color: 'text-blood-ruby' },
-  push: { icon: '\u2550', label: 'Push', color: 'text-venetian-gold' },
+  win: { icon: '\u2713', label: 'Win', color: 'text-success' },
+  lose: { icon: '\u2717', label: 'Loss', color: 'text-error' },
+  push: { icon: '\u2550', label: 'Push', color: 'text-text-secondary' },
 } as const
 
 interface HandHistoryProps {
@@ -26,7 +26,7 @@ export function HandHistory({ entries }: HandHistoryProps) {
   if (entries.length === 0) return null
 
   return (
-    <details className="bg-midnight-black/40 rounded-lg p-4 max-w-lg mx-auto border border-masque-gold/20">
+    <details className="bg-midnight-black/40 rounded-lg p-4 max-w-lg mx-auto border border-masque-gold/20 cyber-panel">
       <summary className="cursor-pointer text-venetian-gold/60 hover:text-masque-gold transition-colors flex items-center justify-center gap-2">
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -57,7 +57,7 @@ export function HandHistory({ entries }: HandHistoryProps) {
                 <span className="text-venetian-gold/50">
                   {entry.mainBet.toFixed(2)}
                 </span>
-                <span className={net > 0 ? 'text-green-400' : net < 0 ? 'text-blood-ruby' : 'text-venetian-gold/50'}>
+                <span className={net > 0 ? 'text-success' : net < 0 ? 'text-error' : 'text-venetian-gold/50'}>
                   {net > 0 ? '+' : ''}{net.toFixed(4)}
                 </span>
                 <span className="text-venetian-gold/30 w-16 text-right">

@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { OnboardingModal } from './OnboardingModal'
+import { BrandProvider } from '@/components/brand/BrandProvider'
+import { getBrandConfig } from '@/lib/brand/config'
 
 // Mock the useDepositPolling hook
 vi.mock('@/hooks/useDepositPolling', () => ({
@@ -43,6 +45,24 @@ describe('OnboardingModal', () => {
   })
 
   describe('Welcome Screen', () => {
+    it('should render 21z copy when 21z brand is active', () => {
+      render(
+        <BrandProvider
+          brand={{
+            id: '21z',
+            host: '21z.cash',
+            source: 'forced',
+            config: getBrandConfig('21z'),
+          }}
+        >
+          <OnboardingModal {...defaultProps} />
+        </BrandProvider>
+      )
+
+      expect(screen.getByText('Welcome to 21z')).toBeInTheDocument()
+      expect(screen.getByText('Prove Everything. Reveal Nothing.')).toBeInTheDocument()
+    })
+
     it('should render welcome screen when modal is open', () => {
       render(<OnboardingModal {...defaultProps} />)
 

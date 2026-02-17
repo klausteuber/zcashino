@@ -38,12 +38,12 @@ export default function Chip({
       disabled={disabled}
       className={`
         ${sizeClasses[size]}
-        ${baseStyle}
+        ${baseStyle} chip
         rounded-full
         font-bold
         shadow-lg
         flex items-center justify-center
-        ${selected ? 'chip-select ring-4 ring-masque-gold shadow-[0_0_15px_rgba(201,162,39,0.5)]' : 'transition-all duration-150'}
+        ${selected ? 'chip-select ring-4 ring-accent-primary shadow-[0_0_15px_color-mix(in_srgb,var(--accent-primary)_45%,transparent)]' : 'transition-all duration-150'}
         ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:scale-105 active:scale-95 cursor-pointer'}
       `}
     >

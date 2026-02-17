@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
+import { BrandWordmark } from '@/components/brand/BrandWordmark'
 import type {
   BlackjackGameState,
   BlackjackAction,
@@ -121,6 +122,7 @@ export default function BlackjackGame() {
 
   // Check localStorage for onboarding status
   useEffect(() => {
+    // TODO(brand-migration): keep zcashino_* keys until a coordinated live-session migration to 21z_* is planned.
     const seen = localStorage.getItem('zcashino_onboarding_seen')
     if (seen) {
       setHasSeenOnboarding(true)
@@ -917,7 +919,7 @@ export default function BlackjackGame() {
 
   if (isLoading && !session) {
     return (
-      <main className="min-h-screen felt-texture flex items-center justify-center">
+      <main className="min-h-screen felt-texture scanline-overlay flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
           <JesterLogo size="lg" className="text-jester-purple-light animate-pulse" />
           <div className="text-venetian-gold/50 font-display">Shuffling the deck...</div>
@@ -927,16 +929,13 @@ export default function BlackjackGame() {
   }
 
   return (
-    <main className="min-h-screen felt-texture">
+    <main className="min-h-screen felt-texture scanline-overlay">
       {/* Header */}
       <header className="border-b border-masque-gold/20 bg-midnight-black/30 backdrop-blur-sm">
         <div className="container mx-auto px-2 sm:px-4 py-3 sm:py-4 flex justify-between items-center">
           <Link href="/" className="flex items-center gap-1.5 sm:gap-3 shrink-0">
             <JesterLogo size="md" className="text-jester-purple-light" />
-            <span className="text-base sm:text-xl font-display font-bold tracking-tight">
-              <span className="text-masque-gold">Cypher</span>
-              <span className="text-bone-white">Jester</span>
-            </span>
+            <BrandWordmark sizeClassName="text-base sm:text-xl" />
           </Link>
 
           <div className="flex items-center gap-1 sm:gap-4">

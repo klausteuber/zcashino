@@ -13,12 +13,16 @@ import {
   createRateLimitResponse,
 } from '@/lib/admin/rate-limit'
 import { logAdminEvent } from '@/lib/admin/audit'
+import { guardCypherAdminRequest } from '@/lib/admin/host-guard'
 
 /**
  * GET /api/admin/auth
  * Check whether the current browser has a valid admin session cookie.
  */
 export async function GET(request: NextRequest) {
+  const hostGuard = guardCypherAdminRequest(request)
+  if (hostGuard) return hostGuard
+
   const readLimit = checkAdminRateLimit(request, 'admin-read')
   if (!readLimit.allowed) {
     await logAdminEvent({
@@ -66,6 +70,9 @@ export async function GET(request: NextRequest) {
  * Login using ADMIN_USERNAME + ADMIN_PASSWORD from environment variables.
  */
 export async function POST(request: NextRequest) {
+  const hostGuard = guardCypherAdminRequest(request)
+  if (hostGuard) return hostGuard
+
   const loginLimit = checkAdminRateLimit(request, 'auth-login')
   if (!loginLimit.allowed) {
     await logAdminEvent({
@@ -160,6 +167,9 @@ export async function POST(request: NextRequest) {
  * Clears the admin session cookie.
  */
 export async function DELETE(request: NextRequest) {
+  const hostGuard = guardCypherAdminRequest(request)
+  if (hostGuard) return hostGuard
+
   const readLimit = checkAdminRateLimit(request, 'admin-read')
   if (!readLimit.allowed) {
     await logAdminEvent({

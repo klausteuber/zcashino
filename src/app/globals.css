@@ -1,38 +1,127 @@
 @import "tailwindcss";
 
 :root {
-  --foreground-rgb: 250, 247, 240;
-  --background-start-rgb: 42, 89, 64;
-  --background-end-rgb: 61, 122, 90;
+  /* Semantic brand tokens */
+  --accent-primary: #c9a227;
+  --accent-secondary: #e8d5a3;
+  --bg-base: #2a5940;
+  --bg-base-alt: #3d7a5a;
+  --bg-surface: #0d0d0d;
+  --bg-elevated: #141414;
+  --text-primary: #faf7f0;
+  --text-secondary: #e8d5a3;
+  --text-muted: #8f8360;
+  --color-success: #5a9e78;
+  --color-error: #722f37;
+  --color-warning: #c9a227;
+  --border-default: rgba(201, 162, 39, 0.2);
+  --border-active: rgba(201, 162, 39, 0.45);
+  --card-red: #722f37;
+  --card-black: #0d0d0d;
+  --font-display: var(--font-cinzel), Georgia, serif;
+  --font-body: var(--font-inter), system-ui, sans-serif;
+  --font-mono-brand: var(--font-mono), ui-monospace, monospace;
 
-  /* CypherJester Color System */
-  --jester-purple: #3D7A5A;
-  --jester-purple-dark: #2A5940;
-  --jester-purple-light: #5A9E78;
-  --masque-gold: #C9A227;
-  --venetian-gold: #E8D5A3;
-  --midnight-black: #0D0D0D;
-  --bone-white: #FAF7F0;
-  --crimson-mask: #4A2C5A;
-  --blood-ruby: #722F37;
+  /* Existing app aliases */
+  --jester-purple: var(--bg-base-alt);
+  --jester-purple-dark: var(--bg-base);
+  --jester-purple-light: var(--color-success);
+  --masque-gold: var(--accent-primary);
+  --venetian-gold: var(--accent-secondary);
+  --midnight-black: var(--bg-surface);
+  --bone-white: var(--text-primary);
+  --crimson-mask: #4a2c5a;
+  --blood-ruby: var(--color-error);
+  --zec-yellow: var(--accent-primary);
+  --zec-black: var(--bg-surface);
+  --casino-green: var(--bg-base);
+  --casino-gold: var(--accent-primary);
+  --casino-red: var(--color-error);
+  --felt-green: var(--bg-base-alt);
+}
 
-  /* Legacy aliases for gradual migration */
-  --zec-yellow: var(--masque-gold);
-  --zec-black: var(--midnight-black);
-  --casino-green: var(--jester-purple-dark);
-  --casino-gold: var(--masque-gold);
-  --casino-red: var(--blood-ruby);
-  --felt-green: var(--jester-purple);
+body[data-brand="cypher"] {
+  --accent-primary: #c9a227;
+  --accent-secondary: #e8d5a3;
+  --bg-base: #2a5940;
+  --bg-base-alt: #3d7a5a;
+  --bg-surface: #0d0d0d;
+  --bg-elevated: #141414;
+  --text-primary: #faf7f0;
+  --text-secondary: #e8d5a3;
+  --text-muted: #8f8360;
+  --color-success: #5a9e78;
+  --color-error: #722f37;
+  --color-warning: #c9a227;
+  --border-default: rgba(201, 162, 39, 0.2);
+  --border-active: rgba(201, 162, 39, 0.45);
+  --card-red: #722f37;
+  --card-black: #0d0d0d;
+  --font-display: var(--font-cinzel), Georgia, serif;
+  --font-body: var(--font-inter), system-ui, sans-serif;
+  --font-mono-brand: var(--font-mono), ui-monospace, monospace;
+}
+
+body[data-brand="21z"] {
+  --accent-primary: #00f0ff;
+  --accent-secondary: #f4b728;
+  --bg-base: #05050a;
+  --bg-base-alt: #0a0a14;
+  --bg-surface: #0f1019;
+  --bg-elevated: #161825;
+  --text-primary: #e0e4f0;
+  --text-secondary: #8890a6;
+  --text-muted: #4a5068;
+  --color-success: #00ffb3;
+  --color-error: #ff2e63;
+  --color-warning: #f4b728;
+  --border-default: rgba(10, 189, 198, 0.28);
+  --border-active: rgba(0, 240, 255, 0.55);
+  --card-red: #ff2e63;
+  --card-black: #e0e4f0;
+  --font-display: var(--font-orbitron), system-ui, sans-serif;
+  --font-body: var(--font-rajdhani), system-ui, sans-serif;
+  --font-mono-brand: var(--font-space-mono), ui-monospace, monospace;
+  --jester-purple: #0abdc6;
+  --jester-purple-dark: #087e85;
+  --jester-purple-light: #00f0ff;
+  --masque-gold: #00f0ff;
+  --venetian-gold: #8890a6;
+  --midnight-black: #05050a;
+  --bone-white: #e0e4f0;
+  --crimson-mask: #00ffb3;
+  --blood-ruby: #ff2e63;
 }
 
 body {
-  color: rgb(var(--foreground-rgb));
+  color: var(--text-primary);
   background: linear-gradient(
-      to bottom,
-      rgb(var(--background-start-rgb)),
-      rgb(var(--background-end-rgb))
-    );
+    to bottom,
+    var(--bg-base),
+    var(--bg-base-alt)
+  );
   min-height: 100vh;
+  font-family: var(--font-body);
+}
+
+body[data-brand="21z"] {
+  background: #05050a;
+}
+
+body[data-brand="21z"]::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.04;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(224, 228, 240, 0.12) 0px,
+    rgba(224, 228, 240, 0.12) 1px,
+    transparent 2px,
+    transparent 4px
+  );
 }
 
 /* Card styling */
@@ -48,18 +137,93 @@ body {
   border: 1px solid var(--venetian-gold);
 }
 
+.playing-card-back {
+  border-radius: 0.5rem;
+}
+
+body[data-brand="cypher"] .card-suit-red {
+  color: #722f37;
+}
+
+body[data-brand="cypher"] .card-suit-black {
+  color: #0d0d0d;
+}
+
+body[data-brand="21z"] .card-suit-red {
+  color: var(--color-error);
+}
+
+body[data-brand="21z"] .card-suit-black {
+  color: var(--text-primary);
+}
+
 .playing-card.red {
-  color: var(--blood-ruby);
+  color: var(--card-red);
 }
 
 .playing-card.black {
-  color: var(--midnight-black);
+  color: var(--card-black);
+}
+
+body[data-brand="21z"] .playing-card {
+  background: linear-gradient(145deg, #0f1019 0%, #161825 100%);
+  border-radius: 0;
+  border-color: #0abdc6;
+  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 0 100%);
+  box-shadow: 0 0 0 1px rgba(10, 189, 198, 0.35), 0 10px 24px rgba(0, 0, 0, 0.35);
+}
+
+body[data-brand="21z"] .playing-card-back {
+  background: linear-gradient(145deg, #0f1019 0%, #161825 100%);
+  border-radius: 0;
+  border-color: rgba(10, 189, 198, 0.45);
+  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 0 100%);
+}
+
+body[data-brand="21z"] .playing-card-back .card-back-inner {
+  border-color: rgba(10, 189, 198, 0.45);
+  background: linear-gradient(145deg, rgba(8, 126, 133, 0.35), rgba(5, 5, 10, 0.75));
 }
 
 /* Casino felt texture - Diamond tufted green felt */
 .felt-texture {
   background-color: var(--jester-purple);
   background-image: url("data:image/svg+xml,%3Csvg width='80' height='80' viewBox='0 0 80 80' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' stroke='%232A5940' stroke-width='1'%3E%3Cpath d='M0 40 L40 0 L80 40 L40 80 Z' stroke-opacity='0.2'/%3E%3Ccircle cx='40' cy='40' r='2' fill='%23C9A227' fill-opacity='0.1'/%3E%3C/g%3E%3C/svg%3E");
+}
+
+body[data-brand="21z"] .felt-texture {
+  background-color: #05050a;
+  background-image:
+    linear-gradient(rgba(10, 189, 198, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(10, 189, 198, 0.03) 1px, transparent 1px);
+  background-size: 36px 36px;
+}
+
+.cyber-grid {
+  background-color: #05050a;
+  background-image:
+    linear-gradient(rgba(10, 189, 198, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(10, 189, 198, 0.03) 1px, transparent 1px);
+  background-size: 36px 36px;
+}
+
+.scanline-overlay {
+  position: relative;
+}
+
+.scanline-overlay::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(224, 228, 240, 0.08) 0px,
+    rgba(224, 228, 240, 0.08) 1px,
+    transparent 2px,
+    transparent 5px
+  );
+  opacity: 0.05;
 }
 
 /* Chip styling */
@@ -77,38 +241,45 @@ body {
 
 /* Custom color utilities for Tailwind v4 */
 @theme {
-  /* CypherJester Color System */
-  --color-jester-purple: #3D7A5A;
-  --color-jester-purple-dark: #2A5940;
-  --color-jester-purple-light: #5A9E78;
-  --color-masque-gold: #C9A227;
-  --color-venetian-gold: #E8D5A3;
-  --color-midnight-black: #0D0D0D;
-  --color-bone-white: #FAF7F0;
-  --color-crimson-mask: #4A2C5A;
-  --color-blood-ruby: #722F37;
-
-  /* Legacy aliases */
-  --color-zec-yellow: #C9A227;
-  --color-zec-black: #0D0D0D;
-  --color-casino-green: #2A5940;
-  --color-casino-gold: #C9A227;
-  --color-casino-red: #722F37;
-  --color-felt-green: #3D7A5A;
+  --color-jester-purple: var(--jester-purple);
+  --color-jester-purple-dark: var(--jester-purple-dark);
+  --color-jester-purple-light: var(--jester-purple-light);
+  --color-masque-gold: var(--masque-gold);
+  --color-venetian-gold: var(--venetian-gold);
+  --color-midnight-black: var(--midnight-black);
+  --color-bone-white: var(--bone-white);
+  --color-crimson-mask: var(--crimson-mask);
+  --color-blood-ruby: var(--blood-ruby);
+  --color-zec-yellow: var(--zec-yellow);
+  --color-zec-black: var(--zec-black);
+  --color-casino-green: var(--casino-green);
+  --color-casino-gold: var(--casino-gold);
+  --color-casino-red: var(--casino-red);
+  --color-felt-green: var(--felt-green);
+  --color-accent-primary: var(--accent-primary);
+  --color-accent-secondary: var(--accent-secondary);
+  --color-bg-base: var(--bg-base);
+  --color-bg-surface: var(--bg-surface);
+  --color-bg-elevated: var(--bg-elevated);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-success: var(--color-success);
+  --color-error: var(--color-error);
 }
 
 /* Typography utilities */
 .font-display {
-  font-family: var(--font-cinzel), Georgia, serif;
+  font-family: var(--font-display);
 }
 
 .font-body {
-  font-family: var(--font-inter), system-ui, sans-serif;
+  font-family: var(--font-body);
 }
 
 /* Gold gradient text effect */
 .text-gold-gradient {
-  background: linear-gradient(135deg, #C9A227 0%, #E8D5A3 50%, #C9A227 100%);
+  background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 50%, var(--accent-primary) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -116,15 +287,115 @@ body {
 
 /* Button hover animations */
 .btn-gold-shimmer {
-  background: linear-gradient(135deg, #C9A227 0%, #E8D5A3 50%, #C9A227 100%);
+  background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 50%, var(--accent-primary) 100%);
   background-size: 200% 200%;
   transition: all 0.3s ease;
+  border: 1px solid transparent;
 }
 
 .btn-gold-shimmer:hover {
   background-position: 100% 0;
-  box-shadow: 0 4px 20px rgba(201, 162, 39, 0.4);
+  box-shadow: 0 4px 20px color-mix(in srgb, var(--accent-primary) 40%, transparent);
   transform: translateY(-1px);
+}
+
+body[data-brand="21z"] .btn-gold-shimmer {
+  background: transparent;
+  color: var(--text-primary);
+  border-color: rgba(0, 240, 255, 0.55);
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%);
+}
+
+body[data-brand="21z"] .btn-gold-shimmer:hover {
+  background: rgba(0, 240, 255, 0.12);
+  box-shadow: 0 0 22px rgba(0, 240, 255, 0.28);
+}
+
+.clip-bevel-tr {
+  clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 0 100%);
+}
+
+.clip-bevel-bl {
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 12px 100%, 0 calc(100% - 12px));
+}
+
+.cyber-panel {
+  position: relative;
+}
+
+body[data-brand="21z"] .cyber-panel {
+  border-radius: 0 !important;
+  clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 0 100%);
+}
+
+body[data-brand="21z"] .btn-gold-shimmer,
+body[data-brand="21z"] .btn-gold-shimmer.text-midnight-black {
+  color: var(--text-primary) !important;
+}
+
+body[data-brand="21z"]
+  :is(div, section, article, aside, main, header, footer, form, details, table, button, a, input, textarea, select).rounded-2xl:not(.rounded-full),
+body[data-brand="21z"]
+  :is(div, section, article, aside, main, header, footer, form, details, table, button, a, input, textarea, select).rounded-xl:not(.rounded-full) {
+  border-radius: 0 !important;
+  clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 0 100%);
+}
+
+body[data-brand="21z"]
+  :is(button, a, input, textarea, select).rounded-lg:not(.rounded-full),
+body[data-brand="21z"]
+  :is(div, section, article, aside, form, details, table).rounded-lg:not(.rounded-full) {
+  border-radius: 0 !important;
+  clip-path: polygon(0 0, calc(100% - 9px) 0, 100% 9px, 100% 100%, 0 100%);
+}
+
+.glow-cyan:hover,
+.glow-cyan:focus-visible {
+  box-shadow: 0 0 24px rgba(0, 240, 255, 0.28);
+}
+
+.glow-gold:hover,
+.glow-gold:focus-visible {
+  box-shadow: 0 0 24px rgba(244, 183, 40, 0.28);
+}
+
+@keyframes glitchIntro {
+  0% {
+    opacity: 0;
+    transform: translateY(-2px);
+    text-shadow: 2px 0 rgba(255, 46, 99, 0.4), -2px 0 rgba(0, 240, 255, 0.45);
+  }
+  60% {
+    opacity: 1;
+    text-shadow: -1px 0 rgba(255, 46, 99, 0.25), 1px 0 rgba(0, 240, 255, 0.3);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+    text-shadow: none;
+  }
+}
+
+.glitch-text {
+  animation: glitchIntro 550ms ease-out both;
+}
+
+.brand-logo-21z,
+.brand-bell-21z,
+.brand-wordmark-21z {
+  display: none;
+}
+
+body[data-brand="21z"] .brand-logo-cypher,
+body[data-brand="21z"] .brand-bell-cypher,
+body[data-brand="21z"] .brand-wordmark-cypher {
+  display: none;
+}
+
+body[data-brand="21z"] .brand-logo-21z,
+body[data-brand="21z"] .brand-bell-21z,
+body[data-brand="21z"] .brand-wordmark-21z {
+  display: inline-flex;
 }
 
 /* Card animations */
@@ -365,7 +636,7 @@ body {
     90deg,
     #C9A227 0%,
     #E8D5A3 25%,
-    #FFFFFF 50%,
+    var(--bone-white) 50%,
     #E8D5A3 75%,
     #C9A227 100%
   );
@@ -711,4 +982,15 @@ body {
 /* Default transitions for interactive elements */
 button, a, [role="button"] {
   transition: all 0.15s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

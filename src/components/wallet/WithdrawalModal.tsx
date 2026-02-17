@@ -188,7 +188,7 @@ export function WithdrawalModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
-      <div className="bg-midnight-black border border-masque-gold/30 rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden animate-modal-enter">
+      <div className="bg-midnight-black border border-masque-gold/30 rounded-2xl cyber-panel shadow-2xl max-w-md w-full mx-4 overflow-hidden animate-modal-enter">
         {step === 'form' && (
           <div className="p-6">
             <div className="flex items-center justify-between mb-6">
@@ -202,19 +202,19 @@ export function WithdrawalModal({
             </div>
 
             {/* Balance display */}
-            <div className="mb-4 p-3 bg-midnight-black/60 rounded-lg border border-masque-gold/20">
+            <div className="mb-4 p-3 bg-midnight-black/60 rounded-lg cyber-panel border border-masque-gold/20">
               <div className="text-xs text-venetian-gold/50 mb-1">Available Balance</div>
               <div className="text-2xl font-bold text-masque-gold font-mono">{balance.toFixed(4)} ZEC</div>
             </div>
 
             {/* Destination address */}
-            <div className="mb-4 p-3 bg-midnight-black/60 rounded-lg border border-masque-gold/20">
+            <div className="mb-4 p-3 bg-midnight-black/60 rounded-lg cyber-panel border border-masque-gold/20">
               <div className="text-xs text-venetian-gold/50 mb-1">Withdrawal Address</div>
               <div className="text-sm text-venetian-gold font-mono">{truncatedAddress}</div>
             </div>
 
             {!withdrawalAddress && (
-              <div className="mb-4 p-3 bg-blood-ruby/20 border border-blood-ruby/30 rounded-lg">
+              <div className="mb-4 p-3 bg-blood-ruby/20 border border-blood-ruby/30 rounded-lg cyber-panel">
                 <p className="text-sm text-blood-ruby">No withdrawal address set. Set one during the deposit flow first.</p>
               </div>
             )}
@@ -236,12 +236,12 @@ export function WithdrawalModal({
                   step="0.0001"
                   min={MIN_WITHDRAWAL}
                   max={maxWithdrawal}
-                  className="flex-1 px-4 py-3 bg-midnight-black/60 border border-masque-gold/20 rounded-lg text-bone-white placeholder-venetian-gold/30 focus:outline-none focus:ring-2 focus:ring-masque-gold/50 focus:border-masque-gold font-mono"
+                  className="flex-1 px-4 py-3 bg-midnight-black/60 border border-masque-gold/20 rounded-lg cyber-panel text-bone-white placeholder-venetian-gold/30 focus:outline-none focus:ring-2 focus:ring-masque-gold/50 focus:border-masque-gold font-mono"
                 />
                 <button
                   onClick={handleMax}
                   disabled={maxWithdrawal < MIN_WITHDRAWAL}
-                  className="px-4 py-3 bg-masque-gold/10 border border-masque-gold/30 rounded-lg text-masque-gold text-sm font-semibold hover:bg-masque-gold/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-4 py-3 bg-masque-gold/10 border border-masque-gold/30 rounded-lg cyber-panel text-masque-gold text-sm font-semibold hover:bg-masque-gold/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   MAX
                 </button>
@@ -250,7 +250,7 @@ export function WithdrawalModal({
 
             {/* Fee breakdown */}
             {parsedAmount > 0 && (
-              <div className="mb-4 p-3 bg-midnight-black/60 rounded-lg border border-masque-gold/20 space-y-1 text-sm font-mono">
+              <div className="mb-4 p-3 bg-midnight-black/60 rounded-lg cyber-panel border border-masque-gold/20 space-y-1 text-sm font-mono">
                 <div className="flex justify-between text-venetian-gold/70">
                   <span>Withdrawal</span>
                   <span>{parsedAmount.toFixed(4)} ZEC</span>
@@ -276,7 +276,7 @@ export function WithdrawalModal({
             )}
 
             {isDemo && (
-              <div className="mb-4 p-3 bg-masque-gold/10 border border-masque-gold/30 rounded-lg">
+              <div className="mb-4 p-3 bg-masque-gold/10 border border-masque-gold/30 rounded-lg cyber-panel">
                 <p className="text-sm text-venetian-gold">Demo mode: withdrawal is simulated instantly.</p>
               </div>
             )}
@@ -296,22 +296,22 @@ export function WithdrawalModal({
             <h2 className="text-xl font-display font-bold text-bone-white mb-6">Confirm Withdrawal</h2>
 
             <div className="space-y-3 mb-6">
-              <div className="p-3 bg-midnight-black/60 rounded-lg border border-masque-gold/20">
+              <div className="p-3 bg-midnight-black/60 rounded-lg cyber-panel border border-masque-gold/20">
                 <div className="text-xs text-venetian-gold/50 mb-1">Sending</div>
                 <div className="text-2xl font-bold text-masque-gold font-mono">{parsedAmount.toFixed(4)} ZEC</div>
               </div>
 
-              <div className="p-3 bg-midnight-black/60 rounded-lg border border-masque-gold/20">
+              <div className="p-3 bg-midnight-black/60 rounded-lg cyber-panel border border-masque-gold/20">
                 <div className="text-xs text-venetian-gold/50 mb-1">To</div>
                 <div className="text-sm text-venetian-gold font-mono break-all">{withdrawalAddress}</div>
               </div>
 
-              <div className="p-3 bg-midnight-black/60 rounded-lg border border-masque-gold/20">
+              <div className="p-3 bg-midnight-black/60 rounded-lg cyber-panel border border-masque-gold/20">
                 <div className="text-xs text-venetian-gold/50 mb-1">Network Fee</div>
                 <div className="text-sm text-venetian-gold font-mono">{WITHDRAWAL_FEE} ZEC</div>
               </div>
 
-              <div className="p-3 bg-masque-gold/10 rounded-lg border border-masque-gold/30">
+              <div className="p-3 bg-masque-gold/10 rounded-lg cyber-panel border border-masque-gold/30">
                 <div className="text-xs text-venetian-gold/50 mb-1">Total Deducted from Balance</div>
                 <div className="text-lg font-bold text-bone-white font-mono">{totalDeducted.toFixed(4)} ZEC</div>
               </div>

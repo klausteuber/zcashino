@@ -1,13 +1,19 @@
 import BlackjackGame from '@/components/game/BlackjackGame'
 import { BreadcrumbJsonLd } from '@/components/seo/JsonLd'
+import { getBrandUrlForPath } from '@/lib/brand/config'
+import { getServerBrand } from '@/lib/brand/server'
 
-export default function BlackjackPage() {
+export default async function BlackjackPage() {
+  const brand = await getServerBrand()
+  const homeUrl = getBrandUrlForPath(brand.id, '/')
+  const pageUrl = getBrandUrlForPath(brand.id, '/blackjack')
+
   return (
     <>
       <BreadcrumbJsonLd
         items={[
-          { name: 'Home', url: 'https://cypherjester.com' },
-          { name: 'Play Blackjack', url: 'https://cypherjester.com/blackjack' },
+          { name: 'Home', url: homeUrl },
+          { name: 'Play Blackjack', url: pageUrl },
         ]}
       />
 
@@ -17,7 +23,7 @@ export default function BlackjackPage() {
       <section className="felt-texture border-t border-masque-gold/20">
         <div className="container mx-auto px-4 py-16 max-w-4xl">
           <h2 className="text-3xl font-display font-bold text-bone-white mb-8 text-center">
-            How to Play Blackjack at CypherJester
+            How to Play Blackjack at {brand.config.name}
           </h2>
 
           <div className="grid md:grid-cols-2 gap-8 mb-12">
@@ -66,7 +72,7 @@ export default function BlackjackPage() {
 
           <div className="bg-midnight-black/40 rounded-xl p-6 border border-masque-gold/20 mb-12">
             <h3 className="text-xl font-display font-semibold text-masque-gold mb-3">
-              Why Play at CypherJester?
+              Why Play at {brand.config.name}?
             </h3>
             <div className="grid sm:grid-cols-3 gap-6 text-sm text-venetian-gold/70">
               <div>

@@ -1,6 +1,33 @@
-# CypherJester
+# CypherJester / 21z
 
-Play in Private. Verify in Public. A provably fair, privacy-focused online casino powered by Zcash (ZEC).
+Dual-brand provably fair Zcash casino frontend:
+- `cypherjester.com` -> CypherJester brand
+- `21z.cash` -> 21z cyberpunk brand
+
+Both brands run from one codebase and share identical game/API/database behavior.
+
+Taglines:
+- CypherJester: "Play in Private. Verify in Public."
+- 21z: "Prove Everything. Reveal Nothing."
+
+## Multi-Brand Runtime
+
+Brand is selected by hostname at request time and rendered as `data-brand` on `<body>`.
+
+Resolver precedence:
+1. `FORCE_BRAND`
+2. Host mapping (`CYPHER_HOSTS`, `BRAND_21Z_HOSTS`)
+3. Fallback `cypher`
+
+Key environment variables:
+- `MULTI_BRAND_ENABLED`
+- `FORCE_BRAND`
+- `CYPHER_HOSTS`
+- `BRAND_21Z_HOSTS`
+
+SEO policy:
+- `21z.cash` is canonical for both brands.
+- Cypher pages remain indexable but canonicalize to matching `21z.cash` paths.
 
 ## Features
 

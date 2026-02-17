@@ -1,28 +1,40 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
+import { BrandWordmark } from '@/components/brand/BrandWordmark'
 import JesterLogo from '@/components/ui/JesterLogo'
+import { getBrandUrlForPath, getCanonicalUrlForPath } from '@/lib/brand/config'
+import { getServerBrand } from '@/lib/brand/server'
 
-export const metadata: Metadata = {
-  title: 'Privacy Policy',
-  description:
-    'How CypherJester handles your data and protects your privacy. No KYC, no tracking, privacy by design.',
-  openGraph: {
-    title: 'Privacy Policy | CypherJester',
-    url: 'https://cypherjester.com/privacy',
-  },
+export async function generateMetadata(): Promise<Metadata> {
+  const brand = await getServerBrand()
+  const brandUrl = getBrandUrlForPath(brand.id, '/privacy')
+  const canonicalUrl = getCanonicalUrlForPath(brand.id, '/privacy')
+  const brandTitle = brand.id === '21z' ? '21z' : 'CypherJester'
+
+  return {
+    title: 'Privacy Policy',
+    description:
+      `How ${brandTitle} handles your data and protects your privacy. No KYC, no tracking, privacy by design.`,
+    alternates: {
+      canonical: canonicalUrl,
+    },
+    openGraph: {
+      title: `Privacy Policy | ${brandTitle}`,
+      url: brandUrl,
+    },
+  }
 }
 
-export default function PrivacyPage() {
+export default async function PrivacyPage() {
+  const brand = await getServerBrand()
+
   return (
     <main className="min-h-screen felt-texture">
       <header className="border-b border-masque-gold/20 bg-midnight-black/30 backdrop-blur-sm">
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
           <Link href="/" className="flex items-center gap-3">
             <JesterLogo size="md" className="text-jester-purple-light" />
-            <span className="text-xl font-display font-bold tracking-tight">
-              <span className="text-masque-gold">Cypher</span>
-              <span className="text-bone-white">Jester</span>
-            </span>
+            <BrandWordmark />
           </Link>
           <Link href="/blackjack" className="btn-gold-shimmer text-midnight-black px-4 py-2 rounded-lg font-semibold">
             Play Now
@@ -36,7 +48,7 @@ export default function PrivacyPage() {
 
           <section>
             <h2 className="text-2xl font-display font-semibold text-bone-white mb-3">Privacy-First Design</h2>
-            <p>CypherJester is built with privacy as a core principle. We do not require personal accounts, email addresses, or any identifying information to use the platform. Your gaming session is tied to a Zcash wallet address, not to your identity.</p>
+            <p>{brand.config.name} is built with privacy as a core principle. We do not require personal accounts, email addresses, or any identifying information to use the platform. Your gaming session is tied to a Zcash wallet address, not to your identity.</p>
           </section>
 
           <section>

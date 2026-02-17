@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
+import { BrandWordmark } from '@/components/brand/BrandWordmark'
 import JesterLogo from '@/components/ui/JesterLogo'
 import type { FullVerificationResult, GameVerificationData, FairnessVersion } from '@/types'
 
@@ -128,10 +129,7 @@ function VerifyPageContent() {
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
           <Link href="/" className="flex items-center gap-3">
             <JesterLogo size="md" className="text-jester-purple-light" />
-            <span className="text-xl font-display font-bold tracking-tight">
-              <span className="text-masque-gold">Cypher</span>
-              <span className="text-bone-white">Jester</span>
-            </span>
+            <BrandWordmark />
           </Link>
           <Link
             href="/blackjack"
@@ -351,11 +349,11 @@ function VerifyPageContent() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M5.07 19h13.86c1.54 0 2.5-1.67 1.73-3L13.73 4c-.77-1.33-2.69-1.33-3.46 0L3.34 16c-.77 1.33.19 3 1.73 3z" />
                     </svg>
                   ) : result.valid ? (
-                    <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-6 h-6 text-bone-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
                   ) : (
-                    <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-6 h-6 text-bone-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                     </svg>
                   )}

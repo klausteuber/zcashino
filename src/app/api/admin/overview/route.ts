@@ -11,12 +11,16 @@ import {
 import { logAdminEvent } from '@/lib/admin/audit'
 import { getKillSwitchStatus } from '@/lib/kill-switch'
 import { PLAYER_COUNTER_ACTIONS } from '@/lib/telemetry/player-events'
+import { guardCypherAdminRequest } from '@/lib/admin/host-guard'
 
 /**
  * GET /api/admin/overview
  * Authenticated admin metrics and operational data.
  */
 export async function GET(request: NextRequest) {
+  const hostGuard = guardCypherAdminRequest(request)
+  if (hostGuard) return hostGuard
+
   const readLimit = checkAdminRateLimit(request, 'admin-read')
   if (!readLimit.allowed) {
     await logAdminEvent({

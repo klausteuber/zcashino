@@ -40,7 +40,7 @@ curl http://localhost:3000/api/health
 | `ZCASH_RPC_URL` | RPC endpoint for mainnet | `http://zcashd:8232` |
 | `ZCASH_TESTNET_RPC_URL` | RPC endpoint for testnet | `http://zcashd:18232` |
 | `HOUSE_ZADDR_TESTNET` | House shielded address (testnet) | `ztestsapling1...` |
-| `HOUSE_ZADDR_MAINNET` | House shielded address (mainnet) | `zs1...` |
+| `HOUSE_ZADDR_MAINNET` | House unified address (mainnet, must include Orchard receiver) | `u1...` |
 | `DEMO_MODE` | Set to `false` for real money | `false` |
 | `ADMIN_USERNAME` | Admin dashboard username | `admin` |
 | `ADMIN_PASSWORD` | Admin password (16+ chars) | `<strong password>` |
@@ -57,6 +57,27 @@ curl http://localhost:3000/api/health
 | `KILL_SWITCH` | Set to `true` to block new games/withdrawals at startup | `false` |
 | `NEXT_PUBLIC_SENTRY_DSN` | Sentry error tracking DSN | (disabled) |
 | `SENTRY_AUTH_TOKEN` | Sentry source map upload token | (disabled) |
+| `MULTI_BRAND_ENABLED` | Enable host-based dual-brand frontend | `false` |
+| `FORCE_BRAND` | Emergency override (`cypher` or `21z`) | (unset) |
+| `CYPHER_HOSTS` | Comma-separated hosts that render Cypher branding | `cypherjester.com,www.cypherjester.com` |
+| `BRAND_21Z_HOSTS` | Comma-separated hosts that render 21z branding | `21z.cash,www.21z.cash` |
+
+### Dual-Brand Deployment Defaults (Mainnet)
+
+Use these defaults for live dual-brand operation:
+
+```env
+MULTI_BRAND_ENABLED=true
+FORCE_BRAND=
+CYPHER_HOSTS=cypherjester.com,www.cypherjester.com
+BRAND_21Z_HOSTS=21z.cash,www.21z.cash
+```
+
+Emergency rollback to Cypher-only visuals:
+
+```env
+FORCE_BRAND=cypher
+```
 
 ### Generating Secrets
 
@@ -81,7 +102,7 @@ Place behind Nginx for TLS termination:
 ```nginx
 server {
     listen 443 ssl http2;
-    server_name cypherjester.example.com;
+    server_name cypherjester.example.com 21z.cash www.21z.cash;
 
     ssl_certificate /etc/letsencrypt/live/cypherjester.example.com/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/cypherjester.example.com/privkey.pem;
@@ -97,8 +118,14 @@ server {
 
 server {
     listen 80;
-    server_name cypherjester.example.com;
+    server_name cypherjester.example.com 21z.cash;
     return 301 https://$host$request_uri;
+}
+
+server {
+    listen 80;
+    server_name www.21z.cash;
+    return 301 https://21z.cash$request_uri;
 }
 ```
 
@@ -289,6 +316,8 @@ No hosted RPC provider supports the wallet methods we need (`z_sendmany`, `z_get
 - **SQLite file permissions**: App runs as uid 1001 (nextjs user). DB file AND parent directory must be owned by 1001: `chown -R 1001:1001 /data`
 - **CSP + Next.js**: `script-src` must include `'unsafe-inline'` — Next.js uses inline scripts for hydration that CSP blocks otherwise
 - **Firewall**: Only expose ports 22 (SSH), 80 (HTTP), 443 (HTTPS). Block app port 3000 and zcashd RPC port (18232/8232) externally — app is only accessible via Nginx reverse proxy
+- **House UA must include Orchard receiver**: `z_sendmany` from a UA only spends from pools with receivers in that UA. Without an Orchard receiver, funds that migrate to Orchard (via internal change outputs) become unspendable. Generate with `z_getaddressforaccount 0 '["sapling","orchard"]'`
+- **`--env-file` required**: `docker compose -f docker-compose.mainnet.yml` requires `--env-file .env.mainnet` or env vars won't be interpolated (e.g., `ZCASH_RPC_PASSWORD is required` error)
 
 ## Mainnet Deployment
 
@@ -317,13 +346,17 @@ docker compose -p mainnet -f docker-compose.mainnet.yml exec zcashd zcash-cli ge
 docker compose -p mainnet -f docker-compose.mainnet.yml exec zcashd zcash-cli z_getnewaccount
 # → {"account": 0}
 docker compose -p mainnet -f docker-compose.mainnet.yml exec zcashd \
-  zcash-cli z_getaddressforaccount 0 '["p2pkh","sapling"]'
-# → {"address": "u1...", "account": 0}
+  zcash-cli z_getaddressforaccount 0 '["p2pkh","sapling","orchard"]'
+# → {"address": "u1...", "account": 0, "receiver_types": ["p2pkh", "sapling", "orchard"]}
+# CRITICAL: The UA MUST include an Orchard receiver! Without it, z_sendmany
+# cannot spend funds in the Orchard pool. Wallet change from withdrawals and
+# other operations often lands in Orchard (NU5 default), making those funds
+# unspendable from a Sapling-only UA.
 # Extract receivers:
 docker compose -p mainnet -f docker-compose.mainnet.yml exec zcashd \
   zcash-cli z_listunifiedreceivers "u1..."
-# → {"p2pkh": "t1...", "sapling": "zs1..."}
-# Set zs1... as HOUSE_ZADDR_MAINNET in .env.mainnet
+# → {"p2pkh": "t1...", "sapling": "zs1...", "orchard": "u1..."}
+# Set the FULL UA (u1...) as HOUSE_ZADDR_MAINNET in .env.mainnet
 # t1... is used for deposit sweeps
 
 # 5. IMMEDIATELY back up the wallet
@@ -496,12 +529,39 @@ Run a restore drill at least once during the first 30 days of mainnet operation.
 
 **Symptoms**: Withdrawal stuck in `pending` status, user complaining
 
-1. Get the operation ID from the transaction record
+1. Get the operation ID from the transaction record:
+   ```bash
+   sqlite3 /var/lib/docker/volumes/mainnet_app-data/_data/zcashino.db \
+     "SELECT id, status, operationId, failReason, amount FROM \"Transaction\" WHERE type='withdrawal' ORDER BY createdAt DESC LIMIT 5;"
+   ```
 2. Check status: `zcash-cli z_getoperationstatus '["opid-xxx"]'`
-3. If `failed`: note the error, refund user balance via admin dashboard
+3. If `failed`: note the error, refund user balance:
+   ```bash
+   # Mark tx as failed and refund session
+   sqlite3 /var/lib/docker/volumes/mainnet_app-data/_data/zcashino.db "
+     UPDATE \"Transaction\" SET status='failed', failReason='<error>' WHERE id='<txId>';
+     UPDATE Session SET balance=balance+<amount+fee>, totalWithdrawn=totalWithdrawn-<amount> WHERE id='<sessionId>';
+   "
+   ```
 4. If `executing` for > 30 min: check node sync status
 5. If node is synced but op stuck: restart zcashd (safe — pending ops resume)
 6. Check result after restart: `zcash-cli z_getoperationresult '["opid-xxx"]'`
+
+**Common failure: "Insufficient funds"** — This usually means the house UA lacks a receiver
+for the pool where funds are held. Check pool distribution:
+```bash
+docker exec mainnet-zcashd-1 zcash-cli -rpcuser=USER -rpcpassword=PASS z_getbalanceforaccount 0 1
+```
+If funds are in Orchard but the house UA only has a Sapling receiver, generate a new UA:
+```bash
+docker exec mainnet-zcashd-1 zcash-cli -rpcuser=USER -rpcpassword=PASS \
+  z_getaddressforaccount 0 '["sapling","orchard"]'
+```
+Update `HOUSE_ZADDR_MAINNET` in `.env.mainnet` and redeploy the app.
+
+**Note**: As of 2026-02-16, the admin approval handler polls the opid for 3 seconds after
+`z_sendmany` to catch immediate failures (like insufficient funds) and auto-refunds the user.
+Earlier versions did not do this, leaving withdrawals silently stuck as `pending`.
 
 ### Commitment Pool Depleted
 

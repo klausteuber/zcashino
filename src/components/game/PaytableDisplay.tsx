@@ -20,7 +20,7 @@ export default function PaytableDisplay({
   const ranks = getHandRankDisplayNames(variant)
 
   return (
-    <div className={`w-full max-w-xl mx-auto ${className}`}>
+    <div className={`w-full max-w-xl mx-auto cyber-panel ${className}`}>
       <table className="w-full text-sm border-collapse">
         <thead>
           <tr className="border-b border-masque-gold/30">
@@ -51,7 +51,7 @@ export default function PaytableDisplay({
                 className={`border-b border-masque-gold/10 transition-all duration-300 ${
                   isWinner
                     ? 'bg-masque-gold/20 text-masque-gold font-bold'
-                    : 'text-bone-white/80'
+                    : 'text-text-primary/80'
                 }`}
               >
                 <td className={`py-1 px-2 text-left ${isWinner ? 'text-masque-gold' : ''}`}>
@@ -72,7 +72,7 @@ export default function PaytableDisplay({
                             ? 'text-masque-gold/80 bg-masque-gold/5'
                             : isWinner
                               ? 'text-masque-gold/70'
-                              : 'text-bone-white/50'
+                              : 'text-text-primary/50'
                       }`}
                     >
                       {payout}

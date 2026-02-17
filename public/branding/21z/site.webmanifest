@@ -1,0 +1,21 @@
+{
+  "name": "21z",
+  "short_name": "21z",
+  "description": "Provably fair Zcash blackjack and video poker",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#05050A",
+  "theme_color": "#00F0FF",
+  "icons": [
+    {
+      "src": "/branding/21z/android-chrome-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/branding/21z/android-chrome-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

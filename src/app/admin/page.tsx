@@ -1,7 +1,9 @@
 'use client'
 
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import Link from 'next/link'
 import JesterLogo from '@/components/ui/JesterLogo'
+import { useBrand } from '@/hooks/useBrand'
 
 type AdminAction = 'refill' | 'cleanup' | 'init' | 'process-withdrawals'
 
@@ -118,6 +120,7 @@ function shortId(value: string, prefix: number = 8, suffix: number = 6): string 
 }
 
 export default function AdminPage() {
+  const brand = useBrand()
   const [authChecked, setAuthChecked] = useState(false)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [configured, setConfigured] = useState(true)
@@ -203,11 +206,15 @@ export default function AdminPage() {
   }, [fetchOverview])
 
   useEffect(() => {
+    if (brand.id !== 'cypher') {
+      setAuthChecked(true)
+      return
+    }
     checkAuth()
-  }, [checkAuth])
+  }, [brand.id, checkAuth])
 
   useEffect(() => {
-    if (!isAuthenticated) {
+    if (brand.id !== 'cypher' || !isAuthenticated) {
       return
     }
 
@@ -218,7 +225,7 @@ export default function AdminPage() {
     }, 20000)
 
     return () => clearInterval(intervalId)
-  }, [isAuthenticated, fetchOverview])
+  }, [brand.id, isAuthenticated, fetchOverview])
 
   const handleLogin = async (event: FormEvent) => {
     event.preventDefault()
@@ -371,6 +378,30 @@ export default function AdminPage() {
     } finally {
       setWithdrawalActionLoading(null)
     }
+  }
+
+  if (brand.id !== 'cypher') {
+    return (
+      <main className="min-h-screen felt-texture flex items-center justify-center px-4">
+        <div className="w-full max-w-xl bg-midnight-black/70 border border-masque-gold/25 rounded-xl p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <JesterLogo size="sm" className="text-jester-purple-light" />
+            <h1 className="text-2xl font-display font-bold text-bone-white">
+              Admin Disabled On 21z
+            </h1>
+          </div>
+          <p className="text-venetian-gold/70 mb-4">
+            The operations dashboard is only available on CypherJester for now.
+          </p>
+          <Link
+            href="https://cypherjester.com/admin"
+            className="inline-flex btn-gold-shimmer text-midnight-black px-4 py-2 rounded-lg font-semibold"
+          >
+            Open Cypher Admin
+          </Link>
+        </div>
+      </main>
+    )
   }
 
   if (!authChecked) {

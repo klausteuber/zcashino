@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect } from 'react'
 import { QRCode, CopyButton } from '@/components/ui/QRCode'
 import { useDepositPolling, DepositStatus } from '@/hooks/useDepositPolling'
+import { useBrand } from '@/hooks/useBrand'
 
 type OnboardingStep = 'welcome' | 'setup' | 'deposit' | 'confirming' | 'ready'
 
@@ -27,6 +28,7 @@ export function OnboardingModal({
   onCreateRealSession,
   onSetWithdrawalAddress
 }: OnboardingModalProps) {
+  const brand = useBrand()
   const [step, setStep] = useState<OnboardingStep>('welcome')
   const [withdrawalAddress, setWithdrawalAddress] = useState('')
   const [addressError, setAddressError] = useState<string | null>(null)
@@ -129,13 +131,15 @@ export function OnboardingModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
-      <div className="bg-midnight-black border border-masque-gold/30 rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden animate-modal-enter">
+      <div className="bg-midnight-black border border-masque-gold/30 rounded-2xl cyber-panel shadow-2xl max-w-md w-full mx-4 overflow-hidden animate-modal-enter">
         {/* Welcome Step */}
         {step === 'welcome' && (
           <WelcomeScreen
             onDemoSelect={handleDemoSelect}
             onRealSelect={handleRealSelect}
             isLoading={isLoading}
+            brandName={brand.config.name}
+            tagline={brand.config.tagline}
           />
         )}
 
@@ -179,22 +183,26 @@ export function OnboardingModal({
 function WelcomeScreen({
   onDemoSelect,
   onRealSelect,
-  isLoading
+  isLoading,
+  brandName,
+  tagline,
 }: {
   onDemoSelect: () => void
   onRealSelect: () => void
   isLoading: boolean
+  brandName: string
+  tagline: string
 }) {
   return (
     <div className="p-8 text-center">
-      <h1 className="text-3xl font-display font-bold text-bone-white mb-2">Welcome to CypherJester</h1>
-      <p className="text-venetian-gold/50 mb-8">Play in Private. Verify in Public.</p>
+      <h1 className="text-3xl font-display font-bold text-bone-white mb-2">Welcome to {brandName}</h1>
+      <p className="text-venetian-gold/50 mb-8">{tagline}</p>
 
       <div className="grid grid-cols-2 gap-4 mb-6">
         {/* Demo Mode Card */}
         <button
           onClick={onDemoSelect}
-          className="group p-6 bg-midnight-black/60 hover:bg-jester-purple-dark/30 border border-masque-gold/20 hover:border-masque-gold/50 rounded-xl transition-all text-left"
+          className="group p-6 bg-midnight-black/60 hover:bg-jester-purple-dark/30 border border-masque-gold/20 hover:border-masque-gold/50 rounded-xl cyber-panel transition-all text-left"
         >
           <div className="text-3xl mb-2">🎮</div>
           <div className="text-lg font-semibold text-bone-white mb-1">Try Demo</div>
@@ -206,7 +214,7 @@ function WelcomeScreen({
         <button
           onClick={onRealSelect}
           disabled={isLoading}
-          className="group p-6 bg-gradient-to-br from-jester-purple-dark/40 to-jester-purple/20 hover:from-jester-purple-dark/50 hover:to-jester-purple/30 border border-masque-gold/30 hover:border-masque-gold/50 rounded-xl transition-all text-left disabled:opacity-50"
+          className="group p-6 bg-gradient-to-br from-jester-purple-dark/40 to-jester-purple/20 hover:from-jester-purple-dark/50 hover:to-jester-purple/30 border border-masque-gold/30 hover:border-masque-gold/50 rounded-xl cyber-panel transition-all text-left disabled:opacity-50"
         >
           {isLoading ? (
             <div className="flex items-center justify-center h-full">
@@ -273,7 +281,7 @@ function SetupScreen({
           value={withdrawalAddress}
           onChange={(e) => onAddressChange(e.target.value)}
           placeholder="zs1... or t1... or tm..."
-          className={`w-full px-4 py-3 bg-midnight-black/60 border rounded-lg text-bone-white placeholder-venetian-gold/30 focus:outline-none focus:ring-2 transition-all ${
+          className={`w-full px-4 py-3 bg-midnight-black/60 border rounded-lg cyber-panel text-bone-white placeholder-venetian-gold/30 focus:outline-none focus:ring-2 transition-all ${
             error
               ? 'border-blood-ruby focus:ring-blood-ruby/50'
               : 'border-masque-gold/20 focus:ring-masque-gold/50 focus:border-masque-gold'
@@ -337,7 +345,7 @@ function DepositScreen({
       </p>
 
       {/* Withdrawal address confirmation */}
-      <div className="mb-4 p-3 bg-midnight-black/60 rounded-lg border border-masque-gold/20">
+      <div className="mb-4 p-3 bg-midnight-black/60 rounded-lg cyber-panel border border-masque-gold/20">
         <div className="text-xs text-venetian-gold/50 mb-1">Withdrawals will go to:</div>
         <div className="text-sm text-masque-gold font-mono">{truncatedAddress}</div>
       </div>
@@ -350,7 +358,7 @@ function DepositScreen({
 
         {/* Deposit address */}
         <div className="w-full">
-          <div className="flex items-center gap-2 p-3 bg-midnight-black/60 rounded-lg border border-masque-gold/20">
+          <div className="flex items-center gap-2 p-3 bg-midnight-black/60 rounded-lg cyber-panel border border-masque-gold/20">
             <code className="flex-1 text-sm text-venetian-gold font-mono break-all">
               {depositAddress}
             </code>
@@ -376,7 +384,7 @@ function DepositScreen({
       </div>
 
       {/* Polling status */}
-      <div className="flex items-center justify-center gap-2 py-3 px-4 bg-midnight-black/60 rounded-lg border border-masque-gold/20">
+      <div className="flex items-center justify-center gap-2 py-3 px-4 bg-midnight-black/60 rounded-lg cyber-panel border border-masque-gold/20">
         <div className="w-2 h-2 bg-masque-gold rounded-full animate-pulse" />
         <span className="text-sm text-venetian-gold">
           {depositStatus.status === 'waiting'
@@ -445,7 +453,7 @@ function ConfirmingScreen({ depositStatus }: { depositStatus: DepositStatus }) {
       </div>
 
       {/* Estimated time */}
-      <div className="mb-6 p-4 bg-midnight-black/60 rounded-lg">
+      <div className="mb-6 p-4 bg-midnight-black/60 rounded-lg cyber-panel">
         <p className="text-sm text-venetian-gold/50 mb-1">Estimated time remaining</p>
         <p className="text-lg font-semibold text-bone-white">
           ~{Math.max(0, (requiredConfirmations - confirmations) * 5)} minutes
@@ -453,7 +461,7 @@ function ConfirmingScreen({ depositStatus }: { depositStatus: DepositStatus }) {
       </div>
 
       {/* While you wait */}
-      <div className="text-left p-4 bg-jester-purple-dark/20 rounded-lg border border-masque-gold/20 mb-4">
+      <div className="text-left p-4 bg-jester-purple-dark/20 rounded-lg cyber-panel border border-masque-gold/20 mb-4">
         <p className="text-sm font-medium text-venetian-gold mb-2">While you wait...</p>
         <ul className="text-sm text-venetian-gold/50 space-y-1">
           <li>• Our games are provably fair</li>

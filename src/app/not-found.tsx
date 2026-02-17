@@ -1,28 +1,28 @@
 import type { Metadata } from 'next'
-import Image from 'next/image'
 import Link from 'next/link'
+import JesterLogo from '@/components/ui/JesterLogo'
+import { getServerBrand } from '@/lib/brand/server'
 
 export const metadata: Metadata = {
   title: 'Page Not Found',
   robots: { index: false, follow: true },
 }
 
-export default function NotFound() {
+export default async function NotFound() {
+  const brand = await getServerBrand()
+  const is21z = brand.id === '21z'
+
   return (
     <main className="min-h-screen felt-texture flex items-center justify-center px-4">
       <div className="text-center max-w-md">
-        <Image
-          src="/images/jester-logo.png"
-          alt="CypherJester"
-          width={64}
-          height={64}
-          className="mx-auto mb-6"
-        />
+        <div className="mx-auto mb-6 flex justify-center">
+          <JesterLogo size="lg" />
+        </div>
         <h1 className="text-6xl font-display font-bold text-masque-gold mb-4">
           404
         </h1>
         <h2 className="text-2xl font-display font-semibold text-bone-white mb-3">
-          The Jester Has No Card Here
+          {is21z ? '404 // SIGNAL LOST' : 'The Jester Has No Card Here'}
         </h2>
         <p className="text-venetian-gold/70 mb-8">
           This page does not exist. Perhaps the hand was folded.

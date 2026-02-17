@@ -1,28 +1,40 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
+import { BrandWordmark } from '@/components/brand/BrandWordmark'
 import JesterLogo from '@/components/ui/JesterLogo'
+import { getBrandUrlForPath, getCanonicalUrlForPath } from '@/lib/brand/config'
+import { getServerBrand } from '@/lib/brand/server'
 
-export const metadata: Metadata = {
-  title: 'Terms of Service',
-  description:
-    'Terms and conditions for using CypherJester, a provably fair privacy casino powered by Zcash.',
-  openGraph: {
-    title: 'Terms of Service | CypherJester',
-    url: 'https://cypherjester.com/terms',
-  },
+export async function generateMetadata(): Promise<Metadata> {
+  const brand = await getServerBrand()
+  const brandUrl = getBrandUrlForPath(brand.id, '/terms')
+  const canonicalUrl = getCanonicalUrlForPath(brand.id, '/terms')
+  const brandTitle = brand.id === '21z' ? '21z' : 'CypherJester'
+
+  return {
+    title: 'Terms of Service',
+    description:
+      `Terms and conditions for using ${brandTitle}, a provably fair privacy casino powered by Zcash.`,
+    alternates: {
+      canonical: canonicalUrl,
+    },
+    openGraph: {
+      title: `Terms of Service | ${brandTitle}`,
+      url: brandUrl,
+    },
+  }
 }
 
-export default function TermsPage() {
+export default async function TermsPage() {
+  const brand = await getServerBrand()
+
   return (
     <main className="min-h-screen felt-texture">
       <header className="border-b border-masque-gold/20 bg-midnight-black/30 backdrop-blur-sm">
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
           <Link href="/" className="flex items-center gap-3">
             <JesterLogo size="md" className="text-jester-purple-light" />
-            <span className="text-xl font-display font-bold tracking-tight">
-              <span className="text-masque-gold">Cypher</span>
-              <span className="text-bone-white">Jester</span>
-            </span>
+            <BrandWordmark />
           </Link>
           <Link href="/blackjack" className="btn-gold-shimmer text-midnight-black px-4 py-2 rounded-lg font-semibold">
             Play Now
@@ -36,7 +48,7 @@ export default function TermsPage() {
 
           <section>
             <h2 className="text-2xl font-display font-semibold text-bone-white mb-3">1. Acceptance of Terms</h2>
-            <p>By accessing or using CypherJester, you agree to be bound by these Terms of Service. If you do not agree, do not use our platform. You must be at least 18 years old (or the legal gambling age in your jurisdiction) to use CypherJester.</p>
+            <p>By accessing or using {brand.config.name}, you agree to be bound by these Terms of Service. If you do not agree, do not use our platform. You must be at least 18 years old (or the legal gambling age in your jurisdiction) to use {brand.config.name}.</p>
           </section>
 
           <section>
@@ -52,7 +64,7 @@ export default function TermsPage() {
 
           <section>
             <h2 className="text-2xl font-display font-semibold text-bone-white mb-3">3. Account & Sessions</h2>
-            <p>CypherJester operates on a session-based model tied to your Zcash wallet address. No personal accounts are created. You are responsible for maintaining the security of your wallet keys. We cannot recover lost funds if you lose access to your wallet.</p>
+            <p>{brand.config.name} operates on a session-based model tied to your Zcash wallet address. No personal accounts are created. You are responsible for maintaining the security of your wallet keys. We cannot recover lost funds if you lose access to your wallet.</p>
           </section>
 
           <section>
@@ -96,7 +108,7 @@ export default function TermsPage() {
 
           <section>
             <h2 className="text-2xl font-display font-semibold text-bone-white mb-3">8. Limitation of Liability</h2>
-            <p>CypherJester is provided &quot;as is&quot; without warranties of any kind. We are not liable for any losses incurred through gambling. You acknowledge that gambling involves risk and that you may lose your deposited funds. We are not responsible for blockchain network delays, failures, or fees beyond our control.</p>
+            <p>{brand.config.name} is provided &quot;as is&quot; without warranties of any kind. We are not liable for any losses incurred through gambling. You acknowledge that gambling involves risk and that you may lose your deposited funds. We are not responsible for blockchain network delays, failures, or fees beyond our control.</p>
           </section>
 
           <section>

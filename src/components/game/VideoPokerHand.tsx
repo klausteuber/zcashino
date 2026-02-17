@@ -35,7 +35,7 @@ export default function VideoPokerHand({
           <div key={`${card.rank}-${card.suit}-${index}`} className="flex flex-col items-center gap-1">
             {/* HELD indicator */}
             <div className={`text-xs font-bold tracking-wider transition-all duration-150 h-5 ${
-              isHeld ? 'text-masque-gold opacity-100 drop-shadow-[0_0_4px_rgba(201,162,39,0.6)]' : 'opacity-0'
+              isHeld ? 'text-accent-primary opacity-100 drop-shadow-[0_0_4px_color-mix(in_srgb,var(--accent-primary)_60%,transparent)]' : 'opacity-0'
             }`}>
               HELD
             </div>
@@ -46,7 +46,7 @@ export default function VideoPokerHand({
               disabled={disabled}
               className={`relative transition-all duration-200 ${
                 !disabled ? 'cursor-pointer hover:-translate-y-1 hover:brightness-110 active:scale-95' : 'cursor-default'
-              } ${isHeld ? 'ring-2 ring-masque-gold shadow-[0_0_14px_rgba(201,162,39,0.5)] -translate-y-3 rotate-[-1deg]' : ''}`}
+              } ${isHeld ? 'ring-2 ring-accent-primary shadow-[0_0_14px_color-mix(in_srgb,var(--accent-primary)_50%,transparent)] -translate-y-3 rotate-[-1deg]' : ''}`}
             >
               {/* Responsive card sizes: md on mobile, lg on tablet, xl on desktop */}
               <div className="sm:hidden">

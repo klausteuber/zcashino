@@ -27,11 +27,15 @@ import {
   initializeSessionSeedPool,
   triggerSessionSeedPoolCheck,
 } from '@/lib/services/session-seed-pool-manager'
+import { guardCypherAdminRequest } from '@/lib/admin/host-guard'
 
 /**
  * GET /api/admin/pool - Get pool status
  */
 export async function GET(request: NextRequest) {
+  const hostGuard = guardCypherAdminRequest(request)
+  if (hostGuard) return hostGuard
+
   const readLimit = checkAdminRateLimit(request, 'admin-read')
   if (!readLimit.allowed) {
     await logAdminEvent({
@@ -98,6 +102,9 @@ export async function GET(request: NextRequest) {
  * - action: 'refill' | 'cleanup' | 'init'
  */
 export async function POST(request: NextRequest) {
+  const hostGuard = guardCypherAdminRequest(request)
+  if (hostGuard) return hostGuard
+
   const actionLimit = checkAdminRateLimit(request, 'admin-action')
   if (!actionLimit.allowed) {
     await logAdminEvent({
@@ -339,6 +346,44 @@ export async function POST(request: NextRequest) {
             where: { id: approveId },
             data: { status: 'pending', operationId: approveOpId },
           })
+
+          // Poll opid briefly to catch immediate failures (e.g. insufficient funds)
+          await new Promise((r) => setTimeout(r, 3000))
+          const opCheck = await getOperationStatus(approveOpId, network)
+
+          if (opCheck.status === 'failed') {
+            // Refund the user — the z_sendmany failed before hitting the blockchain
+            const refundTotal = roundZec(txToApprove.amount + WITHDRAWAL_FEE)
+            await prisma.$transaction([
+              prisma.transaction.update({
+                where: { id: approveId },
+                data: { status: 'failed', failReason: opCheck.error || 'z_sendmany failed' },
+              }),
+              prisma.session.update({
+                where: { id: txToApprove.sessionId },
+                data: {
+                  balance: { increment: refundTotal },
+                  totalWithdrawn: { decrement: txToApprove.amount },
+                },
+              }),
+            ])
+
+            await logAdminEvent({
+              request,
+              action: 'admin.pool.action',
+              success: false,
+              actor: adminCheck.session.username,
+              details: `Withdrawal approval failed: ${opCheck.error}`,
+              metadata: { adminAction: action, transactionId: approveId, operationId: approveOpId },
+            })
+
+            return NextResponse.json({
+              error: `Withdrawal send failed: ${opCheck.error}`,
+              action: 'approve-withdrawal',
+              transactionId: approveId,
+              operationId: approveOpId,
+            }, { status: 500 })
+          }
 
           await logAdminEvent({
             request,

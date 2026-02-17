@@ -1,18 +1,31 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
+import { BrandWordmark } from '@/components/brand/BrandWordmark'
 import JesterLogo from '@/components/ui/JesterLogo'
 import { FAQJsonLd, BreadcrumbJsonLd } from '@/components/seo/JsonLd'
+import { getBrandUrlForPath, getCanonicalUrlForPath } from '@/lib/brand/config'
+import { getServerBrand } from '@/lib/brand/server'
 
-export const metadata: Metadata = {
-  title: 'Provably Fair Gaming',
-  description:
-    'Learn how CypherJester ensures every game outcome is verifiably fair using cryptographic commitments and the Zcash blockchain.',
-  openGraph: {
-    title: 'How Provably Fair Gaming Works | CypherJester',
+export async function generateMetadata(): Promise<Metadata> {
+  const brand = await getServerBrand()
+  const brandTitle = brand.id === '21z' ? '21z' : 'CypherJester'
+  const brandUrl = getBrandUrlForPath(brand.id, '/provably-fair')
+  const canonicalUrl = getCanonicalUrlForPath(brand.id, '/provably-fair')
+
+  return {
+    title: 'Provably Fair Gaming',
     description:
-      'Every hand determined by math you can verify. SHA-256 commitments on the Zcash blockchain.',
-    url: 'https://cypherjester.com/provably-fair',
-  },
+      `Learn how ${brandTitle} ensures every game outcome is verifiably fair using cryptographic commitments and the Zcash blockchain.`,
+    alternates: {
+      canonical: canonicalUrl,
+    },
+    openGraph: {
+      title: `How Provably Fair Gaming Works | ${brandTitle}`,
+      description:
+        'Every hand determined by math you can verify. SHA-256 commitments on the Zcash blockchain.',
+      url: brandUrl,
+    },
+  }
 }
 
 const faqItems = [
@@ -43,14 +56,18 @@ const faqItems = [
   },
 ]
 
-export default function ProvablyFairPage() {
+export default async function ProvablyFairPage() {
+  const brand = await getServerBrand()
+  const homeUrl = getBrandUrlForPath(brand.id, '/')
+  const pageUrl = getBrandUrlForPath(brand.id, '/provably-fair')
+
   return (
     <>
       <FAQJsonLd questions={faqItems} />
       <BreadcrumbJsonLd
         items={[
-          { name: 'Home', url: 'https://cypherjester.com' },
-          { name: 'Provably Fair', url: 'https://cypherjester.com/provably-fair' },
+          { name: 'Home', url: homeUrl },
+          { name: 'Provably Fair', url: pageUrl },
         ]}
       />
     <main className="min-h-screen felt-texture">
@@ -59,10 +76,7 @@ export default function ProvablyFairPage() {
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
           <Link href="/" className="flex items-center gap-3">
             <JesterLogo size="md" className="text-jester-purple-light" />
-            <span className="text-xl font-display font-bold tracking-tight">
-              <span className="text-masque-gold">Cypher</span>
-              <span className="text-bone-white">Jester</span>
-            </span>
+            <BrandWordmark />
           </Link>
           <nav className="flex items-center gap-6 text-sm">
             <Link href="/blackjack" className="text-venetian-gold/70 hover:text-masque-gold transition-colors">Blackjack</Link>
@@ -251,7 +265,7 @@ export default function ProvablyFairPage() {
             <Link href="/privacy" className="hover:text-masque-gold transition-colors">Privacy</Link>
             <Link href="/responsible-gambling" className="hover:text-masque-gold transition-colors">Responsible Gambling</Link>
           </div>
-          <p>CypherJester &mdash; Play in Private. Verify in Public.</p>
+          <p>{brand.config.name} &mdash; {brand.config.tagline}</p>
         </div>
       </footer>
     </main>

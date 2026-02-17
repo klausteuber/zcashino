@@ -8,7 +8,7 @@ export default function ConnectWalletButton() {
   return (
     <button
       onClick={() => setWalletConnected(!walletConnected)}
-      className="btn-gold-shimmer text-midnight-black px-4 py-2 rounded-lg font-semibold"
+      className="btn-gold-shimmer glow-cyan text-midnight-black px-4 py-2 rounded-lg font-semibold tracking-wide"
     >
       {walletConnected ? 'Wallet Connected' : 'Connect Wallet'}
     </button>
