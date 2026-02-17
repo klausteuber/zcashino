@@ -401,7 +401,7 @@ The admin dashboard lives at [`/admin`](http://localhost:3000/admin) and is prot
 
 | Game | House Edge |
 |------|------------|
-| Blackjack (basic strategy, re-split aces enabled) | ~0.5% depending on decisions |
+| Blackjack (basic strategy) | ~0.5% depending on decisions |
 | Perfect Pairs | ~4.5% |
 | Insurance | ~7.4% |
 

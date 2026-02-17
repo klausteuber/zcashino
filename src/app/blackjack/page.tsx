@@ -117,8 +117,8 @@ export default async function BlackjackPage() {
                 </h4>
                 <p>
                   Approximately 0.5% house edge with basic strategy under our
-                  current ruleset (including re-split aces). Full transparency
-                  on all odds &mdash; check our{' '}
+                  current ruleset. Full transparency on all odds &mdash; check
+                  our{' '}
                   <a
                     href="/terms"
                     className="text-masque-gold hover:underline"

@@ -701,7 +701,17 @@ export function getAvailableActions(state: BlackjackGameState): BlackjackAction[
     actions.push('double')
   }
 
-  if (canSplit(currentHand.cards) && currentHand.bet <= state.balance && state.playerHands.length < 4) {
+  const isPairOfAces = currentHand.cards.length === 2
+    && currentHand.cards[0].rank === 'A'
+    && currentHand.cards[1].rank === 'A'
+  const isResplitAcesAttempt = currentHand.isSplit && isPairOfAces
+
+  if (
+    canSplit(currentHand.cards)
+    && currentHand.bet <= state.balance
+    && state.playerHands.length < 4
+    && !isResplitAcesAttempt
+  ) {
     actions.push('split')
   }
 

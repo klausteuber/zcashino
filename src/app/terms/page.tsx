@@ -88,7 +88,7 @@ export default async function TermsPage() {
             <h2 className="text-2xl font-display font-semibold text-bone-white mb-3">6. House Edge</h2>
             <p>Our house edges are publicly disclosed:</p>
             <ul className="list-disc list-inside space-y-2 ml-4">
-              <li>Blackjack (basic strategy, re-split aces enabled): approximately 0.5% depending on decisions</li>
+              <li>Blackjack (basic strategy): approximately 0.5% depending on decisions</li>
               <li>Perfect Pairs side bet: approximately 4.5%</li>
               <li>Insurance bet: approximately 7.4%</li>
             </ul>

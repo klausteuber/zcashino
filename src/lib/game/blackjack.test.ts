@@ -476,7 +476,7 @@ describe('getAvailableActions', () => {
     expect(getAvailableActions(state)).not.toContain('split')
   })
 
-  it('allows re-splitting aces when under hand limit and balance allows', () => {
+  it('excludes re-splitting aces on split hands', () => {
     const state: BlackjackGameState = {
       ...playerTurnState(
         [card('A', 'hearts'), card('A', 'spades')],
@@ -490,6 +490,17 @@ describe('getAvailableActions', () => {
       ],
       currentHandIndex: 1,
     }
+
+    expect(getAvailableActions(state)).not.toContain('split')
+  })
+
+  it('still allows initial split of aces', () => {
+    const state = playerTurnState(
+      [card('A', 'hearts'), card('A', 'spades')],
+      [card('10'), card('7')],
+      [],
+      { balance: 1.0 }
+    )
 
     expect(getAvailableActions(state)).toContain('split')
   })

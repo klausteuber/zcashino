@@ -159,7 +159,7 @@ export default async function Home() {
             <div className="grid md:grid-cols-3 lg:grid-cols-5 gap-6">
               <div className="bg-midnight-black/50 rounded-lg p-4 border border-masque-gold/10">
                 <div className="text-3xl font-display font-bold text-masque-gold">~0.5% or lower</div>
-                <div className="text-venetian-gold/60">Blackjack (Basic Strategy + Re-split Aces)</div>
+                <div className="text-venetian-gold/60">Blackjack (Basic Strategy)</div>
               </div>
               <div className="bg-midnight-black/50 rounded-lg p-4 border border-masque-gold/10">
                 <div className="text-3xl font-display font-bold text-masque-gold">0.46%</div>
