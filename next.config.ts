@@ -14,12 +14,6 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: true,
   },
 
-  // Set turbopack root so standalone builds correctly strip src/app/ prefix from routes.
-  // Without this, Docker builds register routes as /src/app/blackjack instead of /blackjack.
-  turbopack: {
-    root: '.',
-  },
-
   // Security headers
   async headers() {
     return [
