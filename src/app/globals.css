@@ -425,19 +425,22 @@ body[data-brand="21z"]
 
 .brand-logo-21z,
 .brand-bell-21z,
-.brand-wordmark-21z {
+.brand-wordmark-21z,
+.brand-cardback-21z {
   display: none;
 }
 
 body[data-brand="21z"] .brand-logo-cypher,
 body[data-brand="21z"] .brand-bell-cypher,
-body[data-brand="21z"] .brand-wordmark-cypher {
+body[data-brand="21z"] .brand-wordmark-cypher,
+body[data-brand="21z"] .brand-cardback-cypher {
   display: none;
 }
 
 body[data-brand="21z"] .brand-logo-21z,
 body[data-brand="21z"] .brand-bell-21z,
-body[data-brand="21z"] .brand-wordmark-21z {
+body[data-brand="21z"] .brand-wordmark-21z,
+body[data-brand="21z"] .brand-cardback-21z {
   display: inline-flex;
 }
 
