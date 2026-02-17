@@ -2,7 +2,7 @@ import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import { getClientIpAddress } from '@/lib/admin/request'
 
-export type AdminRateLimitBucket = 'auth-login' | 'admin-read' | 'admin-action'
+export type AdminRateLimitBucket = 'auth-login' | 'admin-read' | 'admin-action' | 'admin-write'
 export type PublicRateLimitBucket = 'game-action' | 'session-create' | 'wallet-action' | 'wallet-withdraw'
 
 interface BucketConfig {
@@ -34,6 +34,10 @@ const DEFAULT_BUCKET_CONFIG: Record<AdminRateLimitBucket | PublicRateLimitBucket
   'admin-action': {
     maxRequests: Number(process.env.ADMIN_RATE_LIMIT_ACTION_MAX || 30),
     windowMs: Number(process.env.ADMIN_RATE_LIMIT_ACTION_WINDOW_MS || 60 * 1000),
+  },
+  'admin-write': {
+    maxRequests: 30,
+    windowMs: 60 * 1000,
   },
   'game-action': {
     maxRequests: 60,

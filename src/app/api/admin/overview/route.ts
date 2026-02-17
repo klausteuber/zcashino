@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { requireAdmin } from '@/lib/admin/auth'
 import { getPoolStatus } from '@/lib/provably-fair/commitment-pool'
-import { checkNodeStatus } from '@/lib/wallet/rpc'
+import { checkNodeStatus, getAddressBalance } from '@/lib/wallet/rpc'
 import { DEFAULT_NETWORK } from '@/lib/wallet'
 import {
   checkAdminRateLimit,
@@ -78,7 +78,12 @@ export async function GET(request: NextRequest) {
       idempotencyReplaysAllTime,
       unpaidActionRetries24h,
       unpaidActionRetriesAllTime,
+      bjStats,
+      vpStats,
+      activeVPGames,
+      recentWithdrawals,
       recentAuditLogs,
+      houseBalance,
     ] = await Promise.all([
       prisma.session.aggregate({
         _sum: {
@@ -193,6 +198,45 @@ export async function GET(request: NextRequest) {
           action: PLAYER_COUNTER_ACTIONS.WITHDRAW_UNPAID_ACTION_RETRY,
         },
       }),
+      // GGR: completed blackjack game stats
+      prisma.blackjackGame.aggregate({
+        where: { status: 'completed' },
+        _sum: { payout: true },
+        _count: true,
+      }),
+      // GGR: completed video poker game stats
+      prisma.videoPokerGame.aggregate({
+        where: { status: 'completed' },
+        _sum: { totalBet: true, payout: true },
+        _count: true,
+      }),
+      // Active video poker games (for exposure count)
+      prisma.videoPokerGame.count({ where: { status: 'active' } }),
+      // Recent withdrawals (all statuses, not just pending)
+      prisma.transaction.findMany({
+        where: { type: 'withdrawal' },
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+        select: {
+          id: true,
+          sessionId: true,
+          amount: true,
+          fee: true,
+          address: true,
+          operationId: true,
+          status: true,
+          failReason: true,
+          createdAt: true,
+          confirmedAt: true,
+          session: {
+            select: {
+              walletAddress: true,
+              balance: true,
+              withdrawalAddress: true,
+            },
+          },
+        },
+      }),
       prisma.adminAuditLog.findMany({
         orderBy: { createdAt: 'desc' },
         take: 30,
@@ -206,11 +250,31 @@ export async function GET(request: NextRequest) {
           createdAt: true,
         },
       }),
+      // House wallet balance — uses house UA from env
+      (async () => {
+        const houseUA = process.env.HOUSE_UNIFIED_ADDRESS
+        if (!houseUA) return null
+        try {
+          return await getAddressBalance(houseUA, DEFAULT_NETWORK)
+        } catch {
+          return null
+        }
+      })(),
     ])
 
     const liabilities = sessionTotals._sum.balance || 0
     const totalDeposited = sessionTotals._sum.totalDeposited || 0
     const totalWithdrawn = sessionTotals._sum.totalWithdrawn || 0
+    const totalWagered = sessionTotals._sum.totalWagered || 0
+    const totalWon = sessionTotals._sum.totalWon || 0
+    const ggr = totalWagered - totalWon
+    const houseEdgePct = totalWagered > 0 ? (ggr / totalWagered) * 100 : 0
+
+    const bjPayout = bjStats._sum.payout || 0
+    const bjHands = bjStats._count
+    const vpWagered = vpStats._sum.totalBet || 0
+    const vpPayout = vpStats._sum.payout || 0
+    const vpHands = vpStats._count
 
     await logAdminEvent({
       request,
@@ -233,9 +297,30 @@ export async function GET(request: NextRequest) {
         liabilities,
         totalDeposited,
         totalWithdrawn,
-        totalWagered: sessionTotals._sum.totalWagered || 0,
-        totalWon: sessionTotals._sum.totalWon || 0,
+        totalWagered,
+        totalWon,
         netFlow: totalDeposited - totalWithdrawn,
+      },
+      houseEdge: {
+        realizedGGR: {
+          totalWagered,
+          totalPayout: totalWon,
+          ggr,
+          houseEdgePct: Math.round(houseEdgePct * 100) / 100,
+        },
+        blackjack: {
+          hands: bjHands,
+          payout: bjPayout,
+        },
+        videoPoker: {
+          hands: vpHands,
+          wagered: vpWagered,
+          payout: vpPayout,
+          rtp: vpWagered > 0 ? Math.round((vpPayout / vpWagered) * 10000) / 100 : 0,
+        },
+        activeExposure: {
+          activeGames: activeGames + activeVPGames,
+        },
       },
       transactions: {
         pendingWithdrawalCount,
@@ -264,12 +349,39 @@ export async function GET(request: NextRequest) {
         sessionBalance: tx.session.balance,
         withdrawalAddress: tx.session.withdrawalAddress,
       })),
+      recentWithdrawals: recentWithdrawals.map((tx) => ({
+        id: tx.id,
+        sessionId: tx.sessionId,
+        amount: tx.amount,
+        fee: tx.fee,
+        address: tx.address,
+        operationId: tx.operationId,
+        status: tx.status,
+        failReason: tx.failReason,
+        createdAt: tx.createdAt,
+        confirmedAt: tx.confirmedAt,
+        sessionWallet: tx.session.walletAddress,
+        sessionBalance: tx.session.balance,
+        withdrawalAddress: tx.session.withdrawalAddress,
+      })),
       pool: poolStatus,
       nodeStatus: {
         connected: nodeStatus.connected,
         synced: nodeStatus.synced,
         blockHeight: nodeStatus.blockHeight,
+        rpcLatencyMs: (nodeStatus as { rpcLatencyMs?: number }).rpcLatencyMs ?? null,
         error: nodeStatus.error,
+      },
+      treasury: {
+        houseBalance: houseBalance ? {
+          confirmed: houseBalance.confirmed,
+          pending: houseBalance.pending,
+          total: houseBalance.total,
+        } : null,
+        liabilities,
+        coverageRatio: houseBalance && liabilities > 0
+          ? Math.round((houseBalance.confirmed / liabilities) * 100) / 100
+          : houseBalance && liabilities === 0 ? Infinity : null,
       },
       security: {
         failedLoginAttempts24h: failedLogins24h,

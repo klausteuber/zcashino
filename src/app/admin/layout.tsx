@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { getServerBrand } from '@/lib/brand/server'
+import AdminLayoutClient from '@/components/admin/AdminLayoutClient'
 
 export async function generateMetadata(): Promise<Metadata> {
   const brand = await getServerBrand()
@@ -21,5 +22,5 @@ export default function AdminLayout({
 }: {
   children: React.ReactNode
 }) {
-  return children
+  return <AdminLayoutClient>{children}</AdminLayoutClient>
 }

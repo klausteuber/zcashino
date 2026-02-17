@@ -80,6 +80,43 @@ interface AdminOverview {
     details: string | null
     createdAt: string
   }>
+  killSwitch?: { active: boolean; activatedAt?: string }
+  houseEdge: {
+    realizedGGR: {
+      totalWagered: number
+      totalPayout: number
+      ggr: number
+      houseEdgePct: number
+    }
+    blackjack: {
+      hands: number
+      payout: number
+    }
+    videoPoker: {
+      hands: number
+      wagered: number
+      payout: number
+      rtp: number
+    }
+    activeExposure: {
+      activeGames: number
+    }
+  }
+  recentWithdrawals: Array<{
+    id: string
+    sessionId: string
+    amount: number
+    fee: number
+    address: string | null
+    operationId: string | null
+    status: string
+    failReason: string | null
+    createdAt: string
+    confirmedAt: string | null
+    sessionWallet: string
+    sessionBalance: number
+    withdrawalAddress: string | null
+  }>
 }
 
 const ACTIONS: Record<
@@ -140,6 +177,7 @@ export default function AdminPage() {
   const [sweepLoading, setSweepLoading] = useState(false)
   const [sweepResult, setSweepResult] = useState<string | null>(null)
   const [withdrawalActionLoading, setWithdrawalActionLoading] = useState<string | null>(null)
+  const [withdrawalFilter, setWithdrawalFilter] = useState<string>('all')
 
   const fetchOverview = useCallback(async () => {
     setIsLoadingOverview(true)
@@ -553,6 +591,30 @@ export default function AdminPage() {
 
         {overview && (
           <>
+            {/* Critical Status Banner */}
+            {(overview.pool.available === 0 || !overview.nodeStatus.connected || overview.killSwitch) && (
+              <div className="space-y-2">
+                {overview.pool.available === 0 && (
+                  <div className="bg-crimson-mask/20 border border-crimson-mask/60 rounded-lg p-3 flex items-center gap-2">
+                    <span className="text-crimson-mask font-bold text-lg">!</span>
+                    <span className="text-crimson-mask font-semibold">CRITICAL: Commitment pool empty — games cannot start. Refill immediately.</span>
+                  </div>
+                )}
+                {!overview.nodeStatus.connected && (
+                  <div className="bg-crimson-mask/20 border border-crimson-mask/60 rounded-lg p-3 flex items-center gap-2">
+                    <span className="text-crimson-mask font-bold text-lg">!</span>
+                    <span className="text-crimson-mask font-semibold">CRITICAL: Zcash node offline — deposits and withdrawals unavailable.</span>
+                  </div>
+                )}
+                {overview.killSwitch && (
+                  <div className="bg-masque-gold/10 border border-masque-gold/40 rounded-lg p-3 flex items-center gap-2">
+                    <span className="text-masque-gold font-bold text-lg">!</span>
+                    <span className="text-masque-gold font-semibold">WARNING: Kill switch active — new games and withdrawals are blocked.</span>
+                  </div>
+                )}
+              </div>
+            )}
+
             <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
               <MetricCard
                 label="User Liabilities"
@@ -579,6 +641,54 @@ export default function AdminPage() {
                 value={String(overview.security.failedLoginAttempts24h)}
                 detail={`${overview.security.rateLimitedEvents24h} rate-limited admin events • ${overview.security.legacyPlayerAuthFallback24h} legacy auth fallbacks`}
               />
+            </section>
+
+            {/* House P&L */}
+            <section className="bg-midnight-black/50 border border-masque-gold/20 rounded-xl p-4">
+              <h2 className="text-lg font-semibold text-bone-white mb-3">House P&L (Realized)</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                <div className="bg-midnight-black/70 border border-masque-gold/10 rounded-lg p-3">
+                  <div className="text-xs text-venetian-gold/60">Gross Gaming Revenue</div>
+                  <div className={`text-xl font-bold mt-1 ${overview.houseEdge.realizedGGR.ggr >= 0 ? 'text-jester-purple' : 'text-blood-ruby'}`}>
+                    {formatZec(overview.houseEdge.realizedGGR.ggr)}
+                  </div>
+                  <div className="text-xs text-venetian-gold/50 mt-1">
+                    House edge: {overview.houseEdge.realizedGGR.houseEdgePct.toFixed(2)}%
+                  </div>
+                </div>
+                <div className="bg-midnight-black/70 border border-masque-gold/10 rounded-lg p-3">
+                  <div className="text-xs text-venetian-gold/60">Total Wagered</div>
+                  <div className="text-xl font-bold text-masque-gold mt-1">
+                    {formatZec(overview.houseEdge.realizedGGR.totalWagered)}
+                  </div>
+                  <div className="text-xs text-venetian-gold/50 mt-1">
+                    Total payout: {formatZec(overview.houseEdge.realizedGGR.totalPayout)}
+                  </div>
+                </div>
+                <div className="bg-midnight-black/70 border border-masque-gold/10 rounded-lg p-3">
+                  <div className="text-xs text-venetian-gold/60">Blackjack</div>
+                  <div className="text-lg font-bold text-bone-white mt-1">
+                    {overview.houseEdge.blackjack.hands} hands
+                  </div>
+                  <div className="text-xs text-venetian-gold/50 mt-1">
+                    Payout: {formatZec(overview.houseEdge.blackjack.payout)}
+                  </div>
+                </div>
+                <div className="bg-midnight-black/70 border border-masque-gold/10 rounded-lg p-3">
+                  <div className="text-xs text-venetian-gold/60">Video Poker</div>
+                  <div className="text-lg font-bold text-bone-white mt-1">
+                    {overview.houseEdge.videoPoker.hands} hands
+                  </div>
+                  <div className="text-xs text-venetian-gold/50 mt-1">
+                    RTP: {overview.houseEdge.videoPoker.rtp.toFixed(2)}% • Wagered: {formatZec(overview.houseEdge.videoPoker.wagered)}
+                  </div>
+                </div>
+              </div>
+              {overview.houseEdge.activeExposure.activeGames > 0 && (
+                <div className="mt-3 text-xs text-venetian-gold/50 bg-midnight-black/40 px-3 py-2 rounded-lg">
+                  Active exposure: {overview.houseEdge.activeExposure.activeGames} game(s) in progress (not included in realized GGR)
+                </div>
+              )}
             </section>
 
             <section className="grid grid-cols-1 xl:grid-cols-2 gap-4">
@@ -734,83 +844,127 @@ export default function AdminPage() {
               )}
             </section>
 
+            {/* Withdrawals */}
             <section className="bg-midnight-black/50 border border-masque-gold/20 rounded-xl p-4">
-              <h2 className="text-lg font-semibold text-bone-white mb-3">Pending Withdrawals</h2>
+              <h2 className="text-lg font-semibold text-bone-white mb-3">Withdrawals</h2>
 
-              {overview.pendingWithdrawals.length === 0 ? (
-                <div className="text-venetian-gold/60 text-sm">No pending withdrawals.</div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-masque-gold/20 text-venetian-gold/60">
-                        <th className="text-left py-2 px-1">Transaction</th>
-                        <th className="text-left py-2 px-1">Session</th>
-                        <th className="text-right py-2 px-1">Amount</th>
-                        <th className="text-left py-2 px-1">Status</th>
-                        <th className="text-right py-2 px-1">Created</th>
-                        <th className="text-right py-2 px-1">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {overview.pendingWithdrawals.map((withdrawal) => (
-                        <tr key={withdrawal.id} className="border-b border-masque-gold/10">
-                          <td className="py-2 px-1 font-mono text-bone-white">
-                            {shortId(withdrawal.id)}
-                          </td>
-                          <td className="py-2 px-1">
-                            <div className="font-mono text-bone-white">
-                              {shortId(withdrawal.sessionId)}
-                            </div>
-                            <div className="text-xs text-venetian-gold/50">
-                              Balance {formatZec(withdrawal.sessionBalance)}
-                            </div>
-                          </td>
-                          <td className="py-2 px-1 text-right text-bone-white font-mono">
-                            {formatZec(withdrawal.amount)}
-                          </td>
-                          <td className="py-2 px-1">
-                            {withdrawal.status === 'pending_approval' ? (
-                              <span className="text-xs px-2 py-0.5 rounded bg-masque-gold/20 text-masque-gold font-bold">
-                                NEEDS APPROVAL
-                              </span>
-                            ) : (
-                              <span className="text-xs font-mono text-venetian-gold/70">
-                                {withdrawal.operationId ? shortId(withdrawal.operationId) : 'pending'}
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-2 px-1 text-right text-venetian-gold/50">
-                            {new Date(withdrawal.createdAt).toLocaleString()}
-                          </td>
-                          <td className="py-2 px-1 text-right">
-                            {withdrawal.status === 'pending_approval' ? (
-                              <div className="flex gap-1 justify-end">
-                                <button
-                                  onClick={() => handleWithdrawalAction(withdrawal.id, true)}
-                                  disabled={withdrawalActionLoading === withdrawal.id}
-                                  className="text-xs px-2 py-1 rounded bg-green-700/80 hover:bg-green-600 text-white disabled:opacity-60"
-                                >
-                                  {withdrawalActionLoading === withdrawal.id ? '...' : 'Approve'}
-                                </button>
-                                <button
-                                  onClick={() => handleWithdrawalAction(withdrawal.id, false)}
-                                  disabled={withdrawalActionLoading === withdrawal.id}
-                                  className="text-xs px-2 py-1 rounded bg-crimson-mask/80 hover:bg-crimson-mask text-white disabled:opacity-60"
-                                >
-                                  Reject
-                                </button>
-                              </div>
-                            ) : (
-                              <span className="text-xs text-venetian-gold/40">—</span>
-                            )}
-                          </td>
+              {/* Filter tabs */}
+              <div className="flex gap-2 mb-3">
+                {['all', 'pending_approval', 'pending', 'failed', 'confirmed'].map((filter) => (
+                  <button
+                    key={filter}
+                    onClick={() => setWithdrawalFilter(filter)}
+                    className={`text-xs px-3 py-1 rounded-lg border transition-colors ${
+                      withdrawalFilter === filter
+                        ? 'border-masque-gold/60 bg-masque-gold/20 text-masque-gold'
+                        : 'border-masque-gold/20 text-venetian-gold/50 hover:text-masque-gold'
+                    }`}
+                  >
+                    {filter === 'all' ? 'All' : filter === 'pending_approval' ? 'Needs Approval' : filter.charAt(0).toUpperCase() + filter.slice(1)}
+                  </button>
+                ))}
+              </div>
+
+              {(() => {
+                const filtered = overview.recentWithdrawals?.filter(
+                  (w) => withdrawalFilter === 'all' || w.status === withdrawalFilter
+                ) || []
+
+                if (filtered.length === 0) {
+                  return <div className="text-venetian-gold/60 text-sm">No withdrawals matching filter.</div>
+                }
+
+                return (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-masque-gold/20 text-venetian-gold/60">
+                          <th className="text-left py-2 px-1">Transaction</th>
+                          <th className="text-left py-2 px-1">Session</th>
+                          <th className="text-right py-2 px-1">Amount</th>
+                          <th className="text-left py-2 px-1">Status</th>
+                          <th className="text-left py-2 px-1">Age</th>
+                          <th className="text-right py-2 px-1">Actions</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+                      </thead>
+                      <tbody>
+                        {filtered.map((withdrawal) => {
+                          const ageMs = Date.now() - new Date(withdrawal.createdAt).getTime()
+                          const ageHours = ageMs / (1000 * 60 * 60)
+                          const ageText = ageHours < 1
+                            ? `${Math.round(ageMs / (1000 * 60))}m ago`
+                            : ageHours < 24
+                              ? `${Math.round(ageHours)}h ago`
+                              : `${Math.round(ageHours / 24)}d ago`
+                          const ageColor = ageHours < 1 ? 'text-jester-purple' : ageHours < 24 ? 'text-masque-gold' : 'text-blood-ruby'
+
+                          return (
+                            <tr key={withdrawal.id} className="border-b border-masque-gold/10">
+                              <td className="py-2 px-1">
+                                <button
+                                  onClick={() => navigator.clipboard.writeText(withdrawal.id)}
+                                  className="font-mono text-bone-white hover:text-masque-gold transition-colors text-left"
+                                  title="Click to copy full ID"
+                                >
+                                  {shortId(withdrawal.id)}
+                                </button>
+                              </td>
+                              <td className="py-2 px-1">
+                                <div className="font-mono text-bone-white">{shortId(withdrawal.sessionId)}</div>
+                                <div className="text-xs text-venetian-gold/50">Bal {formatZec(withdrawal.sessionBalance)}</div>
+                              </td>
+                              <td className="py-2 px-1 text-right text-bone-white font-mono">
+                                {formatZec(withdrawal.amount)}
+                              </td>
+                              <td className="py-2 px-1">
+                                {withdrawal.status === 'pending_approval' ? (
+                                  <span className="text-xs px-2 py-0.5 rounded bg-masque-gold/20 text-masque-gold font-bold">NEEDS APPROVAL</span>
+                                ) : withdrawal.status === 'failed' ? (
+                                  <div>
+                                    <span className="text-xs px-2 py-0.5 rounded bg-blood-ruby/20 text-blood-ruby font-bold">FAILED</span>
+                                    {withdrawal.failReason && (
+                                      <div className="text-xs text-blood-ruby/70 mt-1 max-w-[200px] truncate" title={withdrawal.failReason}>
+                                        {withdrawal.failReason}
+                                      </div>
+                                    )}
+                                  </div>
+                                ) : withdrawal.status === 'confirmed' ? (
+                                  <span className="text-xs px-2 py-0.5 rounded bg-jester-purple/20 text-jester-purple font-bold">CONFIRMED</span>
+                                ) : (
+                                  <span className="text-xs px-2 py-0.5 rounded bg-masque-gold/10 text-venetian-gold/70 font-bold">PENDING</span>
+                                )}
+                              </td>
+                              <td className={`py-2 px-1 text-sm ${ageColor}`}>{ageText}</td>
+                              <td className="py-2 px-1 text-right">
+                                {withdrawal.status === 'pending_approval' ? (
+                                  <div className="flex gap-1 justify-end">
+                                    <button
+                                      onClick={() => handleWithdrawalAction(withdrawal.id, true)}
+                                      disabled={withdrawalActionLoading === withdrawal.id}
+                                      className="text-xs px-2 py-1 rounded bg-green-700/80 hover:bg-green-600 text-white disabled:opacity-60"
+                                    >
+                                      {withdrawalActionLoading === withdrawal.id ? '...' : 'Approve'}
+                                    </button>
+                                    <button
+                                      onClick={() => handleWithdrawalAction(withdrawal.id, false)}
+                                      disabled={withdrawalActionLoading === withdrawal.id}
+                                      className="text-xs px-2 py-1 rounded bg-crimson-mask/80 hover:bg-crimson-mask text-white disabled:opacity-60"
+                                    >
+                                      Reject
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <span className="text-xs text-venetian-gold/40">—</span>
+                                )}
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )
+              })()}
             </section>
 
             <section className="bg-midnight-black/50 border border-masque-gold/20 rounded-xl p-4">

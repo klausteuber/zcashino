@@ -23,6 +23,10 @@ export async function register() {
     // Start the deposit sweep service (consolidate deposit funds → house wallet)
     const { initSweepForNextJS } = await import('./lib/services/deposit-sweep')
     await initSweepForNextJS()
+
+    // Start the alert generator service (check for unusual activity every 5 minutes)
+    const { startAlertGenerator } = await import('./lib/services/alert-generator')
+    startAlertGenerator()
   }
   if (process.env.NEXT_RUNTIME === 'edge') {
     await import('./sentry.edge.config')
