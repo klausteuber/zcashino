@@ -17,6 +17,7 @@ export interface Hand {
   isStood: boolean
   isBusted: boolean
   isBlackjack: boolean
+  isSurrendered: boolean
 }
 
 // Game state types
@@ -251,7 +252,7 @@ export interface TransactionInfo {
 // Hand history entry for UI display
 export interface HandHistoryEntry {
   id: string
-  outcome: 'win' | 'lose' | 'push' | 'blackjack'
+  outcome: 'win' | 'lose' | 'push' | 'blackjack' | 'surrender'
   mainBet: number
   payout: number
   createdAt: string | Date

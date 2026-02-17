@@ -51,7 +51,7 @@ Blackjack and Video Poker are fully playable with server-side game logic, atomic
 - ✅ **Commitment Pool** - Pre-generated commitments for instant game starts
 - ✅ **Verification System** - Full verification UI at `/verify`
 - ✅ **Verification Parity** - `/api/verify` supports both blackjack and video poker (`gameType`)
-- ✅ Hit, Stand, Double, Split actions
+- ✅ Hit, Stand, Double, Split, Surrender actions
 - ✅ Server-side API routes (`/api/session`, `/api/game`, `/api/video-poker`, `/api/wallet`, `/api/verify`, `/api/admin/pool`)
 - ✅ **Admin Authentication API** (`/api/admin/auth`) with signed HttpOnly session cookies
 - ✅ **Admin Overview API** (`/api/admin/overview`) for operations + finance metrics
@@ -389,7 +389,7 @@ The admin dashboard lives at [`/admin`](http://localhost:3000/admin) and is prot
 - Double on any two cards
 - Split any pair (up to 4 hands)
 - Double after split allowed
-- No surrender
+- Late surrender on eligible initial hands
 - Insurance offered (2:1)
 
 ### Perfect Pairs Side Bet
@@ -402,7 +402,7 @@ The admin dashboard lives at [`/admin`](http://localhost:3000/admin) and is prot
 
 | Game | House Edge |
 |------|------------|
-| Blackjack (basic strategy) | ~0.5% |
+| Blackjack (basic strategy, with late surrender available) | ~0.5% or lower depending on decisions |
 | Perfect Pairs | ~4.5% |
 | Insurance | ~7.4% |
 

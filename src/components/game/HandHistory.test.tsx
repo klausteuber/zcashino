@@ -71,6 +71,12 @@ describe('HandHistory', () => {
     expect(screen.getByText('Push')).toBeInTheDocument()
   })
 
+  it('shows surrender outcome with arrow icon', () => {
+    render(<HandHistory entries={[createEntry({ outcome: 'surrender', payout: 0.05 })]} />)
+    expect(screen.getByText('\u2190')).toBeInTheDocument()
+    expect(screen.getByText('Surrender')).toBeInTheDocument()
+  })
+
   it('shows bet amount formatted to 2 decimals', () => {
     render(<HandHistory entries={[createEntry({ mainBet: 0.25 })]} />)
     expect(screen.getByText('0.25')).toBeInTheDocument()

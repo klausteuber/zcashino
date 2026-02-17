@@ -301,12 +301,18 @@ export default function BlackjackGame() {
     if (currentPhase === 'complete' && prevPhase !== 'complete') {
       const payout = gameState?.lastPayout ?? 0
       const message = gameState?.message?.toLowerCase() ?? ''
+      const allSurrendered = !!gameState?.playerHands?.length
+        && gameState.playerHands.every(hand => hand.isSurrendered)
 
       if (message.includes('blackjack')) {
         setResultAnimation('blackjack')
         setTimeout(() => playSound('blackjack'), 300)
         // Longer timeout for blackjack celebration (0.6s in + 2s hold + 0.6s out)
         setTimeout(() => setResultAnimation(null), 3500)
+      } else if (allSurrendered || message.includes('surrender')) {
+        setResultAnimation('loss')
+        setTimeout(() => playSound('lose'), 300)
+        setTimeout(() => setResultAnimation(null), 3000)
       } else if (payout > 0) {
         setResultAnimation('win')
         setTimeout(() => playSound('win'), 300)
@@ -326,6 +332,7 @@ export default function BlackjackGame() {
       if (currentGameId) {
         let outcome: HandHistoryEntry['outcome'] = 'lose'
         if (message.includes('blackjack')) outcome = 'blackjack'
+        else if (allSurrendered || message.includes('surrender')) outcome = 'surrender'
         else if (payout > 0) outcome = 'win'
         else if (message.includes('push')) outcome = 'push'
 
@@ -864,6 +871,8 @@ export default function BlackjackGame() {
     const hand = gameState?.playerHands?.[handIndex]
     if (!hand) return null
 
+    if (hand.isSurrendered) return 'lose'
+
     const handValue = calculateHandValue(hand.cards)
     const isBlackjack = handValue === 21 && hand.cards.length === 2
     const isBust = handValue > 21
@@ -1398,6 +1407,18 @@ export default function BlackjackGame() {
                   className="bg-crimson-mask/50 text-bone-white px-8 py-3 rounded-lg font-bold hover:bg-crimson-mask/70 hover:scale-105 active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:hover:scale-100 shadow-lg"
                 >
                   SPLIT
+                </button>
+              )}
+              {availableActions.includes('surrender') && (
+                <button
+                  onClick={() => {
+                    playSound('buttonClick')
+                    handleAction('surrender')
+                  }}
+                  disabled={isLoading}
+                  className="bg-transparent border-2 border-blood-ruby/70 text-blood-ruby px-8 py-3 rounded-lg font-bold hover:bg-blood-ruby/10 hover:scale-105 active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:hover:scale-100"
+                >
+                  SURRENDER
                 </button>
               )}
             </div>

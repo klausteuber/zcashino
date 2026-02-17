@@ -41,7 +41,8 @@ export function createInitialState(balance: number): BlackjackGameState {
       isSplit: false,
       isStood: false,
       isBusted: false,
-      isBlackjack: false
+      isBlackjack: false,
+      isSurrendered: false,
     },
     currentHandIndex: 0,
     deck: [],
@@ -106,7 +107,8 @@ export function startRound(
     isSplit: false,
     isStood: false,
     isBusted: false,
-    isBlackjack: isBlackjack(playerCards)
+    isBlackjack: isBlackjack(playerCards),
+    isSurrendered: false,
   }
 
   const dealerHand: Hand = {
@@ -116,7 +118,8 @@ export function startRound(
     isSplit: false,
     isStood: false,
     isBusted: false,
-    isBlackjack: isBlackjack(dealerCards)
+    isBlackjack: isBlackjack(dealerCards),
+    isSurrendered: false,
   }
 
   // Remove dealt cards from deck
@@ -134,7 +137,7 @@ export function startRound(
 
   // Determine initial phase
   let phase: GamePhase = 'playerTurn'
-  let message = 'Your turn - hit, stand, double, or split'
+  let message = 'Your turn - hit, stand, double, split, or surrender'
 
   const shouldOfferInsurance = dealerCards[0].rank === 'A' && !playerHand.isBlackjack
 
@@ -266,6 +269,8 @@ export function executeAction(
       return executeDouble(currentState)
     case 'split':
       return executeSplit(currentState)
+    case 'surrender':
+      return executeSurrender(currentState)
     default:
       return { ...currentState, message: 'Invalid action' }
   }
@@ -426,7 +431,8 @@ function executeSplit(state: BlackjackGameState): BlackjackGameState {
     isSplit: true,
     isStood: false,
     isBusted: false,
-    isBlackjack: false  // Split hands can't be blackjack
+    isBlackjack: false,  // Split hands can't be blackjack
+    isSurrendered: false,
   }
 
   const hand2: Hand = {
@@ -436,7 +442,8 @@ function executeSplit(state: BlackjackGameState): BlackjackGameState {
     isSplit: true,
     isStood: false,
     isBusted: false,
-    isBlackjack: false
+    isBlackjack: false,
+    isSurrendered: false,
   }
 
   // Replace current hand with two split hands
@@ -454,6 +461,41 @@ function executeSplit(state: BlackjackGameState): BlackjackGameState {
     balance: state.balance - currentHand.bet,
     message: `Split! Playing hand ${lastHandIndex + 1} of ${updatedHands.length}`
   }
+}
+
+/**
+ * Player surrenders current hand (late surrender)
+ */
+function executeSurrender(state: BlackjackGameState): BlackjackGameState {
+  const currentHand = state.playerHands[state.currentHandIndex]
+
+  const canSurrender = state.playerHands.length === 1
+    && !currentHand.isSplit
+    && !currentHand.isDoubled
+    && currentHand.cards.length === 2
+
+  if (!canSurrender) {
+    return { ...state, message: 'Cannot surrender on this hand' }
+  }
+
+  const updatedHands = [...state.playerHands]
+  updatedHands[state.currentHandIndex] = {
+    ...currentHand,
+    isSurrendered: true,
+    isStood: true,
+  }
+
+  return resolveRound({
+    ...state,
+    phase: 'payout',
+    dealerPeeked: true,
+    playerHands: updatedHands,
+    dealerHand: {
+      ...state.dealerHand,
+      cards: state.dealerHand.cards.map(c => ({ ...c, faceUp: true })),
+    },
+    message: 'Player surrendered',
+  })
 }
 
 /**
@@ -552,7 +594,11 @@ function resolveRound(state: BlackjackGameState): BlackjackGameState {
     let payout = 0
     let reason = ''
 
-    if (hand.isBusted) {
+    if (hand.isSurrendered) {
+      outcome = 'surrender'
+      payout = roundZec(hand.bet / 2)
+      reason = 'Surrender - half bet returned'
+    } else if (hand.isBusted) {
       outcome = 'lose'
       reason = 'Player busted'
     } else if (hand.isBlackjack && !hand.isSplit) {
@@ -608,12 +654,18 @@ function resolveRound(state: BlackjackGameState): BlackjackGameState {
 
   // Build result message
   const winningHands = results.filter(r => r.outcome === 'win' || r.outcome === 'blackjack')
+  const allSurrendered = results.length > 0
+    && results.every(r => r.outcome === 'surrender')
+    && insurancePayout === 0
+    && perfectPairsPayout === 0
   const onlyPushes = results.length > 0
     && results.every(r => r.outcome === 'push')
     && insurancePayout === 0
     && perfectPairsPayout === 0
 
-  const message = totalPayout > 0
+  const message = allSurrendered
+    ? 'Surrender - half bet returned'
+    : totalPayout > 0
     ? `You won ${totalPayout.toFixed(4)} ZEC!`
     : onlyPushes
       ? 'Push - bet returned'
@@ -651,6 +703,14 @@ export function getAvailableActions(state: BlackjackGameState): BlackjackAction[
 
   if (canSplit(currentHand.cards) && currentHand.bet <= state.balance && state.playerHands.length < 4) {
     actions.push('split')
+  }
+
+  const canSurrender = state.playerHands.length === 1
+    && !currentHand.isSplit
+    && !currentHand.isDoubled
+    && currentHand.cards.length === 2
+  if (canSurrender) {
+    actions.push('surrender')
   }
 
   return actions

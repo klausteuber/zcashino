@@ -63,6 +63,10 @@ export default async function BlackjackPage() {
                   Split a pair into two separate hands
                 </li>
                 <li>
+                  <strong className="text-bone-white">Surrender</strong> &mdash;
+                  Fold your initial two-card hand and get half your bet back
+                </li>
+                <li>
                   <strong className="text-bone-white">Insurance</strong> &mdash;
                   Side bet when dealer shows an Ace (pays 2:1)
                 </li>
@@ -112,13 +116,14 @@ export default async function BlackjackPage() {
                   Low House Edge
                 </h4>
                 <p>
-                  Just 0.5% house edge with basic strategy. Full transparency on
-                  all odds &mdash; check our{' '}
+                  Approximately 0.5% house edge with basic strategy, and lower on
+                  eligible hands when you use late surrender correctly. Full
+                  transparency on all odds &mdash; check our{' '}
                   <a
-                    href="/reserves"
+                    href="/terms"
                     className="text-masque-gold hover:underline"
                   >
-                    proof of reserves
+                    house edge disclosures
                   </a>
                   .
                 </p>
@@ -154,6 +159,12 @@ export default async function BlackjackPage() {
                   P
                 </kbd>{' '}
                 Split
+              </span>
+              <span>
+                <kbd className="px-2 py-1 bg-midnight-black/60 rounded text-masque-gold font-mono text-xs">
+                  R
+                </kbd>{' '}
+                Surrender
               </span>
               <span>
                 <kbd className="px-2 py-1 bg-midnight-black/60 rounded text-masque-gold font-mono text-xs">

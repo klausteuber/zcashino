@@ -15,6 +15,7 @@ const OUTCOME_CONFIG = {
   blackjack: { icon: '\u2605', label: 'BJ', color: 'text-masque-gold' },
   win: { icon: '\u2713', label: 'Win', color: 'text-success' },
   lose: { icon: '\u2717', label: 'Loss', color: 'text-error' },
+  surrender: { icon: '\u2190', label: 'Surrender', color: 'text-blood-ruby' },
   push: { icon: '\u2550', label: 'Push', color: 'text-text-secondary' },
 } as const
 

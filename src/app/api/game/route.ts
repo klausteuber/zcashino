@@ -148,6 +148,7 @@ export async function POST(request: NextRequest) {
       case 'stand':
       case 'double':
       case 'split':
+      case 'surrender':
         return handleGameAction(request, session, payload.gameId, payload.action as BlackjackAction)
 
       case 'insurance':
@@ -860,6 +861,9 @@ async function resolveGameServerSeed(
 }
 
 function determineOutcome(gameState: BlackjackGameState): string {
+  if (gameState.playerHands.length > 0 && gameState.playerHands.every(hand => hand.isSurrendered)) {
+    return 'surrender'
+  }
   if (gameState.playerHands[0]?.isBlackjack) return 'blackjack'
   if (gameState.playerHands[0]?.isBusted) return 'lose'
   if (gameState.dealerHand.isBusted) return 'win'

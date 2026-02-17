@@ -11,7 +11,7 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title: 'Play Blackjack',
     description:
-      'Play provably fair blackjack with Zcash. 0.5% house edge with basic strategy. Every hand verified on the blockchain. No account required.',
+      'Play provably fair blackjack with Zcash. Around 0.5% house edge with basic strategy, potentially lower with late surrender. Every hand verified on the blockchain. No account required.',
     keywords: [
       'play blackjack online',
       'crypto blackjack',
@@ -25,7 +25,7 @@ export async function generateMetadata(): Promise<Metadata> {
     openGraph: {
       title: `Play Provably Fair Blackjack | ${brandTitle}`,
       description:
-        'Blackjack with 0.5% house edge. Every hand is blockchain-verified. Play with Zcash for maximum privacy.',
+        'Blackjack with around 0.5% house edge, potentially lower with late surrender. Every hand is blockchain-verified. Play with Zcash for maximum privacy.',
       url: brandUrl,
     },
   }

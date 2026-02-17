@@ -21,6 +21,7 @@ const ACTION_KEYS: Record<string, BlackjackAction> = {
   s: 'stand',
   d: 'double',
   p: 'split',
+  r: 'surrender',
 }
 
 export function useKeyboardShortcuts({
@@ -69,7 +70,7 @@ export function useKeyboardShortcuts({
         }
       }
 
-      // Player turn: H/S/D/P
+      // Player turn: H/S/D/P/R
       if (gamePhase === 'playerTurn' && !showInsuranceOffer) {
         const action = ACTION_KEYS[key]
         if (action && availableActions.includes(action)) {
