@@ -609,14 +609,25 @@ export default function VideoPokerGame() {
             Blackjack
           </Link>
 
-          {/* Balance */}
-          <div className={`text-right transition-all duration-300 ${
-            balanceAnimation === 'increase' ? 'text-green-400 scale-105' :
-            balanceAnimation === 'decrease' ? 'text-blood-ruby scale-95' :
-            'text-masque-gold'
-          }`}>
-            <div className="text-xs text-venetian-gold/50">Balance</div>
-            <div className="font-mono font-bold text-sm sm:text-base">{session?.balance.toFixed(4)} ZEC</div>
+          {/* Balance & Deposit Widget - compact on mobile, full on desktop */}
+          <div className="relative">
+            <div className="hidden sm:block">
+              <DepositWidget
+                balance={session?.balance ?? 0}
+                isDemo={session?.isDemo ?? session?.walletAddress?.startsWith('demo_') ?? true}
+                isAuthenticated={session?.isAuthenticated ?? false}
+                onDepositClick={() => setShowOnboarding(true)}
+                onWithdrawClick={() => setShowWithdrawal(true)}
+              />
+            </div>
+            <div className="block sm:hidden">
+              <DepositWidgetCompact
+                balance={session?.balance ?? 0}
+                isDemo={session?.isDemo ?? session?.walletAddress?.startsWith('demo_') ?? true}
+                onDepositClick={() => setShowOnboarding(true)}
+                onWithdrawClick={() => setShowWithdrawal(true)}
+              />
+            </div>
           </div>
         </div>
       </div>
@@ -744,6 +755,48 @@ export default function VideoPokerGame() {
           />
         </div>
 
+        {/* Action buttons */}
+        <div className="flex flex-col items-center gap-2">
+          <div className="flex justify-center gap-3">
+            {canDeal && (
+              <button
+                onClick={handleDeal}
+                disabled={isActing || !session || (selectedBet * betMultiplier > (session?.balance ?? 0))}
+                className="px-8 py-3 bg-gradient-to-r from-masque-gold to-venetian-gold text-midnight-black font-bold rounded-lg hover:shadow-[0_0_20px_rgba(201,162,39,0.4)] transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed text-lg font-cinzel"
+              >
+                {isComplete ? 'DEAL AGAIN' : 'DEAL'}
+                <span className="text-xs ml-2 opacity-60 hidden sm:inline">[D]</span>
+              </button>
+            )}
+
+            {canDraw && (
+              <button
+                onClick={handleDraw}
+                disabled={isActing}
+                className="px-8 py-3 bg-gradient-to-r from-masque-gold to-venetian-gold text-midnight-black font-bold rounded-lg hover:shadow-[0_0_20px_rgba(201,162,39,0.4)] transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed text-lg font-cinzel"
+              >
+                DRAW
+                <span className="text-xs ml-2 opacity-60 hidden sm:inline">[D]</span>
+              </button>
+            )}
+          </div>
+
+          {/* Insufficient funds message */}
+          {canDeal && session && selectedBet * betMultiplier > session.balance && (
+            <p className="text-blood-ruby text-xs">
+              Bet exceeds balance — lower your bet or deposit
+            </p>
+          )}
+        </div>
+
+        {/* Hold instruction */}
+        {phase === 'hold' && (
+          <p className="text-center text-sm text-venetian-gold/50">
+            Click cards to hold, then press DRAW
+            <span className="hidden sm:inline"> — or use keys 1-5</span>
+          </p>
+        )}
+
         {isSessionFairnessMode && fairness && (
           <div className="bg-midnight-black/40 border border-masque-gold/20 rounded-lg p-3 space-y-2 text-xs">
             <div className="flex items-center justify-between gap-2">
@@ -793,48 +846,6 @@ export default function VideoPokerGame() {
               </div>
             )}
           </div>
-        )}
-
-        {/* Action buttons */}
-        <div className="flex flex-col items-center gap-2">
-          <div className="flex justify-center gap-3">
-            {canDeal && (
-              <button
-                onClick={handleDeal}
-                disabled={isActing || !session || (selectedBet * betMultiplier > (session?.balance ?? 0))}
-                className="px-8 py-3 bg-gradient-to-r from-masque-gold to-venetian-gold text-midnight-black font-bold rounded-lg hover:shadow-[0_0_20px_rgba(201,162,39,0.4)] transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed text-lg font-cinzel"
-              >
-                {isComplete ? 'DEAL AGAIN' : 'DEAL'}
-                <span className="text-xs ml-2 opacity-60 hidden sm:inline">[D]</span>
-              </button>
-            )}
-
-            {canDraw && (
-              <button
-                onClick={handleDraw}
-                disabled={isActing}
-                className="px-8 py-3 bg-gradient-to-r from-masque-gold to-venetian-gold text-midnight-black font-bold rounded-lg hover:shadow-[0_0_20px_rgba(201,162,39,0.4)] transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed text-lg font-cinzel"
-              >
-                DRAW
-                <span className="text-xs ml-2 opacity-60 hidden sm:inline">[D]</span>
-              </button>
-            )}
-          </div>
-
-          {/* Insufficient funds message */}
-          {canDeal && session && selectedBet * betMultiplier > session.balance && (
-            <p className="text-blood-ruby text-xs">
-              Bet exceeds balance — lower your bet or deposit
-            </p>
-          )}
-        </div>
-
-        {/* Hold instruction */}
-        {phase === 'hold' && (
-          <p className="text-center text-sm text-venetian-gold/50">
-            Click cards to hold, then press DRAW
-            <span className="hidden sm:inline"> — or use keys 1-5</span>
-          </p>
         )}
       </div>
 
@@ -908,31 +919,6 @@ export default function VideoPokerGame() {
             })}
           </div>
         </details>
-      )}
-
-      {/* Desktop deposit widget */}
-      {session && (
-        <div className="hidden sm:block">
-          <DepositWidget
-            balance={session.balance}
-            isDemo={session.isDemo ?? session.walletAddress?.startsWith('demo_') ?? true}
-            isAuthenticated={session.isAuthenticated ?? false}
-            onDepositClick={() => setShowOnboarding(true)}
-            onWithdrawClick={() => setShowWithdrawal(true)}
-          />
-        </div>
-      )}
-
-      {/* Mobile deposit widget */}
-      {session && (
-        <div className="sm:hidden">
-          <DepositWidgetCompact
-            balance={session.balance}
-            isDemo={session.isDemo ?? session.walletAddress?.startsWith('demo_') ?? true}
-            onDepositClick={() => setShowOnboarding(true)}
-            onWithdrawClick={() => setShowWithdrawal(true)}
-          />
-        </div>
       )}
 
       {/* Withdrawal modal */}

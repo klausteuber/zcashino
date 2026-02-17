@@ -1267,6 +1267,22 @@ export default function BlackjackGame() {
                 )}
               </div>
 
+              {/* Maintenance Banner */}
+              {session?.maintenanceMode && (
+                <div className="bg-crimson-mask/20 border border-crimson-mask/40 text-crimson-mask px-4 py-2 rounded-lg text-sm text-center mb-2">
+                  Platform is under maintenance. New games are temporarily paused.
+                </div>
+              )}
+
+              {/* Deal Button */}
+              <button
+                onClick={handlePlaceBet}
+                disabled={isLoading || !session || selectedBet > session.balance || session?.maintenanceMode}
+                className="btn-gold-shimmer text-midnight-black px-8 py-3 rounded-lg font-bold text-lg disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isLoading ? 'Dealing...' : session?.maintenanceMode ? 'MAINTENANCE' : 'DEAL'}
+              </button>
+
               {/* Client seed controls */}
               <div className="w-full max-w-md bg-midnight-black/40 rounded-lg border border-masque-gold/10 px-4 py-3">
                 <div className="flex items-center justify-between mb-2">
@@ -1307,22 +1323,6 @@ export default function BlackjackGame() {
                   </p>
                 )}
               </div>
-
-              {/* Maintenance Banner */}
-              {session?.maintenanceMode && (
-                <div className="bg-crimson-mask/20 border border-crimson-mask/40 text-crimson-mask px-4 py-2 rounded-lg text-sm text-center mb-2">
-                  Platform is under maintenance. New games are temporarily paused.
-                </div>
-              )}
-
-              {/* Deal Button */}
-              <button
-                onClick={handlePlaceBet}
-                disabled={isLoading || !session || selectedBet > session.balance || session?.maintenanceMode}
-                className="btn-gold-shimmer text-midnight-black px-8 py-3 rounded-lg font-bold text-lg disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isLoading ? 'Dealing...' : session?.maintenanceMode ? 'MAINTENANCE' : 'DEAL'}
-              </button>
             </>
           )}
 
