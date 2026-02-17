@@ -1427,15 +1427,32 @@ export default function BlackjackGame() {
                     </button>
                   ))}
                 </div>
-                <label className="flex items-center gap-1.5 cursor-pointer whitespace-nowrap">
-                  <input
-                    type="checkbox"
-                    checked={perfectPairsBet > 0}
-                    onChange={(e) => setPerfectPairsBet(e.target.checked ? selectedBet * 0.1 : 0)}
-                    className="w-3 h-3 accent-masque-gold"
-                  />
-                  <span className="text-[10px] text-venetian-gold/60">PP</span>
-                </label>
+                <div className="flex items-center gap-2.5">
+                  <label className="flex items-center gap-1.5 cursor-pointer whitespace-nowrap">
+                    <input
+                      type="checkbox"
+                      checked={perfectPairsBet > 0}
+                      onChange={(e) => setPerfectPairsBet(e.target.checked ? selectedBet * 0.1 : 0)}
+                      className="w-3 h-3 accent-masque-gold"
+                    />
+                    <span className="text-[10px] text-venetian-gold/60">PP</span>
+                  </label>
+                  <button
+                    onClick={toggleAutoBet}
+                    className={`flex items-center gap-1 text-[10px] whitespace-nowrap transition-colors ${
+                      isAutoBetEnabled
+                        ? 'text-masque-gold hover:text-blood-ruby'
+                        : 'text-venetian-gold/40 hover:text-masque-gold'
+                    }`}
+                    title={isAutoBetEnabled ? 'Auto-deal is ON — click to stop after this hand' : 'Auto-deal is OFF — click to enable'}
+                  >
+                    <svg className={`w-3 h-3 ${isAutoBetEnabled ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" style={isAutoBetEnabled ? { animationDuration: '3s' } : undefined}>
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    {isAutoBetEnabled ? 'AUTO' : 'AUTO'}
+                  </button>
+                </div>
               </div>
             </div>
           )}
