@@ -148,7 +148,6 @@ export async function POST(request: NextRequest) {
       case 'stand':
       case 'double':
       case 'split':
-      case 'surrender':
         return handleGameAction(request, session, payload.gameId, payload.action as BlackjackAction)
 
       case 'insurance':

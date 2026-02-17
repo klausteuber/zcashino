@@ -389,7 +389,6 @@ The admin dashboard lives at [`/admin`](http://localhost:3000/admin) and is prot
 - Double on any two cards
 - Split any pair (up to 4 hands)
 - Double after split allowed
-- Late surrender on eligible initial hands
 - Insurance offered (2:1)
 
 ### Perfect Pairs Side Bet
@@ -402,7 +401,7 @@ The admin dashboard lives at [`/admin`](http://localhost:3000/admin) and is prot
 
 | Game | House Edge |
 |------|------------|
-| Blackjack (basic strategy, with late surrender available) | ~0.5% or lower depending on decisions |
+| Blackjack (basic strategy, re-split aces enabled) | ~0.5% depending on decisions |
 | Perfect Pairs | ~4.5% |
 | Insurance | ~7.4% |
 

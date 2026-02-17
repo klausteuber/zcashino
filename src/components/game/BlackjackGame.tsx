@@ -1409,18 +1409,6 @@ export default function BlackjackGame() {
                   SPLIT
                 </button>
               )}
-              {availableActions.includes('surrender') && (
-                <button
-                  onClick={() => {
-                    playSound('buttonClick')
-                    handleAction('surrender')
-                  }}
-                  disabled={isLoading}
-                  className="bg-transparent border-2 border-blood-ruby/70 text-blood-ruby px-8 py-3 rounded-lg font-bold hover:bg-blood-ruby/10 hover:scale-105 active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:hover:scale-100"
-                >
-                  SURRENDER
-                </button>
-              )}
             </div>
           )}
 

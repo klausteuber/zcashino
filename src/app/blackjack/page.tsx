@@ -116,9 +116,9 @@ export default async function BlackjackPage() {
                   Low House Edge
                 </h4>
                 <p>
-                  Approximately 0.5% house edge with basic strategy, and lower on
-                  eligible hands when you use late surrender correctly. Full
-                  transparency on all odds &mdash; check our{' '}
+                  Approximately 0.5% house edge with basic strategy under our
+                  current ruleset (including re-split aces). Full transparency
+                  on all odds &mdash; check our{' '}
                   <a
                     href="/terms"
                     className="text-masque-gold hover:underline"
@@ -159,12 +159,6 @@ export default async function BlackjackPage() {
                   P
                 </kbd>{' '}
                 Split
-              </span>
-              <span>
-                <kbd className="px-2 py-1 bg-midnight-black/60 rounded text-masque-gold font-mono text-xs">
-                  R
-                </kbd>{' '}
-                Surrender
               </span>
               <span>
                 <kbd className="px-2 py-1 bg-midnight-black/60 rounded text-masque-gold font-mono text-xs">

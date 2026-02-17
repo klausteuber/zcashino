@@ -383,31 +383,6 @@ describe('executeAction', () => {
     expect(result.playerHands[1].isBlackjack).toBe(false)
   })
 
-  it('surrender returns half bet and completes the hand', () => {
-    const state = playerTurnState(
-      [card('10'), card('6')],
-      [card('9'), card('7', 'hearts', false)],
-      [card('3')]
-    )
-    const result = executeAction(state, 'surrender')
-    expect(result.phase).toBe('complete')
-    expect(result.playerHands[0].isSurrendered).toBe(true)
-    expect(result.settlement?.mainHandsPayout).toBe(0.05)
-    expect(result.settlement?.totalStake).toBe(0.1)
-    expect(result.settlement?.totalPayout).toBe(0.05)
-    expect(result.settlement?.net).toBe(-0.05)
-  })
-
-  it('surrender is rejected after a hit', () => {
-    const state = playerTurnState(
-      [card('10'), card('6'), card('2')],
-      [card('9'), card('7', 'hearts', false)],
-      [card('3')]
-    )
-    const result = executeAction(state, 'surrender')
-    expect(result.message).toContain('Cannot surrender')
-  })
-
   it('invalid action returns error message', () => {
     const state = playerTurnState(
       [card('5'), card('6')],
@@ -440,7 +415,6 @@ describe('getAvailableActions', () => {
     const actions = getAvailableActions(state)
     expect(actions).toContain('hit')
     expect(actions).toContain('stand')
-    expect(actions).toContain('surrender')
   })
 
   it('includes double when 2 cards and sufficient balance', () => {
@@ -502,14 +476,22 @@ describe('getAvailableActions', () => {
     expect(getAvailableActions(state)).not.toContain('split')
   })
 
-  it('excludes surrender when hand has more than two cards', () => {
-    const state = playerTurnState(
-      [card('10'), card('6'), card('2')],
-      [card('K'), card('Q')],
-      [],
-      { balance: 1.0 }
-    )
-    expect(getAvailableActions(state)).not.toContain('surrender')
+  it('allows re-splitting aces when under hand limit and balance allows', () => {
+    const state: BlackjackGameState = {
+      ...playerTurnState(
+        [card('A', 'hearts'), card('A', 'spades')],
+        [card('10'), card('7')],
+        [],
+        { balance: 1.0 }
+      ),
+      playerHands: [
+        hand([card('8'), card('9')], { isSplit: true }),
+        hand([card('A', 'hearts'), card('A', 'clubs')], { isSplit: true, bet: 0.1 }),
+      ],
+      currentHandIndex: 1,
+    }
+
+    expect(getAvailableActions(state)).toContain('split')
   })
 
   it('returns empty when hand is stood', () => {
@@ -749,51 +731,4 @@ describe('settlement and insurance flows', () => {
     })
   })
 
-  it('surrender settles with side-bet payout and deterministic totals', () => {
-    const state = playerTurnState(
-      [card('10'), card('6')],
-      [card('9'), card('7', 'hearts', false)],
-      [],
-      {
-        balance: 0.85,
-        currentBet: 0.1,
-        perfectPairsBet: 0.05,
-        perfectPairsResult: {
-          outcome: 'mixed',
-          payout: 0.3,
-        },
-        dealerPeeked: true,
-      }
-    )
-
-    const result = executeAction(state, 'surrender')
-    expect(result.phase).toBe('complete')
-    expect(result.playerHands[0].isSurrendered).toBe(true)
-    expect(result.settlement).toMatchObject({
-      totalStake: 0.15,
-      totalPayout: 0.35,
-      net: 0.2,
-      mainHandsPayout: 0.05,
-      insurancePayout: 0,
-      perfectPairsPayout: 0.3,
-    })
-  })
-
-  it('peek happens before surrender when dealer shows Ace and has blackjack', () => {
-    const state = playerTurnState(
-      [card('10'), card('6')],
-      [card('A'), card('K', 'hearts', false)],
-      [card('3')],
-      {
-        balance: 0.9,
-        dealerPeeked: false,
-      }
-    )
-
-    const result = executeAction(state, 'surrender')
-    expect(result.phase).toBe('complete')
-    expect(result.playerHands[0].isSurrendered).toBe(false)
-    expect(result.dealerHand.cards.every((c) => c.faceUp)).toBe(true)
-    expect(result.settlement?.mainHandsPayout).toBe(0)
-  })
 })

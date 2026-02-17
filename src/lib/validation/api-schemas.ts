@@ -38,11 +38,6 @@ export const blackjackBodySchema = z.discriminatedUnion('action', [
     gameId: nonEmptyString,
   }).strict(),
   z.object({
-    action: z.literal('surrender'),
-    sessionId: nonEmptyString,
-    gameId: nonEmptyString,
-  }).strict(),
-  z.object({
     action: z.literal('insurance'),
     sessionId: nonEmptyString,
     gameId: nonEmptyString,

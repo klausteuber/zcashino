@@ -469,7 +469,7 @@ function ConfirmingScreen({ depositStatus }: { depositStatus: DepositStatus }) {
         <ul className="text-sm text-venetian-gold/50 space-y-1">
           <li>• Our games are provably fair</li>
           <li>• View proof of reserves at /reserves</li>
-          <li>• Blackjack edge: ~0.5% or lower with late surrender strategy</li>
+          <li>• Blackjack edge: around 0.5% with basic strategy</li>
         </ul>
       </div>
 

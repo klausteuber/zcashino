@@ -137,7 +137,7 @@ export function startRound(
 
   // Determine initial phase
   let phase: GamePhase = 'playerTurn'
-  let message = 'Your turn - hit, stand, double, split, or surrender'
+  let message = 'Your turn - hit, stand, double, or split'
 
   const shouldOfferInsurance = dealerCards[0].rank === 'A' && !playerHand.isBlackjack
 
@@ -464,7 +464,7 @@ function executeSplit(state: BlackjackGameState): BlackjackGameState {
 }
 
 /**
- * Player surrenders current hand (late surrender)
+ * Legacy-only surrender handler kept for historical action replay compatibility.
  */
 function executeSurrender(state: BlackjackGameState): BlackjackGameState {
   const currentHand = state.playerHands[state.currentHandIndex]
@@ -703,14 +703,6 @@ export function getAvailableActions(state: BlackjackGameState): BlackjackAction[
 
   if (canSplit(currentHand.cards) && currentHand.bet <= state.balance && state.playerHands.length < 4) {
     actions.push('split')
-  }
-
-  const canSurrender = state.playerHands.length === 1
-    && !currentHand.isSplit
-    && !currentHand.isDoubled
-    && currentHand.cards.length === 2
-  if (canSurrender) {
-    actions.push('surrender')
   }
 
   return actions

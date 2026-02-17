@@ -224,7 +224,7 @@ describe('/api/game POST race/idempotency', () => {
     createInitialStateMock.mockReturnValue({})
     executeActionMock.mockImplementation((state: unknown) => state)
     takeInsuranceMock.mockImplementation((state: unknown) => state)
-    getAvailableActionsMock.mockReturnValue(['hit', 'stand', 'double', 'split', 'surrender'])
+    getAvailableActionsMock.mockReturnValue(['hit', 'stand', 'double', 'split'])
     checkWagerAllowedMock.mockReturnValue({ allowed: true })
     requirePlayerSessionMock.mockReturnValue({ ok: true, legacyFallback: false })
     getProvablyFairModeMock.mockReturnValue('legacy_per_game_v1')
@@ -411,6 +411,19 @@ describe('/api/game POST race/idempotency', () => {
       code: 'INVALID_SIDE_BET',
     })
     expect(reserveFundsMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects surrender action payload', async () => {
+    const response = await POST(makeRequest({
+      action: 'surrender',
+      sessionId: 'session-1',
+      gameId: 'game-1',
+    }))
+
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toMatchObject({
+      error: 'Invalid request payload',
+    })
   })
 
   it('returns 403 LOSS_LIMIT_REACHED for start wagers', async () => {
@@ -621,98 +634,4 @@ describe('/api/game POST race/idempotency', () => {
     await expect(insuranceRes.json()).resolves.toMatchObject({ code: 'LOSS_LIMIT_REACHED' })
   })
 
-  it('accepts surrender action and persists surrender outcome on completion', async () => {
-    prismaMock.session.findUnique
-      .mockResolvedValueOnce({
-        id: 'session-1',
-        balance: 0.9,
-        walletAddress: 'demo_wallet',
-        isAuthenticated: false,
-        excludedUntil: null,
-        totalWagered: 0.1,
-        totalWon: 0,
-        lossLimit: null,
-        sessionLimit: null,
-        createdAt: new Date('2026-02-16T00:00:00Z'),
-      })
-      .mockResolvedValueOnce({
-        id: 'session-1',
-        balance: 0.95,
-        totalWagered: 0.1,
-        totalWon: 0.05,
-      })
-
-    prismaMock.blackjackGame.findUnique.mockResolvedValueOnce({
-      id: 'game-1',
-      sessionId: 'session-1',
-      status: 'active',
-      mainBet: 0.1,
-      perfectPairsBet: 0,
-      insuranceBet: 0,
-      serverSeed: 'server-seed',
-      serverSeedHash: 'server-hash',
-      clientSeed: 'client-seed',
-      nonce: 0,
-      fairnessVersion: 'legacy_mulberry_v1',
-      actionHistory: '[]',
-    })
-
-    startRoundMock.mockReturnValue({
-      ...buildGameState('playerTurn'),
-      currentBet: 0.1,
-      dealerPeeked: true,
-      insuranceBet: 0,
-      balance: 0.9,
-      lastPayout: 0,
-    })
-    getAvailableActionsMock.mockReturnValue(['hit', 'stand', 'double', 'split', 'surrender'])
-    executeActionMock.mockReturnValue({
-      ...buildGameState('complete', 0.05),
-      playerHands: [
-        {
-          cards: [
-            { rank: '10', suit: 'hearts', faceUp: true },
-            { rank: '6', suit: 'clubs', faceUp: true },
-          ],
-          bet: 0.1,
-          isBlackjack: false,
-          isBusted: false,
-          isSurrendered: true,
-        },
-      ],
-      settlement: {
-        totalStake: 0.1,
-        totalPayout: 0.05,
-        net: -0.05,
-        mainHandsPayout: 0.05,
-        insurancePayout: 0,
-        perfectPairsPayout: 0,
-      },
-      message: 'Surrender - half bet returned',
-    })
-
-    const response = await POST(makeRequest({
-      action: 'surrender',
-      sessionId: 'session-1',
-      gameId: 'game-1',
-    }))
-
-    expect(response.status).toBe(200)
-    expect(executeActionMock).toHaveBeenCalledWith(expect.anything(), 'surrender')
-    expect(prismaMock.blackjackGame.updateMany).toHaveBeenCalledWith({
-      where: { id: 'game-1', status: 'active' },
-      data: {
-        status: 'completed',
-        completedAt: expect.any(Date),
-        payout: 0.05,
-      },
-    })
-    expect(creditFundsMock).toHaveBeenCalledTimes(1)
-    expect(prismaMock.blackjackGame.update).toHaveBeenCalledWith({
-      where: { id: 'game-1' },
-      data: expect.objectContaining({
-        outcome: 'surrender',
-      }),
-    })
-  })
 })
