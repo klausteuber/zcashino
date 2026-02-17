@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import Image from 'next/image'
 import type { Card as CardType, Suit } from '@/types'
 import { JesterBell } from '@/components/ui/JesterLogo'
 
@@ -130,13 +129,12 @@ export default function Card({ card, size = 'md', className = '', dealDelay = 0,
       />
       {/* CypherJester: jester bell icon */}
       <JesterBell className="w-6 h-6 text-masque-gold/60 brand-cardback-cypher" />
-      {/* 21z: logo image */}
-      <Image
-        src="/images/21z-logo.png"
+      {/* 21z: logo SVG (transparent bg, scales cleanly) */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="/images/21z-logo.svg"
         alt=""
-        width={48}
-        height={48}
-        className="brand-cardback-21z w-3/4 h-3/4 object-contain opacity-70"
+        className="brand-cardback-21z w-full h-full object-contain p-1 opacity-80"
       />
     </div>
   )
