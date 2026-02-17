@@ -14,11 +14,6 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: true,
   },
 
-  // Set turbopack root to this project directory
-  turbopack: {
-    root: __dirname,
-  },
-
   // Security headers
   async headers() {
     return [
