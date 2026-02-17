@@ -465,3 +465,28 @@ if (result.count > 0) {
 - Add explicit logging in:
   - `createAnchoredFairnessSeed(...)` for commitment creation failures
   - `session-seed-pool-manager` refill loop when seed creation returns null
+
+---
+
+## Build/Deploy Outage — Gotchas (2026-02-17)
+
+### All routes return 404 after successful container start
+
+**Symptom:** `https://21z.cash`, `https://cypherjester.com`, and `/api/health` all return Next.js 404 while container logs show startup success.
+
+**Root Cause:** The server repo had an untracked nested `app/` directory with a second copy of the codebase (`app/src/app/...`). Docker copied it into build context, and Next.js compiled route entries from that tree, producing path-prefixed routes (`/src/app/...`) that do not match public URLs.
+
+**Fix:**
+- Add `app/` (and `data/`) to `.dockerignore`.
+- Rebuild with `--no-cache` so stale route layers are not reused.
+- Verify build route table includes `/`, `/blackjack`, `/api/health` (no `/src/app/*` routes).
+
+### Hotfix build fails with `unknown option '--no-turbopack'`
+
+**Symptom:** Docker build fails at Next build step with `error: unknown option '--no-turbopack'`.
+
+**Root Cause:** Current Next.js CLI version on production (`16.1.4`) does not support `--no-turbopack`.
+
+**Fix:**
+- Use the supported build command (`npm run build`, which maps to `next build` in this repo).
+- Confirm valid CLI options before pushing Dockerfile flag changes.

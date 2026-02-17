@@ -229,3 +229,17 @@ In-memory limits and remote font fetches are acceptable in dev, but must be call
 
 3. **Pool starvation diagnosis depends on explicit seed creation error logs.**
    `createAnchoredFairnessSeed()` and `session-seed-pool-manager` now log commitment failure causes and refill failures directly. Without this, admin-triggered refill appears successful while no new seeds are actually created.
+
+## Routing Outage Learnings (2026-02-17)
+
+1. **Untracked nested project directories can poison Docker build context.**
+   The production host had an untracked `app/` directory containing a full project copy (`app/src/app/*`). Because `.dockerignore` did not exclude `app/`, Next.js compiled extra routes and emitted path-prefixed entries that broke the live route map.
+
+2. **Build logs are the fastest truth source for route integrity.**
+   The decisive signal was the route table in the Docker build output. Healthy output listed `/`, `/blackjack`, and `/api/health`. Broken output had `/src/app/*` prefixed routes and served 404 for all public paths.
+
+3. **A hotfix must be committed, not only patched on server.**
+   Server-local edits restore service quickly, but the source-of-truth repo must immediately include the same protections (`.dockerignore` exclusions and valid build command) or the next deploy can reintroduce outage behavior.
+
+4. **Keep Dockerfile build command aligned with supported Next.js CLI flags.**
+   On Next.js 16.1.4, `--no-turbopack` is invalid. Use a supported build invocation (`next build` via `npm run build`) unless a compatible explicit flag is confirmed.

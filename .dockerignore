@@ -9,3 +9,5 @@ notes/
 !README.md
 playwright.config.ts
 tests/
+app/
+data/

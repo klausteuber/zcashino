@@ -13,7 +13,7 @@ COPY . .
 # references as runtime lookups instead of inlining them as undefined.
 # Real values are injected at runtime via docker-compose env_file.
 ENV PLAYER_SESSION_SECRET=build-time-placeholder-replaced-at-runtime
-RUN npx prisma generate && npx next build --no-turbopack
+RUN npx prisma generate && npm run build
 
 # Stage 3: Production
 FROM node:22-slim AS runner
