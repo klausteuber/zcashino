@@ -252,6 +252,90 @@ The site uses a **diamond-tufted green felt** SVG pattern as the background text
 
 ---
 
+## 21z Brand Override (Cyberpunk Futurist)
+
+### Philosophy
+
+"A terminal in a quiet, expensive cyberpunk bar."
+
+The void is the canvas. Light is the paint. Every glow must be earned through interaction.
+No textures. No patterns. No decoration. Restraint is the aesthetic.
+
+### Background
+
+- Pure void: `#05050a` — no grid, no scanlines, no felt texture
+- Subtle radial vignette via `body::before` (darker edges) for cinematic depth
+- `.felt-texture` and `.scanline-overlay` are neutralized via `body[data-brand="21z"]`
+
+### Color System
+
+| Role | Value | Token | Notes |
+|------|-------|-------|-------|
+| Primary Accent | `#00F0FF` | `--accent-primary` | Cyan — interactive elements, borders, glows |
+| Secondary Accent | `#F4B728` | `--accent-secondary` | Zcash Gold — sparingly, brand alignment only |
+| Success | `#00FFB3` | `--color-success` | Neon green — wins, positive states |
+| Error | `#FF2E63` | `--color-error` | Hot pink — losses, errors |
+| Surface | `#0F1019` | `--bg-surface` | Cards, panels |
+| Elevated | `#161825` | `--bg-elevated` | Modals, dropdowns |
+| Text Primary | `#E0E4F0` | `--text-primary` | Cool-tinted white (never pure #FFF) |
+| Text Secondary | `#8890A6` | `--text-secondary` | Labels, captions |
+
+### Glow System
+
+Three-layer box-shadow for realistic light falloff:
+
+```css
+box-shadow:
+  0 0 5px rgba(0, 240, 255, 0.3),     /* tight core */
+  0 0 15px rgba(0, 240, 255, 0.15),    /* medium diffuse */
+  0 0 30px rgba(0, 240, 255, 0.05);    /* wide ambient */
+```
+
+**Rules:**
+- Glow at rest: NEVER (exception: active game hand pulse)
+- Glow on hover: YES — buttons, panels, interactive elements
+- Glow on focus-visible: YES — same as hover (accessibility)
+- Glow on active/pressed: TIGHTER, BRIGHTER — energy surge
+- Win animation: neon green glow (`#00FFB3`)
+- Blackjack animation: cyan glow (`#00F0FF`)
+
+### Shape Language
+
+- `border-radius: 0` everywhere (enforced via CSS overrides)
+- Beveled clip-paths replace rounded corners:
+  - Panels/modals: 12px bevel
+  - Buttons: 10px bevel
+  - Cards: 8px bevel
+  - Tooltips: 6px bevel
+
+### Typography
+
+| Role | Font | Usage |
+|------|------|-------|
+| Display | Orbitron | Headlines, balance, bet amounts, brand mark |
+| Body | Rajdhani | All UI text, buttons, labels |
+| Mono | Space Mono | Addresses, hashes, seeds |
+
+### Shadows (21z overrides)
+
+| Name | Value | Notes |
+|------|-------|-------|
+| Subtle | `0 2px 8px rgba(0,0,0,0.3)` | Denser than Cypher (darker base) |
+| Card | `0 4px 16px rgba(0,0,0,0.4)` | |
+| Elevated | `0 8px 32px rgba(0,0,0,0.5)` | |
+| Cyan Glow | `0 0 20px rgba(0,240,255,0.2)` | Replaces gold-glow |
+
+### DO NOT (21z brand)
+
+- No grid patterns or background textures
+- No scanline overlays
+- No rounded corners (use clip-path bevels)
+- No pure white `#FFFFFF` or pure black `#000000`
+- No gold/warm colors except `--accent-secondary` for Zcash brand tie-in
+- No glow effects at rest (only on interaction)
+
+---
+
 ## Migration Notes
 
 When updating existing code:

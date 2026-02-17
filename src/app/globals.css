@@ -114,14 +114,12 @@ body[data-brand="21z"]::before {
   inset: 0;
   pointer-events: none;
   z-index: 0;
-  opacity: 0.04;
-  background: repeating-linear-gradient(
-    to bottom,
-    rgba(224, 228, 240, 0.12) 0px,
-    rgba(224, 228, 240, 0.12) 1px,
-    transparent 2px,
-    transparent 4px
+  background: radial-gradient(
+    ellipse 80% 70% at 50% 40%,
+    transparent 0%,
+    rgba(0, 0, 0, 0.4) 100%
   );
+  opacity: 1;
 }
 
 /* Card styling */
@@ -171,6 +169,7 @@ body[data-brand="21z"] .playing-card {
   border-color: #0abdc6;
   clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 0 100%);
   box-shadow: 0 0 0 1px rgba(10, 189, 198, 0.35), 0 10px 24px rgba(0, 0, 0, 0.35);
+  transition: box-shadow 0.2s ease-out;
 }
 
 body[data-brand="21z"] .playing-card-back {
@@ -193,10 +192,11 @@ body[data-brand="21z"] .playing-card-back .card-back-inner {
 
 body[data-brand="21z"] .felt-texture {
   background-color: #05050a;
-  background-image:
-    linear-gradient(rgba(10, 189, 198, 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(10, 189, 198, 0.03) 1px, transparent 1px);
-  background-size: 36px 36px;
+  background-image: none;
+}
+
+body[data-brand="21z"] .cyber-grid {
+  background-image: none;
 }
 
 .cyber-grid {
@@ -224,6 +224,10 @@ body[data-brand="21z"] .felt-texture {
     transparent 5px
   );
   opacity: 0.05;
+}
+
+body[data-brand="21z"] .scanline-overlay::after {
+  display: none;
 }
 
 /* Chip styling */
@@ -285,6 +289,14 @@ body[data-brand="21z"] .felt-texture {
   background-clip: text;
 }
 
+/* 21z: Cyan gradient text instead of gold */
+body[data-brand="21z"] .text-gold-gradient {
+  background: linear-gradient(135deg, var(--accent-primary) 0%, var(--text-primary) 50%, var(--accent-primary) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
 /* Button hover animations */
 .btn-gold-shimmer {
   background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 50%, var(--accent-primary) 100%);
@@ -302,13 +314,34 @@ body[data-brand="21z"] .felt-texture {
 body[data-brand="21z"] .btn-gold-shimmer {
   background: transparent;
   color: var(--text-primary);
-  border-color: rgba(0, 240, 255, 0.55);
+  border-color: rgba(0, 240, 255, 0.35);
   clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%);
+  box-shadow: none;
+  transition: background 0.2s ease-out, box-shadow 0.2s ease-out, border-color 0.2s ease-out;
 }
 
 body[data-brand="21z"] .btn-gold-shimmer:hover {
-  background: rgba(0, 240, 255, 0.12);
-  box-shadow: 0 0 22px rgba(0, 240, 255, 0.28);
+  background: rgba(0, 240, 255, 0.08);
+  border-color: rgba(0, 240, 255, 0.65);
+  box-shadow:
+    0 0 5px rgba(0, 240, 255, 0.25),
+    0 0 15px rgba(0, 240, 255, 0.12),
+    0 0 30px rgba(0, 240, 255, 0.04);
+}
+
+body[data-brand="21z"] .btn-gold-shimmer:focus-visible {
+  border-color: rgba(0, 240, 255, 0.65);
+  box-shadow:
+    0 0 5px rgba(0, 240, 255, 0.25),
+    0 0 15px rgba(0, 240, 255, 0.12);
+  outline: none;
+}
+
+body[data-brand="21z"] .btn-gold-shimmer:active {
+  background: rgba(0, 240, 255, 0.15);
+  box-shadow:
+    0 0 3px rgba(0, 240, 255, 0.4),
+    0 0 8px rgba(0, 240, 255, 0.2);
 }
 
 .clip-bevel-tr {
@@ -326,6 +359,13 @@ body[data-brand="21z"] .btn-gold-shimmer:hover {
 body[data-brand="21z"] .cyber-panel {
   border-radius: 0 !important;
   clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 0 100%);
+  transition: box-shadow 0.2s ease-out;
+}
+
+body[data-brand="21z"] .cyber-panel:hover {
+  box-shadow:
+    0 0 4px rgba(0, 240, 255, 0.1),
+    0 0 12px rgba(0, 240, 255, 0.05);
 }
 
 body[data-brand="21z"] .btn-gold-shimmer,
@@ -351,7 +391,10 @@ body[data-brand="21z"]
 
 .glow-cyan:hover,
 .glow-cyan:focus-visible {
-  box-shadow: 0 0 24px rgba(0, 240, 255, 0.28);
+  box-shadow:
+    0 0 5px rgba(0, 240, 255, 0.3),
+    0 0 15px rgba(0, 240, 255, 0.15),
+    0 0 30px rgba(0, 240, 255, 0.05);
 }
 
 .glow-gold:hover,
@@ -684,6 +727,13 @@ body[data-brand="21z"] .brand-wordmark-21z {
   opacity: 1;
 }
 
+/* 21z: Beveled tooltip matching angular shape language */
+body[data-brand="21z"] .tooltip::after {
+  border-radius: 0;
+  border-color: rgba(0, 240, 255, 0.35);
+  clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 0 100%);
+}
+
 /* Button press animation */
 @keyframes buttonPress {
   0% { transform: scale(1); }
@@ -801,6 +851,125 @@ body[data-brand="21z"] .brand-wordmark-21z {
   border-radius: 12px;
   padding: 8px;
   margin: -8px;
+}
+
+/* ================================
+   21z: CYAN GAME ANIMATION OVERRIDES
+   ================================ */
+
+/* 21z: active hand uses cyan pulse instead of gold */
+@keyframes activeHandPulse21z {
+  0%, 100% {
+    box-shadow: 0 0 10px rgba(0, 240, 255, 0.2), inset 0 0 5px rgba(0, 240, 255, 0.05);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(0, 240, 255, 0.4), 0 0 30px rgba(0, 240, 255, 0.15), inset 0 0 10px rgba(0, 240, 255, 0.1);
+  }
+}
+
+body[data-brand="21z"] .active-hand {
+  animation: activeHandPulse21z 1.5s ease-in-out infinite;
+  border-radius: 0;
+  padding: 8px;
+  margin: -8px;
+}
+
+/* 21z: winner hand uses neon green */
+@keyframes winnerCelebrate21z {
+  0%, 100% {
+    box-shadow: 0 0 15px rgba(0, 255, 179, 0.35);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 25px rgba(0, 255, 179, 0.55), 0 0 40px rgba(0, 255, 179, 0.2);
+    transform: scale(1.02);
+  }
+}
+
+body[data-brand="21z"] .winner-hand {
+  animation: winnerCelebrate21z 1s ease-in-out infinite;
+  border-radius: 0;
+  padding: 8px;
+  margin: -8px;
+}
+
+/* 21z: dealer turn uses cyan */
+@keyframes dealerDrawing21z {
+  0%, 100% {
+    opacity: 1;
+    box-shadow: 0 0 10px rgba(0, 240, 255, 0.2);
+  }
+  50% {
+    opacity: 0.8;
+    box-shadow: 0 0 20px rgba(0, 240, 255, 0.35);
+  }
+}
+
+body[data-brand="21z"] .dealer-turn {
+  animation: dealerDrawing21z 0.8s ease-in-out infinite;
+  border-radius: 0;
+  padding: 8px;
+  margin: -8px;
+}
+
+/* 21z: push hand uses cyan glow */
+body[data-brand="21z"] .push-hand {
+  box-shadow: 0 0 15px rgba(0, 240, 255, 0.25);
+  border-radius: 0;
+  padding: 8px;
+  margin: -8px;
+}
+
+/* 21z: win glow uses neon green */
+@keyframes goldPulse21z {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(0, 255, 179, 0.3); }
+  50% { box-shadow: 0 0 20px 8px rgba(0, 255, 179, 0.15); }
+}
+
+body[data-brand="21z"] .win-glow {
+  animation: goldPulse21z 1.5s ease-in-out infinite;
+}
+
+/* 21z: blackjack celebration uses cyan */
+@keyframes blackjackGlow21z {
+  0%, 100% {
+    box-shadow: 0 0 10px rgba(0, 240, 255, 0.4), 0 0 20px rgba(0, 240, 255, 0.2);
+    text-shadow: 0 0 10px rgba(0, 240, 255, 0.6);
+  }
+  50% {
+    box-shadow: 0 0 25px rgba(0, 240, 255, 0.6), 0 0 40px rgba(0, 240, 255, 0.3);
+    text-shadow: 0 0 20px rgba(0, 240, 255, 0.8);
+  }
+}
+
+body[data-brand="21z"] .blackjack-glow {
+  animation: blackjackGlow21z 1s ease-in-out infinite;
+}
+
+/* 21z: blackjack shimmer text uses cyan gradient */
+@keyframes blackjackPulse21z {
+  0%, 100% {
+    text-shadow: 0 0 20px rgba(0, 240, 255, 0.5), 0 0 40px rgba(0, 240, 255, 0.2);
+  }
+  50% {
+    text-shadow: 0 0 40px rgba(0, 240, 255, 0.7), 0 0 80px rgba(0, 240, 255, 0.35), 0 0 120px rgba(0, 240, 255, 0.1);
+  }
+}
+
+body[data-brand="21z"] .blackjack-shimmer-text {
+  background: linear-gradient(
+    90deg,
+    #00f0ff 0%,
+    #8890a6 25%,
+    var(--bone-white) 50%,
+    #8890a6 75%,
+    #00f0ff 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: blackjackShimmer 1.5s linear infinite, blackjackPulse21z 1s ease-in-out infinite;
 }
 
 /* ================================
@@ -977,6 +1146,14 @@ body[data-brand="21z"] .brand-wordmark-21z {
   --shadow-card: 0 4px 16px rgba(0, 0, 0, 0.25);
   --shadow-elevated: 0 8px 32px rgba(0, 0, 0, 0.35);
   --shadow-gold-glow: 0 0 20px rgba(201, 162, 39, 0.3);
+}
+
+/* 21z: Deeper shadows for void-black base, cyan glow instead of gold */
+body[data-brand="21z"] {
+  --shadow-subtle: 0 2px 8px rgba(0, 0, 0, 0.3);
+  --shadow-card: 0 4px 16px rgba(0, 0, 0, 0.4);
+  --shadow-elevated: 0 8px 32px rgba(0, 0, 0, 0.5);
+  --shadow-gold-glow: 0 0 20px rgba(0, 240, 255, 0.2);
 }
 
 /* Default transitions for interactive elements */
