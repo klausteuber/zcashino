@@ -2,7 +2,6 @@ import Image from 'next/image'
 import { BrandWordmark } from '@/components/brand/BrandWordmark'
 import { BreadcrumbJsonLd } from '@/components/seo/JsonLd'
 import JesterLogo from '@/components/ui/JesterLogo'
-import ConnectWalletButton from '@/components/wallet/ConnectWalletButton'
 import { getBrandUrlForPath } from '@/lib/brand/config'
 import { getServerBrand } from '@/lib/brand/server'
 
@@ -38,7 +37,6 @@ export default async function Home() {
                 Responsible Gambling
               </a>
             </nav>
-            <ConnectWalletButton />
           </div>
         </header>
 
