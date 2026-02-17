@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { OnboardingModal } from './OnboardingModal'
 import { BrandProvider } from '@/components/brand/BrandProvider'
@@ -110,162 +110,20 @@ describe('OnboardingModal', () => {
     })
   })
 
-  describe('Setup Screen', () => {
-    it('should show setup screen after clicking Real ZEC', async () => {
+  describe('Deposit Screen (skips setup)', () => {
+    it('should go directly to deposit screen after clicking Real ZEC', async () => {
       const user = userEvent.setup()
-      render(<OnboardingModal {...defaultProps} />)
-
-      const realButton = screen.getByText('Real ZEC').closest('button')!
-      await user.click(realButton)
-
-      await waitFor(() => {
-        expect(screen.getByText('Set Withdrawal Address')).toBeInTheDocument()
-      })
-    })
-
-    it('should have a back button that returns to welcome screen', async () => {
-      const user = userEvent.setup()
-      render(<OnboardingModal {...defaultProps} />)
-
-      // Go to setup screen
-      const realButton = screen.getByText('Real ZEC').closest('button')!
-      await user.click(realButton)
-
-      await waitFor(() => {
-        expect(screen.getByText('Set Withdrawal Address')).toBeInTheDocument()
-      })
-
-      // Click back
-      const backButton = screen.getByText('Back')
-      await user.click(backButton)
-
-      await waitFor(() => {
-        expect(screen.getByText('Welcome to CypherJester')).toBeInTheDocument()
-      })
-    })
-
-    it('should validate withdrawal address format', async () => {
-      const user = userEvent.setup()
-      const mockSetAddress = vi.fn().mockResolvedValue(false)
-
-      render(
-        <OnboardingModal
-          {...defaultProps}
-          sessionId="session-123"
-          onSetWithdrawalAddress={mockSetAddress}
-        />
-      )
-
-      // Go to setup screen
-      const realButton = screen.getByText('Real ZEC').closest('button')!
-      await user.click(realButton)
-
-      await waitFor(() => {
-        expect(screen.getByPlaceholderText(/zs1|t1|tm/i)).toBeInTheDocument()
-      })
-
-      // Enter invalid address
-      const input = screen.getByPlaceholderText(/zs1|t1|tm/i)
-      await user.type(input, 'invalid-address')
-
-      const continueButton = screen.getByText('Continue to Deposit')
-      await user.click(continueButton)
-
-      await waitFor(() => {
-        expect(screen.getByText(/invalid/i)).toBeInTheDocument()
-      })
-    })
-
-    it('should accept valid testnet address', async () => {
-      const user = userEvent.setup()
-      const mockSetAddress = vi.fn().mockResolvedValue(true)
-
-      render(
-        <OnboardingModal
-          {...defaultProps}
-          sessionId="session-123"
-          onSetWithdrawalAddress={mockSetAddress}
-        />
-      )
-
-      // Go to setup screen
-      const realButton = screen.getByText('Real ZEC').closest('button')!
-      await user.click(realButton)
-
-      await waitFor(() => {
-        expect(screen.getByPlaceholderText(/zs1|t1|tm/i)).toBeInTheDocument()
-      })
-
-      // Enter valid testnet address (starts with tm and is long enough)
-      const input = screen.getByPlaceholderText(/zs1|t1|tm/i)
-      await user.type(input, 'tmTestAddress123456789012345678901234567890')
-
-      const continueButton = screen.getByText('Continue to Deposit')
-      await user.click(continueButton)
-
-      await waitFor(() => {
-        expect(mockSetAddress).toHaveBeenCalledWith('tmTestAddress123456789012345678901234567890')
-      })
-    })
-
-    it('should accept valid unified testnet withdrawal address', async () => {
-      const user = userEvent.setup()
-      const mockSetAddress = vi.fn().mockResolvedValue(true)
-      const unifiedTestnetAddress = `utest${'a'.repeat(50)}`
-
-      render(
-        <OnboardingModal
-          {...defaultProps}
-          sessionId="session-123"
-          onSetWithdrawalAddress={mockSetAddress}
-        />
-      )
-
-      const realButton = screen.getByText('Real ZEC').closest('button')!
-      await user.click(realButton)
-
-      await waitFor(() => {
-        expect(screen.getByPlaceholderText(/zs1|t1|tm/i)).toBeInTheDocument()
-      })
-
-      const input = screen.getByPlaceholderText(/zs1|t1|tm/i)
-      await user.type(input, unifiedTestnetAddress)
-      await user.click(screen.getByText('Continue to Deposit'))
-
-      await waitFor(() => {
-        expect(mockSetAddress).toHaveBeenCalledWith(unifiedTestnetAddress)
-      })
-    })
-  })
-
-  describe('Deposit Screen', () => {
-    it('should show deposit screen with QR code after setting address', async () => {
-      const user = userEvent.setup()
-      const mockSetAddress = vi.fn().mockResolvedValue(true)
 
       render(
         <OnboardingModal
           {...defaultProps}
           sessionId="session-123"
           depositAddress="tmDeposit123456789012345678901234"
-          onSetWithdrawalAddress={mockSetAddress}
         />
       )
 
-      // Go to setup screen
       const realButton = screen.getByText('Real ZEC').closest('button')!
       await user.click(realButton)
-
-      await waitFor(() => {
-        expect(screen.getByPlaceholderText(/zs1|t1|tm/i)).toBeInTheDocument()
-      })
-
-      // Enter valid address
-      const input = screen.getByPlaceholderText(/zs1|t1|tm/i)
-      await user.type(input, 'tmTestAddress123456789012345678901234567890')
-
-      const continueButton = screen.getByText('Continue to Deposit')
-      await user.click(continueButton)
 
       await waitFor(() => {
         expect(screen.getByText('Deposit ZEC')).toBeInTheDocument()
@@ -275,29 +133,17 @@ describe('OnboardingModal', () => {
 
     it('should show deposit requirements', async () => {
       const user = userEvent.setup()
-      const mockSetAddress = vi.fn().mockResolvedValue(true)
 
       render(
         <OnboardingModal
           {...defaultProps}
           sessionId="session-123"
           depositAddress="tmDeposit123"
-          onSetWithdrawalAddress={mockSetAddress}
         />
       )
 
-      // Navigate to deposit screen
       const realButton = screen.getByText('Real ZEC').closest('button')!
       await user.click(realButton)
-
-      await waitFor(() => {
-        expect(screen.getByPlaceholderText(/zs1|t1|tm/i)).toBeInTheDocument()
-      })
-
-      const input = screen.getByPlaceholderText(/zs1|t1|tm/i)
-      await user.type(input, 'tmTestAddress123456789012345678901234567890')
-
-      await user.click(screen.getByText('Continue to Deposit'))
 
       await waitFor(() => {
         expect(screen.getByText(/minimum.*0\.001/i)).toBeInTheDocument()
@@ -307,7 +153,6 @@ describe('OnboardingModal', () => {
 
     it('should render QR code with raw address value', async () => {
       const user = userEvent.setup()
-      const mockSetAddress = vi.fn().mockResolvedValue(true)
       const depositAddress = 'tmDeposit123456789012345678901234'
 
       render(
@@ -315,14 +160,12 @@ describe('OnboardingModal', () => {
           {...defaultProps}
           sessionId="session-123"
           depositAddress={depositAddress}
-          onSetWithdrawalAddress={mockSetAddress}
+          onCreateRealSession={vi.fn().mockResolvedValue({ sessionId: 'session-123', depositAddress })}
         />
       )
 
       const realButton = screen.getByText('Real ZEC').closest('button')!
       await user.click(realButton)
-      await user.type(screen.getByPlaceholderText(/zs1|t1|tm/i), 'tmTestAddress123456789012345678901234567890')
-      await user.click(screen.getByText('Continue to Deposit'))
 
       await waitFor(() => {
         expect(screen.getByTestId('qr-code')).toHaveTextContent(depositAddress)
@@ -332,7 +175,6 @@ describe('OnboardingModal', () => {
 
     it('should label unified mainnet deposit addresses as mainnet', async () => {
       const user = userEvent.setup()
-      const mockSetAddress = vi.fn().mockResolvedValue(true)
       const unifiedMainnetAddress = `u1${'a'.repeat(100)}`
 
       render(
@@ -340,17 +182,41 @@ describe('OnboardingModal', () => {
           {...defaultProps}
           sessionId="session-123"
           depositAddress={unifiedMainnetAddress}
-          onSetWithdrawalAddress={mockSetAddress}
+          onCreateRealSession={vi.fn().mockResolvedValue({ sessionId: 'session-123', depositAddress: unifiedMainnetAddress })}
         />
       )
 
       const realButton = screen.getByText('Real ZEC').closest('button')!
       await user.click(realButton)
-      await user.type(screen.getByPlaceholderText(/zs1|t1|tm/i), 'tmTestAddress123456789012345678901234567890')
-      await user.click(screen.getByText('Continue to Deposit'))
 
       await waitFor(() => {
         expect(screen.getByText('Network: mainnet')).toBeInTheDocument()
+      })
+    })
+
+    it('should have a back button that returns to welcome screen', async () => {
+      const user = userEvent.setup()
+
+      render(
+        <OnboardingModal
+          {...defaultProps}
+          sessionId="session-123"
+          depositAddress="tmDeposit123456789012345678901234"
+        />
+      )
+
+      const realButton = screen.getByText('Real ZEC').closest('button')!
+      await user.click(realButton)
+
+      await waitFor(() => {
+        expect(screen.getByText('Deposit ZEC')).toBeInTheDocument()
+      })
+
+      const backButton = screen.getByText('Back')
+      await user.click(backButton)
+
+      await waitFor(() => {
+        expect(screen.getByText('Welcome to CypherJester')).toBeInTheDocument()
       })
     })
   })

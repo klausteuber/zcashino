@@ -1847,6 +1847,9 @@ export default function BlackjackGame() {
         onBalanceUpdate={(newBalance) => {
           setSession(prev => prev ? { ...prev, balance: newBalance } : null)
         }}
+        onWithdrawalAddressSet={(address) => {
+          setSession(prev => prev ? { ...prev, withdrawalAddress: address } : null)
+        }}
       />
     </main>
   )

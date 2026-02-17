@@ -15,7 +15,7 @@ interface OnboardingModalProps {
   sessionId: string | null
   depositAddress: string | null
   onCreateRealSession: () => Promise<{ sessionId: string; depositAddress: string } | null>
-  onSetWithdrawalAddress: (address: string) => Promise<boolean>
+  onSetWithdrawalAddress?: (address: string) => Promise<boolean>
 }
 
 export function OnboardingModal({
@@ -67,14 +67,15 @@ export function OnboardingModal({
     onClose()
   }, [onDemoSelect, onClose])
 
-  // Handle real ZEC selection
+  // Handle real ZEC selection — skip setup, go straight to deposit
   const handleRealSelect = useCallback(async () => {
     setIsLoading(true)
     try {
       const result = await onCreateRealSession()
       if (result) {
         setLocalSessionId(result.sessionId)
-        setStep('setup')
+        setLocalDepositAddress(result.depositAddress)
+        setStep('deposit')
       }
     } catch (err) {
       console.error('Failed to create session:', err)
@@ -113,7 +114,7 @@ export function OnboardingModal({
     setAddressError(null)
 
     try {
-      const success = await onSetWithdrawalAddress(withdrawalAddress.trim())
+      const success = onSetWithdrawalAddress ? await onSetWithdrawalAddress(withdrawalAddress.trim()) : false
       if (success) {
         setStep('deposit')
       } else {
@@ -159,8 +160,8 @@ export function OnboardingModal({
         {step === 'deposit' && localDepositAddress && (
           <DepositScreen
             depositAddress={localDepositAddress}
-            withdrawalAddress={withdrawalAddress}
-            onBack={() => setStep('setup')}
+            withdrawalAddress={withdrawalAddress || null}
+            onBack={() => setStep('welcome')}
             depositStatus={depositStatus}
           />
         )}
@@ -319,11 +320,11 @@ function DepositScreen({
   depositStatus
 }: {
   depositAddress: string
-  withdrawalAddress: string
+  withdrawalAddress: string | null
   onBack: () => void
   depositStatus: DepositStatus
 }) {
-  const truncatedAddress = withdrawalAddress.length > 20
+  const truncatedAddress = withdrawalAddress && withdrawalAddress.length > 20
     ? `${withdrawalAddress.slice(0, 10)}...${withdrawalAddress.slice(-8)}`
     : withdrawalAddress
 
@@ -344,11 +345,13 @@ function DepositScreen({
         Send ZEC to start playing
       </p>
 
-      {/* Withdrawal address confirmation */}
-      <div className="mb-4 p-3 bg-midnight-black/60 rounded-lg cyber-panel border border-masque-gold/20">
-        <div className="text-xs text-venetian-gold/50 mb-1">Withdrawals will go to:</div>
-        <div className="text-sm text-masque-gold font-mono">{truncatedAddress}</div>
-      </div>
+      {/* Withdrawal address confirmation (only shown if already set) */}
+      {truncatedAddress && (
+        <div className="mb-4 p-3 bg-midnight-black/60 rounded-lg cyber-panel border border-masque-gold/20">
+          <div className="text-xs text-venetian-gold/50 mb-1">Withdrawals will go to:</div>
+          <div className="text-sm text-masque-gold font-mono">{truncatedAddress}</div>
+        </div>
+      )}
 
       {/* QR Code */}
       <div className="flex flex-col items-center mb-4">

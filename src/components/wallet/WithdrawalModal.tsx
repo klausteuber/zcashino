@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react'
 
-type WithdrawalStep = 'form' | 'confirm' | 'processing' | 'pending_approval' | 'success' | 'error'
+type WithdrawalStep = 'set-address' | 'form' | 'confirm' | 'processing' | 'pending_approval' | 'success' | 'error'
 
 interface WithdrawalModalProps {
   isOpen: boolean
@@ -12,6 +12,7 @@ interface WithdrawalModalProps {
   withdrawalAddress: string | null
   isDemo: boolean
   onBalanceUpdate: (newBalance: number) => void
+  onWithdrawalAddressSet?: (address: string) => void
 }
 
 const MIN_WITHDRAWAL = 0.01
@@ -21,6 +22,22 @@ const ZATS_PER_ZEC = 100_000_000
 const toZats = (zec: number): number => Math.round(zec * ZATS_PER_ZEC)
 const fromZats = (zats: number): number => zats / ZATS_PER_ZEC
 
+// Client-side Zcash address validation
+function validateZcashAddress(address: string): boolean {
+  if (!address || address.trim().length === 0) return false
+  const a = address.trim()
+  // Testnet
+  if (a.startsWith('tm') && a.length >= 35) return true
+  if (a.startsWith('ztestsapling') && a.length >= 78) return true
+  if (a.startsWith('utest') && a.length >= 50) return true
+  // Mainnet
+  if (a.startsWith('t1') && a.length >= 35) return true
+  if (a.startsWith('t3') && a.length >= 35) return true
+  if (a.startsWith('zs') && a.length >= 78) return true
+  if (a.startsWith('u1') && a.length >= 50) return true
+  return false
+}
+
 export function WithdrawalModal({
   isOpen,
   onClose,
@@ -29,10 +46,15 @@ export function WithdrawalModal({
   withdrawalAddress,
   isDemo,
   onBalanceUpdate,
+  onWithdrawalAddressSet,
 }: WithdrawalModalProps) {
-  const [step, setStep] = useState<WithdrawalStep>('form')
+  const [step, setStep] = useState<WithdrawalStep>(withdrawalAddress ? 'form' : 'set-address')
   const [amount, setAmount] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [addressInput, setAddressInput] = useState('')
+  const [addressError, setAddressError] = useState<string | null>(null)
+  const [isSettingAddress, setIsSettingAddress] = useState(false)
+  const [localWithdrawalAddress, setLocalWithdrawalAddress] = useState<string | null>(withdrawalAddress)
   const [txHash, setTxHash] = useState<string | null>(null)
   const [transactionId, setTransactionId] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -41,12 +63,16 @@ export function WithdrawalModal({
   // Reset state when modal opens
   useEffect(() => {
     if (isOpen) {
-      setStep('form')
+      setStep(withdrawalAddress ? 'form' : 'set-address')
+      setLocalWithdrawalAddress(withdrawalAddress)
       setAmount('')
       setError(null)
       setTxHash(null)
       setTransactionId(null)
       setIsSubmitting(false)
+      setAddressInput('')
+      setAddressError(null)
+      setIsSettingAddress(false)
     }
     return () => {
       if (pollRef.current) {
@@ -54,7 +80,7 @@ export function WithdrawalModal({
         pollRef.current = null
       }
     }
-  }, [isOpen])
+  }, [isOpen, withdrawalAddress])
 
   const feeZats = toZats(WITHDRAWAL_FEE)
   const minWithdrawalZats = toZats(MIN_WITHDRAWAL)
@@ -73,6 +99,44 @@ export function WithdrawalModal({
       setAmount(maxWithdrawal.toFixed(8).replace(/\.?0+$/, ''))
     }
   }, [maxWithdrawal])
+
+  const handleSetAddress = useCallback(async () => {
+    if (!sessionId) return
+    const trimmed = addressInput.trim()
+    if (!trimmed) {
+      setAddressError('Please enter your Zcash address')
+      return
+    }
+    if (!validateZcashAddress(trimmed)) {
+      setAddressError('Invalid Zcash address format')
+      return
+    }
+    setIsSettingAddress(true)
+    setAddressError(null)
+    try {
+      const res = await fetch('/api/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'set-withdrawal-address',
+          sessionId,
+          withdrawalAddress: trimmed,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setAddressError(data.error || 'Failed to set address')
+        return
+      }
+      setLocalWithdrawalAddress(trimmed)
+      onWithdrawalAddressSet?.(trimmed)
+      setStep('form')
+    } catch {
+      setAddressError('Failed to set address. Please try again.')
+    } finally {
+      setIsSettingAddress(false)
+    }
+  }, [sessionId, addressInput, onWithdrawalAddressSet])
 
   const handleConfirm = useCallback(() => {
     if (!isValidAmount) return
@@ -180,15 +244,71 @@ export function WithdrawalModal({
 
   if (!isOpen) return null
 
-  const truncatedAddress = withdrawalAddress
-    ? withdrawalAddress.length > 24
-      ? `${withdrawalAddress.slice(0, 12)}...${withdrawalAddress.slice(-10)}`
-      : withdrawalAddress
+  const effectiveAddress = localWithdrawalAddress
+  const truncatedAddress = effectiveAddress
+    ? effectiveAddress.length > 24
+      ? `${effectiveAddress.slice(0, 12)}...${effectiveAddress.slice(-10)}`
+      : effectiveAddress
     : 'Not set'
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
       <div className="bg-midnight-black border border-masque-gold/30 rounded-2xl cyber-panel shadow-2xl max-w-md w-full mx-4 overflow-hidden animate-modal-enter">
+        {/* Set withdrawal address step */}
+        {step === 'set-address' && (
+          <div className="p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-display font-bold text-bone-white">Set Withdrawal Address</h2>
+              <button
+                onClick={onClose}
+                className="text-venetian-gold/50 hover:text-bone-white transition-colors text-xl"
+              >
+                &times;
+              </button>
+            </div>
+
+            <p className="text-sm text-venetian-gold/50 mb-4">
+              Enter your Zcash address where winnings will be sent
+            </p>
+
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-venetian-gold mb-2">
+                Your Zcash Address
+              </label>
+              <input
+                type="text"
+                value={addressInput}
+                onChange={(e) => { setAddressInput(e.target.value); setAddressError(null) }}
+                placeholder="zs1... or u1... or t1..."
+                className={`w-full px-4 py-3 bg-midnight-black/60 border rounded-lg cyber-panel text-bone-white placeholder-venetian-gold/30 focus:outline-none focus:ring-2 transition-all font-mono text-sm ${
+                  addressError
+                    ? 'border-blood-ruby focus:ring-blood-ruby/50'
+                    : 'border-masque-gold/20 focus:ring-masque-gold/50 focus:border-masque-gold'
+                }`}
+              />
+              {addressError && <p className="mt-2 text-sm text-blood-ruby">{addressError}</p>}
+              <p className="mt-2 text-xs text-venetian-gold/40">
+                Supports transparent (t1), shielded (zs), and unified (u1) addresses
+              </p>
+            </div>
+
+            <button
+              onClick={handleSetAddress}
+              disabled={isSettingAddress || !addressInput.trim()}
+              className="w-full py-3 btn-gold-shimmer disabled:bg-midnight-black/40 disabled:cursor-not-allowed text-midnight-black font-semibold rounded-lg transition-colors flex items-center justify-center gap-2"
+            >
+              {isSettingAddress ? (
+                <>
+                  <div className="w-5 h-5 border-2 border-midnight-black border-t-transparent rounded-full animate-spin" />
+                  <span>Setting up...</span>
+                </>
+              ) : (
+                <span>Continue to Withdrawal</span>
+              )}
+            </button>
+          </div>
+        )}
+
         {step === 'form' && (
           <div className="p-6">
             <div className="flex items-center justify-between mb-6">
@@ -213,9 +333,15 @@ export function WithdrawalModal({
               <div className="text-sm text-venetian-gold font-mono">{truncatedAddress}</div>
             </div>
 
-            {!withdrawalAddress && (
-              <div className="mb-4 p-3 bg-blood-ruby/20 border border-blood-ruby/30 rounded-lg cyber-panel">
-                <p className="text-sm text-blood-ruby">No withdrawal address set. Set one during the deposit flow first.</p>
+            {!effectiveAddress && (
+              <div className="mb-4 p-3 bg-masque-gold/10 border border-masque-gold/30 rounded-lg cyber-panel">
+                <p className="text-sm text-venetian-gold mb-2">No withdrawal address set yet.</p>
+                <button
+                  onClick={() => setStep('set-address')}
+                  className="text-sm text-masque-gold hover:text-venetian-gold underline transition-colors"
+                >
+                  Set withdrawal address →
+                </button>
               </div>
             )}
 
@@ -283,7 +409,7 @@ export function WithdrawalModal({
 
             <button
               onClick={handleConfirm}
-              disabled={!isValidAmount || !withdrawalAddress}
+              disabled={!isValidAmount || !effectiveAddress}
               className="w-full py-3 btn-gold-shimmer disabled:bg-midnight-black/40 disabled:text-venetian-gold/30 disabled:cursor-not-allowed text-midnight-black font-semibold rounded-lg transition-colors"
             >
               Review Withdrawal
@@ -303,7 +429,7 @@ export function WithdrawalModal({
 
               <div className="p-3 bg-midnight-black/60 rounded-lg cyber-panel border border-masque-gold/20">
                 <div className="text-xs text-venetian-gold/50 mb-1">To</div>
-                <div className="text-sm text-venetian-gold font-mono break-all">{withdrawalAddress}</div>
+                <div className="text-sm text-venetian-gold font-mono break-all">{effectiveAddress}</div>
               </div>
 
               <div className="p-3 bg-midnight-black/60 rounded-lg cyber-panel border border-masque-gold/20">

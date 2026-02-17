@@ -391,7 +391,9 @@ async function handleCheckDeposits(session: {
           if (!isConfirmedOnChain || !eligibleAmount) return
           await creditFunds(dbTx, session.id, tx.amount, 'totalDeposited')
 
-          const shouldAuthenticate = !isAuthenticatedNow && !!session.withdrawalAddress
+          // Authenticate on first confirmed deposit — withdrawal address not required
+          // (user sets withdrawal address later when they want to withdraw)
+          const shouldAuthenticate = !isAuthenticatedNow
           if (shouldAuthenticate) {
             await dbTx.session.update({
               where: { id: session.id },

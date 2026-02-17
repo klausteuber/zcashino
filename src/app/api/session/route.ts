@@ -164,6 +164,25 @@ export async function GET(request: NextRequest) {
         },
         include: { wallet: true }
       })
+
+      // For real sessions, create deposit wallet immediately so user can deposit right away
+      if (!isDemo && !session.wallet) {
+        try {
+          const wallet = await createDepositWalletForSession(session.id)
+          // Re-fetch to include the wallet relation
+          session = await prisma.session.findUnique({
+            where: { id: session.id },
+            include: { wallet: true }
+          }) ?? session
+          // If re-fetch failed, manually attach wallet for response
+          if (!session.wallet && wallet) {
+            (session as Record<string, unknown>).wallet = wallet
+          }
+        } catch (err) {
+          console.error('[SessionAPI] Failed to create deposit wallet:', err)
+          // Non-fatal: session still works, wallet can be created later
+        }
+      }
     }
 
     // Update last active timestamp
