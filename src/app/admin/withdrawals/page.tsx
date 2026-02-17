@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
+import { useZecPrice } from '@/hooks/useZecPrice'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -53,6 +54,7 @@ const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
 // ---------------------------------------------------------------------------
 
 export default function AdminWithdrawalsPage() {
+  const { formatZecWithUsd } = useZecPrice()
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -480,7 +482,7 @@ export default function AdminWithdrawalsPage() {
 
                       {/* Amount */}
                       <td className="px-4 py-3 text-right text-bone-white font-mono">
-                        {formatZec(w.amount)}
+                        {formatZecWithUsd(w.amount)}
                       </td>
 
                       {/* Status */}

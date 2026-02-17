@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import Link from 'next/link'
 import JesterLogo from '@/components/ui/JesterLogo'
 import { useBrand } from '@/hooks/useBrand'
+import { useZecPrice } from '@/hooks/useZecPrice'
 
 type AdminAction = 'refill' | 'cleanup' | 'init' | 'process-withdrawals'
 
@@ -158,6 +159,7 @@ function shortId(value: string, prefix: number = 8, suffix: number = 6): string 
 
 export default function AdminPage() {
   const brand = useBrand()
+  const { formatZecWithUsd } = useZecPrice()
   const [authChecked, setAuthChecked] = useState(false)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [configured, setConfigured] = useState(true)
@@ -618,13 +620,13 @@ export default function AdminPage() {
             <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
               <MetricCard
                 label="User Liabilities"
-                value={formatZec(overview.platform.liabilities)}
+                value={formatZecWithUsd(overview.platform.liabilities)}
                 detail={`${overview.platform.authenticatedSessions}/${overview.platform.totalSessions} verified sessions`}
               />
               <MetricCard
                 label="Net Flow"
-                value={formatZec(overview.platform.netFlow)}
-                detail={`Deposited ${formatZec(overview.platform.totalDeposited)} • Withdrawn ${formatZec(overview.platform.totalWithdrawn)}`}
+                value={formatZecWithUsd(overview.platform.netFlow)}
+                detail={`Deposited ${formatZecWithUsd(overview.platform.totalDeposited)} • Withdrawn ${formatZecWithUsd(overview.platform.totalWithdrawn)}`}
               />
               <MetricCard
                 label="Pending Withdrawals"
@@ -634,7 +636,7 @@ export default function AdminPage() {
               <MetricCard
                 label="Active Games"
                 value={String(overview.platform.activeGames)}
-                detail={`Total wagers ${formatZec(overview.platform.totalWagered)}`}
+                detail={`Total wagers ${formatZecWithUsd(overview.platform.totalWagered)}`}
               />
               <MetricCard
                 label="Failed Logins (24h)"
@@ -650,7 +652,7 @@ export default function AdminPage() {
                 <div className="bg-midnight-black/70 border border-masque-gold/10 rounded-lg p-3">
                   <div className="text-xs text-venetian-gold/60">Gross Gaming Revenue</div>
                   <div className={`text-xl font-bold mt-1 ${overview.houseEdge.realizedGGR.ggr >= 0 ? 'text-jester-purple' : 'text-blood-ruby'}`}>
-                    {formatZec(overview.houseEdge.realizedGGR.ggr)}
+                    {formatZecWithUsd(overview.houseEdge.realizedGGR.ggr)}
                   </div>
                   <div className="text-xs text-venetian-gold/50 mt-1">
                     House edge: {overview.houseEdge.realizedGGR.houseEdgePct.toFixed(2)}%
@@ -659,10 +661,10 @@ export default function AdminPage() {
                 <div className="bg-midnight-black/70 border border-masque-gold/10 rounded-lg p-3">
                   <div className="text-xs text-venetian-gold/60">Total Wagered</div>
                   <div className="text-xl font-bold text-masque-gold mt-1">
-                    {formatZec(overview.houseEdge.realizedGGR.totalWagered)}
+                    {formatZecWithUsd(overview.houseEdge.realizedGGR.totalWagered)}
                   </div>
                   <div className="text-xs text-venetian-gold/50 mt-1">
-                    Total payout: {formatZec(overview.houseEdge.realizedGGR.totalPayout)}
+                    Total payout: {formatZecWithUsd(overview.houseEdge.realizedGGR.totalPayout)}
                   </div>
                 </div>
                 <div className="bg-midnight-black/70 border border-masque-gold/10 rounded-lg p-3">
@@ -671,7 +673,7 @@ export default function AdminPage() {
                     {overview.houseEdge.blackjack.hands} hands
                   </div>
                   <div className="text-xs text-venetian-gold/50 mt-1">
-                    Payout: {formatZec(overview.houseEdge.blackjack.payout)}
+                    Payout: {formatZecWithUsd(overview.houseEdge.blackjack.payout)}
                   </div>
                 </div>
                 <div className="bg-midnight-black/70 border border-masque-gold/10 rounded-lg p-3">
@@ -680,7 +682,7 @@ export default function AdminPage() {
                     {overview.houseEdge.videoPoker.hands} hands
                   </div>
                   <div className="text-xs text-venetian-gold/50 mt-1">
-                    RTP: {overview.houseEdge.videoPoker.rtp.toFixed(2)}% • Wagered: {formatZec(overview.houseEdge.videoPoker.wagered)}
+                    RTP: {overview.houseEdge.videoPoker.rtp.toFixed(2)}% • Wagered: {formatZecWithUsd(overview.houseEdge.videoPoker.wagered)}
                   </div>
                 </div>
               </div>
@@ -742,11 +744,11 @@ export default function AdminPage() {
                   <InlineStat label="Pool Total" value={String(overview.pool.total)} />
                   <InlineStat
                     label="Confirmed Deposits"
-                    value={`${overview.transactions.confirmedDepositCount} (${formatZec(overview.transactions.confirmedDepositVolume)})`}
+                    value={`${overview.transactions.confirmedDepositCount} (${formatZecWithUsd(overview.transactions.confirmedDepositVolume)})`}
                   />
                   <InlineStat
                     label="Confirmed Withdrawals"
-                    value={`${overview.transactions.confirmedWithdrawalCount} (${formatZec(overview.transactions.confirmedWithdrawalVolume)})`}
+                    value={`${overview.transactions.confirmedWithdrawalCount} (${formatZecWithUsd(overview.transactions.confirmedWithdrawalVolume)})`}
                   />
                   <InlineStat
                     label="Race Rejections"
@@ -911,10 +913,10 @@ export default function AdminPage() {
                               </td>
                               <td className="py-2 px-1">
                                 <div className="font-mono text-bone-white">{shortId(withdrawal.sessionId)}</div>
-                                <div className="text-xs text-venetian-gold/50">Bal {formatZec(withdrawal.sessionBalance)}</div>
+                                <div className="text-xs text-venetian-gold/50">Bal {formatZecWithUsd(withdrawal.sessionBalance)}</div>
                               </td>
                               <td className="py-2 px-1 text-right text-bone-white font-mono">
-                                {formatZec(withdrawal.amount)}
+                                {formatZecWithUsd(withdrawal.amount)}
                               </td>
                               <td className="py-2 px-1">
                                 {withdrawal.status === 'pending_approval' ? (

@@ -87,6 +87,21 @@ services:
         max-size: "100m"
         max-file: "3"
 
+  migrate:
+    build:
+      context: .
+      target: builder    # builder stage has full node_modules + Prisma CLI
+    env_file:
+      - .env.mainnet
+    environment:
+      - DATABASE_URL=file:/app/data/zcashino.db
+    volumes:
+      - app-data:/app/data
+    command: ["sh", "-lc", "npx prisma migrate deploy"]
+    restart: "no"
+    profiles:
+      - tools    # Only runs when explicitly invoked via: docker compose run --rm migrate
+
 volumes:
   app-data:
     driver: local

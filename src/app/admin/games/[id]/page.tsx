@@ -12,8 +12,12 @@ interface Card {
 
 interface GameState {
   playerHand?: Card[]
-  dealerHand?: Card[]
+  playerCards?: Card[]
+  dealerHand?: Card[] | { cards: Card[] }
+  dealerCards?: Card[]
+  playerHands?: Array<{ cards: Card[] }>
   hands?: Array<{ cards: Card[] }>
+  hand?: Card[]
   deck?: Card[]
   initialHand?: Card[]
   finalHand?: Card[]
@@ -137,14 +141,25 @@ function statusBadge(status: string): { label: string; classes: string } {
   }
 }
 
-function extractCards(state: GameState | null, key: string): Card[] {
+function extractCards(state: GameState | null, ...keys: string[]): Card[] {
   if (!state) return []
-  const val = state[key]
-  if (Array.isArray(val)) {
-    return val.filter(
-      (c): c is Card =>
-        c !== null && typeof c === 'object' && 'rank' in c && 'suit' in c
-    )
+  for (const key of keys) {
+    const val = state[key]
+    // Direct Card[] (BJ initialState: playerCards/dealerCards, VP: hand)
+    if (Array.isArray(val)) {
+      const cards = val.filter(
+        (c): c is Card => c !== null && typeof c === 'object' && 'rank' in c && 'suit' in c
+      )
+      if (cards.length > 0) return cards
+    }
+    // Hand object with nested .cards (BJ finalState: dealerHand)
+    if (val && typeof val === 'object' && !Array.isArray(val) && 'cards' in val) {
+      const hand = val as { cards: unknown[] }
+      const cards = hand.cards.filter(
+        (c): c is Card => c !== null && typeof c === 'object' && 'rank' in c && 'suit' in c
+      )
+      if (cards.length > 0) return cards
+    }
   }
   return []
 }
@@ -219,17 +234,33 @@ export default function AdminGameDetailPage() {
   const vpGame = !isBlackjack ? (game as VideoPokerGameDetail) : null
 
   // Extract card data from states
-  const initialPlayerCards = extractCards(game.initialState, 'playerHand')
-  const initialDealerCards = extractCards(game.initialState, 'dealerHand')
-  const finalPlayerCards = extractCards(game.finalState, 'playerHand')
+  const initialPlayerCards = extractCards(game.initialState, 'playerCards', 'playerHand')
+  const initialDealerCards = extractCards(game.initialState, 'dealerCards', 'dealerHand')
   const finalDealerCards = extractCards(game.finalState, 'dealerHand')
 
-  // For split hands
-  const finalHands = game.finalState?.hands as Array<{ cards: Card[] }> | undefined
+  // Extract final player hands from playerHands (Hand[]) — handles splits
+  const finalPlayerHands: Card[][] = []
+  const playerHandsRaw = game.finalState?.playerHands
+  if (Array.isArray(playerHandsRaw)) {
+    for (const hand of playerHandsRaw) {
+      if (hand && typeof hand === 'object' && 'cards' in hand && Array.isArray((hand as { cards: unknown[] }).cards)) {
+        finalPlayerHands.push(
+          (hand as { cards: unknown[] }).cards.filter((c: unknown): c is Card =>
+            c !== null && typeof c === 'object' && 'rank' in c && 'suit' in c
+          )
+        )
+      }
+    }
+  }
+  const finalPlayerCards = finalPlayerHands[0] ?? extractCards(game.finalState, 'playerHand', 'playerCards')
+
+  // For split hands — try legacy 'hands' key, then fall back to playerHands if multiple
+  const finalHands = (game.finalState?.hands as Array<{ cards: Card[] }> | undefined)
+    ?? (finalPlayerHands.length > 1 ? finalPlayerHands.map(cards => ({ cards })) : undefined)
 
   // Video poker cards
-  const vpInitialHand = extractCards(game.initialState, 'initialHand')
-  const vpFinalHand = extractCards(game.finalState, 'finalHand')
+  const vpInitialHand = extractCards(game.initialState, 'hand', 'initialHand')
+  const vpFinalHand = extractCards(game.finalState, 'hand', 'finalHand')
 
   // Blockchain explorer URL for commitment tx
   const explorerBaseUrl = 'https://zcashblockexplorer.com/transactions'

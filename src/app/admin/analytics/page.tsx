@@ -5,6 +5,8 @@ import GGRChart from '@/components/admin/charts/GGRChart'
 import DepositWithdrawalChart from '@/components/admin/charts/DepositWithdrawalChart'
 import WagerTrendChart from '@/components/admin/charts/WagerTrendChart'
 import RTPDisplay from '@/components/admin/charts/RTPDisplay'
+import SessionTrendChart from '@/components/admin/charts/SessionTrendChart'
+import { useZecPrice } from '@/hooks/useZecPrice'
 
 type Period = '24h' | '7d' | '30d' | 'all'
 
@@ -68,6 +70,7 @@ function formatZec(value: number): string {
 }
 
 export default function AnalyticsPage() {
+  const { formatZecWithUsd } = useZecPrice()
   const [period, setPeriod] = useState<Period>('7d')
   const [data, setData] = useState<AnalyticsData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -127,6 +130,24 @@ export default function AnalyticsPage() {
     bjPayout: d.bjPayout,
     vpPayout: d.vpPayout,
   }))
+
+  const sessionTrendData = (data?.trends.daily ?? []).map((d) => ({
+    date: d.date,
+    activeSessions: d.activeSessions,
+  }))
+
+  const peakDailySessions =
+    sessionTrendData.length > 0
+      ? Math.max(...sessionTrendData.map((d) => d.activeSessions))
+      : 0
+
+  const avgDailySessions =
+    sessionTrendData.length > 0
+      ? (
+          sessionTrendData.reduce((sum, d) => sum + d.activeSessions, 0) /
+          sessionTrendData.length
+        ).toFixed(1)
+      : '0.0'
 
   return (
     <main className="min-h-screen felt-texture pb-10">
@@ -195,7 +216,7 @@ export default function AnalyticsPage() {
                       : 'text-blood-ruby'
                   }`}
                 >
-                  {formatZec(data.summary.realizedGGR.ggr)}
+                  {formatZecWithUsd(data.summary.realizedGGR.ggr)}
                 </div>
                 <div className="text-xs text-venetian-gold/50 mt-2">
                   House edge: {data.summary.realizedGGR.houseEdgePct.toFixed(2)}%
@@ -205,17 +226,17 @@ export default function AnalyticsPage() {
               <div className="bg-midnight-black/50 border border-masque-gold/20 rounded-xl p-4">
                 <div className="text-sm text-venetian-gold/60">Total Wagered</div>
                 <div className="text-2xl font-bold text-masque-gold mt-1">
-                  {formatZec(data.summary.realizedGGR.totalWagered)}
+                  {formatZecWithUsd(data.summary.realizedGGR.totalWagered)}
                 </div>
                 <div className="text-xs text-venetian-gold/50 mt-2">
-                  Total payout: {formatZec(data.summary.realizedGGR.totalPayout)}
+                  Total payout: {formatZecWithUsd(data.summary.realizedGGR.totalPayout)}
                 </div>
               </div>
 
               <div className="bg-midnight-black/50 border border-masque-gold/20 rounded-xl p-4">
                 <div className="text-sm text-venetian-gold/60">Total Payout</div>
                 <div className="text-2xl font-bold text-masque-gold mt-1">
-                  {formatZec(data.summary.realizedGGR.totalPayout)}
+                  {formatZecWithUsd(data.summary.realizedGGR.totalPayout)}
                 </div>
                 <div className="text-xs text-venetian-gold/50 mt-2">
                   {data.summary.activeExposure.activeGames} active game(s)
@@ -278,6 +299,32 @@ export default function AnalyticsPage() {
                   totalPayout={data.summary.realizedGGR.totalPayout}
                 />
               </div>
+            </section>
+
+            {/* Player Activity */}
+            <section className="bg-midnight-black/50 border border-masque-gold/20 rounded-xl p-4">
+              <h2 className="text-lg font-semibold text-bone-white mb-3">
+                Player Activity
+              </h2>
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div className="bg-midnight-black/70 border border-masque-gold/10 rounded-lg p-3">
+                  <div className="text-sm text-venetian-gold/60">
+                    Peak Daily Sessions
+                  </div>
+                  <div className="text-2xl font-bold text-teal-400 mt-1 font-mono">
+                    {peakDailySessions}
+                  </div>
+                </div>
+                <div className="bg-midnight-black/70 border border-masque-gold/10 rounded-lg p-3">
+                  <div className="text-sm text-venetian-gold/60">
+                    Avg Daily Sessions
+                  </div>
+                  <div className="text-2xl font-bold text-teal-400 mt-1 font-mono">
+                    {avgDailySessions}
+                  </div>
+                </div>
+              </div>
+              <SessionTrendChart data={sessionTrendData} />
             </section>
 
             {/* Per-Game Breakdown */}
