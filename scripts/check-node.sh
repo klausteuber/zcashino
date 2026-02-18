@@ -10,10 +10,17 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="${SCRIPT_DIR}/.."
 ENV_FILE="${PROJECT_DIR}/.env.monitoring"
+ENV_MAINNET_FILE="${PROJECT_DIR}/.env.mainnet"
 
 if [[ -f "$ENV_FILE" ]]; then
   # shellcheck disable=SC1090
   source "$ENV_FILE"
+fi
+
+# Load mainnet env so zcash-cli can authenticate (daemon uses rpcuser/rpcpassword, so no cookie exists).
+if [[ -f "$ENV_MAINNET_FILE" ]]; then
+  # shellcheck disable=SC1090
+  source "$ENV_MAINNET_FILE"
 fi
 
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.yml}"
@@ -26,6 +33,21 @@ alert() {
 
 cd "$PROJECT_DIR"
 
+RPC_USER="${ZCASH_RPC_USER:-zcashrpc}"
+RPC_PASSWORD="${ZCASH_RPC_PASSWORD:-}"
+
+if [[ -z "$RPC_PASSWORD" ]]; then
+  alert "NODE ERROR: ZCASH_RPC_PASSWORD not set (cannot auth zcash-cli)"
+  exit 1
+fi
+
+zcash_cli() {
+  docker compose -f "$COMPOSE_FILE" exec -T zcashd zcash-cli \
+    -rpcuser="$RPC_USER" \
+    -rpcpassword="$RPC_PASSWORD" \
+    "$@"
+}
+
 # Check if zcashd container is running
 if ! docker compose -f "$COMPOSE_FILE" ps zcashd --status running -q 2>/dev/null | grep -q .; then
   alert "NODE DOWN: zcashd container is not running"
@@ -33,7 +55,7 @@ if ! docker compose -f "$COMPOSE_FILE" ps zcashd --status running -q 2>/dev/null
 fi
 
 # Get blockchain info via zcash-cli inside the container
-BLOCKCHAIN_INFO=$(docker compose -f "$COMPOSE_FILE" exec -T zcashd zcash-cli getblockchaininfo 2>/dev/null || echo "")
+BLOCKCHAIN_INFO=$(zcash_cli getblockchaininfo 2>/dev/null || echo "")
 
 if [[ -z "$BLOCKCHAIN_INFO" ]]; then
   alert "NODE ERROR: Cannot reach zcash-cli (RPC unresponsive)"
@@ -60,7 +82,7 @@ fi
 if [[ "$BLOCKS" -gt 0 ]]; then
   BEST_HASH=$(echo "$BLOCKCHAIN_INFO" | jq -r '.bestblockhash // ""')
   if [[ -n "$BEST_HASH" ]]; then
-    BLOCK_TIME=$(docker compose -f "$COMPOSE_FILE" exec -T zcashd zcash-cli getblock "$BEST_HASH" 2>/dev/null | jq -r '.time // 0')
+    BLOCK_TIME=$(zcash_cli getblock "$BEST_HASH" 2>/dev/null | jq -r '.time // 0')
     NOW=$(date +%s)
     BLOCK_AGE=$((NOW - BLOCK_TIME))
     if [[ "$BLOCK_AGE" -gt "$MAX_BLOCK_AGE" ]]; then
