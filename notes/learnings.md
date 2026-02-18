@@ -1,6 +1,6 @@
 # Project Learnings
 
-Last updated: 2026-02-16
+Last updated: 2026-02-18
 
 ## Launch-Critical Learnings
 
@@ -218,6 +218,38 @@ In-memory limits and remote font fetches are acceptable in dev, but must be call
 
 8. **Retry resilience needs observable counters in admin ops.**
    Add explicit telemetry (`player.withdraw.unpaid_action_retry`) and expose 24h/all-time counts in admin overview so fee-policy friction is visible and tunable.
+
+## Admin Ops Learnings (2026-02-18)
+
+1. **Settings must be enforced at runtime, not just stored.**
+   Symptom: Admin settings UI saved bet limits/pool thresholds/alert thresholds, but gameplay and ops behavior did not change.
+   Root cause: `AdminConfig` values were stored but not loaded/consumed by game/pool/alert services.
+   Fix: Add a typed runtime settings loader with a short TTL cache + invalidation on PATCH, then consume it in:
+   - game start wager validation (blackjack/video poker)
+   - pool auto-refill thresholds and target sizing
+   - alert thresholds (large win + high RTP)
+   - responsible gambling defaults on new sessions
+   Key files: `src/lib/admin/runtime-settings.ts`, `src/app/api/admin/settings/route.ts`, `src/app/api/game/route.ts`, `src/app/api/video-poker/route.ts`, `src/lib/provably-fair/commitment-pool.ts`.
+
+2. **Background services must start in standalone Node deployments (even when `NEXT_RUNTIME` is unset).**
+   Symptom: Alerts page stayed empty even during critical conditions (pool empty, kill switch active, withdrawal backlog).
+   Root cause: service startup was incorrectly gated on `NEXT_RUNTIME` being set, so the alert generator never started.
+   Fix: Treat anything except explicit `edge` as the Node.js runtime in `instrumentation.ts`, and expose service status in admin overview/alerts UI.
+   Key files: `src/instrumentation.ts`, `src/lib/services/alert-generator.ts`, `src/app/api/admin/alerts/route.ts`.
+
+3. **Operators need row-level withdrawal recovery, not one blunt "Process Withdrawals" button.**
+   Symptom: Failed withdrawals accumulated with no per-withdrawal retry, and pending withdrawals could not be polled.
+   Root cause: admin tooling lacked targeted actions for `pending`/`failed` states.
+   Fix: Add two safe admin actions:
+   - `poll-withdrawal`: check opid status and confirm or fail+refund
+   - `requeue-withdrawal`: create a new `pending_approval` tx by reserving funds again
+   Key files: `src/app/api/admin/pool/route.ts`, `src/app/admin/withdrawals/page.tsx`.
+
+4. **Health endpoints must match pool semantics (don't count expired commitments as available).**
+   Symptom: `/api/health` could report "pool low/ok" while the real pool was unusable due to expired commitments.
+   Root cause: query counted `status='available'` without `expiresAt > now`.
+   Fix: filter by `expiresAt > now` in the health check.
+   Key files: `src/app/api/health/route.ts`.
 
 ## Session Fairness Seed Pool Learnings (2026-02-16)
 
