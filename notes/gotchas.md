@@ -611,3 +611,17 @@ The `handleRealSelect` callback called `setStep('deposit')` unconditionally, but
 **Lesson:** Never use per-domain localStorage flags to control UX that must be identical across domains sharing the same codebase. Derive UX state from actual data (session exists? demo or real?) not from flags that may differ per origin.
 
 **Files:** `src/hooks/useGameSession.ts`, `src/components/game/BlackjackGame.tsx`, `src/components/game/VideoPokerGame.tsx`
+
+---
+
+### Insurance decline must be server-side — game logic never client-only (2026-02-18)
+
+**Symptom:** Player allowed to Hit/Stand while insurance prompt was visible. Dealer blackjack not checked after declining insurance. Player could play a full hand and lose to a dealer blackjack that should have ended the round immediately.
+
+**Root Cause:** `handleInsurance(false)` only set `insuranceDeclined = true` locally. No server call → `dealerPeeked` stays `false` → dealer blackjack never checked → player plays a hand they should have lost to dealer BJ. Also, action buttons rendered when `phase === 'playerTurn'` with no guard for pending insurance.
+
+**Fix:** Added `decline_insurance` server action. Client sends POST to `/api/game` with `action: 'decline_insurance'`. Server calls `declineInsurance()` which peeks for dealer blackjack. If dealer has BJ, round resolves immediately (dealer wins). Also added `!showInsuranceOffer` guard on action buttons render.
+
+**Rule:** Game logic = server-side. UI state = client-side. Never blur this boundary. When adding any new game feature, ask: "does this client-side state change affect what hands/outcomes are possible?" If yes, it must round-trip through the server.
+
+**Files:** `src/lib/game/blackjack.ts`, `src/app/api/game/route.ts`, `src/components/game/BlackjackGame.tsx`, `src/lib/validation/api-schemas.ts`
