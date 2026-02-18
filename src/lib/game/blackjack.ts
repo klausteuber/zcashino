@@ -675,11 +675,11 @@ function resolveRound(state: BlackjackGameState): BlackjackGameState {
 
   const message = allSurrendered
     ? 'Surrender - half bet returned'
+    : onlyPushes
+    ? 'Push - bet returned'
     : totalPayout > 0
     ? `You won ${totalPayout.toFixed(4)} ZEC!`
-    : onlyPushes
-      ? 'Push - bet returned'
-      : 'Dealer wins'
+    : 'Dealer wins'
 
   return {
     ...state,
