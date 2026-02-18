@@ -38,7 +38,6 @@ export function DepositWidget({
 
         {/* Balance */}
         <div className="text-bone-white font-mono">
-          <span className="text-venetian-gold/50 text-sm mr-1">Balance:</span>
           <span className="text-lg font-semibold">{balance.toFixed(4)}</span>
           <span className="text-venetian-gold/50 ml-1">ZEC</span>
         </div>

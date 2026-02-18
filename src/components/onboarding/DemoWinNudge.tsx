@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 
 interface DemoWinNudgeProps {
   amount: number
-  onDeposit: () => void
+  onDeposit?: () => void
   onDismiss: () => void
 }
 
@@ -52,21 +52,9 @@ export function DemoWinNudge({ amount, onDeposit, onDismiss }: DemoWinNudgeProps
         <div className="flex items-start gap-3">
           <div className="text-2xl flex-shrink-0">🎉</div>
           <div>
-            <p className="text-sm font-medium text-bone-white mb-1">
+            <p className="text-sm font-medium text-bone-white">
               Nice! You won {amount.toFixed(4)} ZEC
             </p>
-            <p className="text-xs text-venetian-gold/60 mb-3">
-              Imagine winning real ZEC you can withdraw.
-            </p>
-            <button
-              onClick={() => {
-                handleDismiss()
-                onDeposit()
-              }}
-              className="btn-gold-shimmer px-3 py-1.5 text-midnight-black text-xs font-semibold rounded-lg transition-colors"
-            >
-              Deposit Real ZEC →
-            </button>
           </div>
         </div>
       </div>

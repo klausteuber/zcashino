@@ -104,6 +104,19 @@ setInterval(() => {
 **Root Cause:** CSS changes were committed locally but not pushed/pulled to VPS before rebuild. The fix commit only included `.dockerignore` and `Dockerfile` changes.
 **Fix:** Always verify that ALL pending changes are pushed and pulled before rebuilding: `git pull origin main` on VPS, then rebuild. Check deployed CSS bundle hash changes after rebuild.
 
+### [2026-02-18] Insurance Decline Was Client-Only — No Dealer Blackjack Check
+**Problem:** When dealer shows Ace, player could Hit/Stand while insurance prompt was visible. Declining insurance was purely client-side (`setInsuranceDeclined(true)`) — no server call, so `dealerPeeked` stayed `false` and dealer blackjack was never checked. Players could play hands they should have lost to dealer blackjack.
+
+**Root Causes:**
+1. Action buttons rendered when `phase === 'playerTurn'` with no check for `showInsuranceOffer`
+2. `handleInsurance(false)` only set local state — server never learned the player declined
+
+**Fix:** (a) Added `&& !showInsuranceOffer` guard to action buttons render, (b) Added `decline_insurance` server action that triggers dealer peek, (c) Client sends server call on decline
+
+**Rule:** Every game state transition that affects gameplay flow MUST round-trip through the server. Client-only state changes are only acceptable for UI-cosmetic behavior (animations, tooltips), NEVER for game logic decisions like "should the dealer peek for blackjack." When adding new game features, audit: "does this client-side state change affect what hands/outcomes are possible?"
+
+**Files:** `blackjack.ts`, `route.ts`, `BlackjackGame.tsx`, `api-schemas.ts`, `blackjack.test.ts`
+
 ### [2026-02-18] Push Incorrectly Shown as Win
 **Problem:** A push (tie) was shown as "WIN" with win animation and "You won X ZEC!" message.
 **Root Cause:** Both the message builder (`blackjack.ts`) and the result animation (`BlackjackGame.tsx`) checked `payout > 0` before checking `onlyPushes`/`message.includes('push')`. A push returns the original bet (payout > 0), so push was caught by the win branch first.
@@ -190,12 +203,12 @@ sqlite3 /var/lib/docker/volumes/mainnet_app-data/_data/zcashino.db "SELECT statu
 **CRITICAL: Never rsync source files directly to VPS.** Always commit → push → git pull on VPS → rebuild. Direct rsync can overwrite deployment-specific patches and introduce stale files into the Docker build context.
 
 ## Testing
-- 293 tests across 12 files
+- 448 tests across 30 files
 - Run: `npm test` or `npx vitest run`
 - Game is at: http://localhost:3000/blackjack
 
 ## API Endpoints
-- `POST /api/session` - Create/get session
+- `POST /api/session` - Create/get session (actions: set-withdrawal-address, change-withdrawal-address, update-limits, reset-demo-balance)
 - `POST /api/game` - Game actions (start, hit, stand, double, split)
 - `POST /api/video-poker` - Video poker (start, draw)
 - `POST /api/wallet` - Deposits/withdrawals
