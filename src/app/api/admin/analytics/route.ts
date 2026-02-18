@@ -9,6 +9,7 @@ import { logAdminEvent } from '@/lib/admin/audit'
 import { guardCypherAdminRequest } from '@/lib/admin/host-guard'
 import { toCsvResponse, isCsvRequest } from '@/lib/admin/csv-export'
 import { getHistoricalPrices, captureDaily } from '@/lib/admin/price-history'
+import { REAL_SESSIONS_WHERE, REAL_SESSION_RELATION } from '@/lib/admin/query-filters'
 
 type ValidPeriod = '24h' | '7d' | '30d' | 'all'
 const VALID_PERIODS: ValidPeriod[] = ['24h', '7d', '30d', 'all']
@@ -89,18 +90,18 @@ export async function GET(request: NextRequest) {
       activeVPGames,
     ] = await Promise.all([
       prisma.blackjackGame.aggregate({
-        where: { status: 'completed', completedAt: { gte: periodStart } },
+        where: { status: 'completed', completedAt: { gte: periodStart }, ...REAL_SESSION_RELATION },
         _sum: { mainBet: true, perfectPairsBet: true, insuranceBet: true, payout: true },
         _count: true,
       }),
       prisma.videoPokerGame.aggregate({
-        where: { status: 'completed', completedAt: { gte: periodStart } },
+        where: { status: 'completed', completedAt: { gte: periodStart }, ...REAL_SESSION_RELATION },
         _sum: { totalBet: true, payout: true },
         _count: true,
       }),
       prisma.videoPokerGame.groupBy({
         by: ['handRank'],
-        where: { status: 'completed', completedAt: { gte: periodStart } },
+        where: { status: 'completed', completedAt: { gte: periodStart }, ...REAL_SESSION_RELATION },
         _count: true,
       }),
       prisma.blackjackGame.aggregate({
@@ -108,6 +109,7 @@ export async function GET(request: NextRequest) {
           status: 'completed',
           perfectPairsBet: { gt: 0 },
           completedAt: { gte: periodStart },
+          ...REAL_SESSION_RELATION,
         },
         _sum: { perfectPairsBet: true },
         _count: true,
@@ -117,47 +119,55 @@ export async function GET(request: NextRequest) {
           status: 'completed',
           insuranceBet: { gt: 0 },
           completedAt: { gte: periodStart },
+          ...REAL_SESSION_RELATION,
         },
         _sum: { insuranceBet: true },
         _count: true,
       }),
-      prisma.blackjackGame.count({ where: { status: 'active' } }),
-      prisma.videoPokerGame.count({ where: { status: 'active' } }),
+      prisma.blackjackGame.count({ where: { status: 'active', ...REAL_SESSION_RELATION } }),
+      prisma.videoPokerGame.count({ where: { status: 'active', ...REAL_SESSION_RELATION } }),
     ])
 
     // Daily trends — raw SQL for date grouping
     const [dailyTx, dailyBJ, dailyVP, dailySessions] = await Promise.all([
       prisma.$queryRaw`
-        SELECT DATE(confirmedAt) as date, type,
-          COUNT(*) as count, SUM(amount) as volume
-        FROM "Transaction"
-        WHERE status = 'confirmed' AND confirmedAt >= ${periodStart}
-        GROUP BY DATE(confirmedAt), type ORDER BY date
+        SELECT DATE(t.confirmedAt) as date, t.type,
+          COUNT(*) as count, SUM(t.amount) as volume
+        FROM "Transaction" t
+        JOIN Session s ON t.sessionId = s.id
+        WHERE t.status = 'confirmed' AND t.confirmedAt >= ${periodStart}
+          AND s.walletAddress NOT LIKE 'demo_%'
+        GROUP BY DATE(t.confirmedAt), t.type ORDER BY date
       ` as Promise<Array<{ date: string; type: string; count: bigint; volume: number }>>,
 
       prisma.$queryRaw`
-        SELECT DATE(completedAt) as date,
+        SELECT DATE(bg.completedAt) as date,
           COUNT(*) as hands,
-          SUM(mainBet + perfectPairsBet + insuranceBet) as wagered,
-          SUM(payout) as payout
-        FROM BlackjackGame
-        WHERE status = 'completed' AND completedAt >= ${periodStart}
-        GROUP BY DATE(completedAt) ORDER BY date
+          SUM(bg.mainBet + bg.perfectPairsBet + bg.insuranceBet) as wagered,
+          SUM(bg.payout) as payout
+        FROM BlackjackGame bg
+        JOIN Session s ON bg.sessionId = s.id
+        WHERE bg.status = 'completed' AND bg.completedAt >= ${periodStart}
+          AND s.walletAddress NOT LIKE 'demo_%'
+        GROUP BY DATE(bg.completedAt) ORDER BY date
       ` as Promise<Array<{ date: string; hands: bigint; wagered: number; payout: number }>>,
 
       prisma.$queryRaw`
-        SELECT DATE(completedAt) as date,
+        SELECT DATE(vp.completedAt) as date,
           COUNT(*) as hands,
-          SUM(totalBet) as wagered,
-          SUM(payout) as payout
-        FROM VideoPokerGame
-        WHERE status = 'completed' AND completedAt >= ${periodStart}
-        GROUP BY DATE(completedAt) ORDER BY date
+          SUM(vp.totalBet) as wagered,
+          SUM(vp.payout) as payout
+        FROM VideoPokerGame vp
+        JOIN Session s ON vp.sessionId = s.id
+        WHERE vp.status = 'completed' AND vp.completedAt >= ${periodStart}
+          AND s.walletAddress NOT LIKE 'demo_%'
+        GROUP BY DATE(vp.completedAt) ORDER BY date
       ` as Promise<Array<{ date: string; hands: bigint; wagered: number; payout: number }>>,
 
       prisma.$queryRaw`
         SELECT DATE(lastActiveAt) as date, COUNT(DISTINCT id) as count
         FROM Session WHERE lastActiveAt >= ${periodStart}
+          AND walletAddress NOT LIKE 'demo_%'
         GROUP BY DATE(lastActiveAt) ORDER BY date
       ` as Promise<Array<{ date: string; count: bigint }>>,
     ])
@@ -265,6 +275,7 @@ export async function GET(request: NextRequest) {
       prisma.$queryRaw`
         SELECT DATE(createdAt) as date, COUNT(*) as count
         FROM Session WHERE createdAt >= ${periodStart}
+          AND walletAddress NOT LIKE 'demo_%'
         GROUP BY DATE(createdAt) ORDER BY date
       ` as Promise<Array<{ date: string; count: bigint }>>,
 
@@ -281,6 +292,7 @@ export async function GET(request: NextRequest) {
             WHEN s.lastActiveAt >= datetime(s.createdAt, '+30 day') THEN s.id END) as d30
         FROM Session s
         WHERE s.createdAt >= ${periodStart} AND s.totalWagered > 0
+          AND s.walletAddress NOT LIKE 'demo_%'
         GROUP BY DATE(s.createdAt) ORDER BY cohort_date
       ` as Promise<Array<{
         cohort_date: string
@@ -297,9 +309,13 @@ export async function GET(request: NextRequest) {
       FROM (
         SELECT sessionId, MIN(completedAt) as first_game
         FROM (
-          SELECT sessionId, completedAt FROM BlackjackGame WHERE status = 'completed'
+          SELECT bg.sessionId, bg.completedAt FROM BlackjackGame bg
+          JOIN Session s ON bg.sessionId = s.id
+          WHERE bg.status = 'completed' AND s.walletAddress NOT LIKE 'demo_%'
           UNION ALL
-          SELECT sessionId, completedAt FROM VideoPokerGame WHERE status = 'completed'
+          SELECT vp.sessionId, vp.completedAt FROM VideoPokerGame vp
+          JOIN Session s ON vp.sessionId = s.id
+          WHERE vp.status = 'completed' AND s.walletAddress NOT LIKE 'demo_%'
         )
         GROUP BY sessionId
         HAVING first_game >= ${periodStart}
@@ -336,11 +352,17 @@ export async function GET(request: NextRequest) {
         COUNT(*) as hands,
         SUM(amount) as wagered
       FROM (
-        SELECT completedAt, mainBet + perfectPairsBet + insuranceBet as amount
-        FROM BlackjackGame WHERE status = 'completed' AND completedAt >= ${periodStart}
+        SELECT bg.completedAt, bg.mainBet + bg.perfectPairsBet + bg.insuranceBet as amount
+        FROM BlackjackGame bg
+        JOIN Session s ON bg.sessionId = s.id
+        WHERE bg.status = 'completed' AND bg.completedAt >= ${periodStart}
+          AND s.walletAddress NOT LIKE 'demo_%'
         UNION ALL
-        SELECT completedAt, totalBet as amount
-        FROM VideoPokerGame WHERE status = 'completed' AND completedAt >= ${periodStart}
+        SELECT vp.completedAt, vp.totalBet as amount
+        FROM VideoPokerGame vp
+        JOIN Session s ON vp.sessionId = s.id
+        WHERE vp.status = 'completed' AND vp.completedAt >= ${periodStart}
+          AND s.walletAddress NOT LIKE 'demo_%'
       )
       GROUP BY dow, hour ORDER BY dow, hour
     ` as Array<{ dow: number; hour: number; hands: bigint; wagered: number }>

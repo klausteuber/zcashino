@@ -9,6 +9,7 @@ import { logAdminEvent } from '@/lib/admin/audit'
 import { guardCypherAdminRequest } from '@/lib/admin/host-guard'
 import { toCsvResponse, isCsvRequest } from '@/lib/admin/csv-export'
 import { batchRiskLevels } from '@/lib/admin/risk-scoring'
+import { REAL_SESSIONS_WHERE } from '@/lib/admin/query-filters'
 
 /**
  * GET /api/admin/players
@@ -53,13 +54,14 @@ export async function GET(request: NextRequest) {
 
     const where = search
       ? {
+          ...REAL_SESSIONS_WHERE,
           OR: [
             { id: { contains: search } },
             { walletAddress: { contains: search } },
             { withdrawalAddress: { contains: search } },
           ],
         }
-      : {}
+      : { ...REAL_SESSIONS_WHERE }
 
     // For high rollers, override limit/offset to top 10
     const take = highRollers ? 10 : limit

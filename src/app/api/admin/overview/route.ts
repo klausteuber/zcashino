@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { requireAdmin } from '@/lib/admin/auth'
+import { REAL_SESSIONS_WHERE, REAL_SESSION_RELATION } from '@/lib/admin/query-filters'
 import { getPoolStatus } from '@/lib/provably-fair/commitment-pool'
 import { checkNodeStatus, getAddressBalance } from '@/lib/wallet/rpc'
 import { DEFAULT_NETWORK } from '@/lib/wallet'
@@ -93,6 +94,7 @@ export async function GET(request: NextRequest) {
       houseBalance,
     ] = await Promise.all([
       prisma.session.aggregate({
+        where: REAL_SESSIONS_WHERE,
         _sum: {
           balance: true,
           totalDeposited: true,
@@ -101,31 +103,31 @@ export async function GET(request: NextRequest) {
           totalWon: true,
         },
       }),
-      prisma.session.count(),
-      prisma.session.count({ where: { isAuthenticated: true } }),
-      prisma.blackjackGame.count({ where: { status: 'active' } }),
+      prisma.session.count({ where: REAL_SESSIONS_WHERE }),
+      prisma.session.count({ where: { isAuthenticated: true, ...REAL_SESSIONS_WHERE } }),
+      prisma.blackjackGame.count({ where: { status: 'active', ...REAL_SESSION_RELATION } }),
       prisma.transaction.count({
-        where: { type: 'withdrawal', status: { in: ['pending', 'pending_approval'] } },
+        where: { type: 'withdrawal', status: { in: ['pending', 'pending_approval'] }, ...REAL_SESSION_RELATION },
       }),
       prisma.transaction.count({
-        where: { type: 'withdrawal', status: 'failed' },
+        where: { type: 'withdrawal', status: 'failed', ...REAL_SESSION_RELATION },
       }),
       prisma.transaction.count({
-        where: { type: 'deposit', status: 'confirmed' },
+        where: { type: 'deposit', status: 'confirmed', ...REAL_SESSION_RELATION },
       }),
       prisma.transaction.aggregate({
-        where: { type: 'deposit', status: 'confirmed' },
+        where: { type: 'deposit', status: 'confirmed', ...REAL_SESSION_RELATION },
         _sum: { amount: true },
       }),
       prisma.transaction.count({
-        where: { type: 'withdrawal', status: 'confirmed' },
+        where: { type: 'withdrawal', status: 'confirmed', ...REAL_SESSION_RELATION },
       }),
       prisma.transaction.aggregate({
-        where: { type: 'withdrawal', status: 'confirmed' },
+        where: { type: 'withdrawal', status: 'confirmed', ...REAL_SESSION_RELATION },
         _sum: { amount: true },
       }),
       prisma.transaction.findMany({
-        where: { type: 'withdrawal', status: { in: ['pending', 'pending_approval'] } },
+        where: { type: 'withdrawal', status: { in: ['pending', 'pending_approval'] }, ...REAL_SESSION_RELATION },
         orderBy: { createdAt: 'desc' },
         take: 25,
         select: {
@@ -220,21 +222,21 @@ export async function GET(request: NextRequest) {
       }),
       // GGR: completed blackjack game stats
       prisma.blackjackGame.aggregate({
-        where: { status: 'completed' },
+        where: { status: 'completed', ...REAL_SESSION_RELATION },
         _sum: { mainBet: true, perfectPairsBet: true, insuranceBet: true, payout: true },
         _count: true,
       }),
       // GGR: completed video poker game stats
       prisma.videoPokerGame.aggregate({
-        where: { status: 'completed' },
+        where: { status: 'completed', ...REAL_SESSION_RELATION },
         _sum: { totalBet: true, payout: true },
         _count: true,
       }),
       // Active video poker games (for exposure count)
-      prisma.videoPokerGame.count({ where: { status: 'active' } }),
+      prisma.videoPokerGame.count({ where: { status: 'active', ...REAL_SESSION_RELATION } }),
       // Recent withdrawals (all statuses, not just pending)
       prisma.transaction.findMany({
-        where: { type: 'withdrawal' },
+        where: { type: 'withdrawal', ...REAL_SESSION_RELATION },
         orderBy: { createdAt: 'desc' },
         take: 50,
         select: {

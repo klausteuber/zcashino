@@ -3,6 +3,7 @@ import { getAdminSettings } from '@/lib/admin/runtime-settings'
 import { isKillSwitchActive, getKillSwitchStatus } from '@/lib/kill-switch'
 import { getProvablyFairMode, SESSION_NONCE_MODE } from '@/lib/provably-fair/mode'
 import { sendTelegramMessage } from '@/lib/notifications/telegram'
+import { REAL_SESSIONS_WHERE, REAL_SESSION_RELATION } from '@/lib/admin/query-filters'
 
 /**
  * Alert generation functions for the admin dashboard.
@@ -77,6 +78,7 @@ export async function checkLargeWins(since: Date, threshold = 1.0): Promise<numb
       status: 'completed',
       payout: { gt: threshold },
       completedAt: { gte: since },
+      ...REAL_SESSION_RELATION,
     },
     select: { id: true, sessionId: true, payout: true, mainBet: true, outcome: true },
     orderBy: { payout: 'desc' },
@@ -101,6 +103,7 @@ export async function checkLargeWins(since: Date, threshold = 1.0): Promise<numb
       status: 'completed',
       payout: { gt: threshold },
       completedAt: { gte: since },
+      ...REAL_SESSION_RELATION,
     },
     select: { id: true, sessionId: true, payout: true, totalBet: true, handRank: true },
     orderBy: { payout: 'desc' },
@@ -133,6 +136,7 @@ export async function checkHighRTPPlayers(since: Date, threshold = 1.5): Promise
     where: {
       totalWagered: { gt: 0 },
       lastActiveAt: { gte: since },
+      ...REAL_SESSIONS_WHERE,
     },
     select: { id: true, totalWagered: true, totalWon: true },
   })
@@ -176,6 +180,7 @@ export async function checkRapidCycles(since: Date): Promise<number> {
       type: 'deposit',
       status: 'confirmed',
       confirmedAt: { gte: since },
+      ...REAL_SESSION_RELATION,
     },
     select: { sessionId: true, confirmedAt: true, amount: true },
     orderBy: { confirmedAt: 'desc' },
@@ -223,12 +228,14 @@ export async function checkWithdrawalVelocity(since: Date): Promise<number> {
   const withdrawalsByAddress = await prisma.$queryRaw<
     Array<{ address: string; count: bigint; total: number }>
   >`
-    SELECT address, COUNT(*) as count, SUM(amount) as total
-    FROM "Transaction"
-    WHERE type = 'withdrawal'
-      AND createdAt >= ${since}
-      AND address IS NOT NULL
-    GROUP BY address
+    SELECT t.address, COUNT(*) as count, SUM(t.amount) as total
+    FROM "Transaction" t
+    JOIN "Session" s ON t.sessionId = s.id
+    WHERE t.type = 'withdrawal'
+      AND t.createdAt >= ${since}
+      AND t.address IS NOT NULL
+      AND s.walletAddress NOT LIKE 'demo_%'
+    GROUP BY t.address
     HAVING COUNT(*) > 3
     ORDER BY count DESC
   `
@@ -401,7 +408,7 @@ export async function checkLowHouseBalance(): Promise<number> {
 
   const liabilities = await prisma.session.aggregate({
     _sum: { balance: true },
-    where: { balance: { gt: 0 } },
+    where: { balance: { gt: 0 }, ...REAL_SESSIONS_WHERE },
   })
 
   const totalLiabilities = liabilities._sum.balance ?? 0

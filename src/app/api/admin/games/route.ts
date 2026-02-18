@@ -8,6 +8,7 @@ import {
 import { logAdminEvent } from '@/lib/admin/audit'
 import { guardCypherAdminRequest } from '@/lib/admin/host-guard'
 import { toCsvResponse, isCsvRequest } from '@/lib/admin/csv-export'
+import { REAL_SESSION_RELATION } from '@/lib/admin/query-filters'
 
 interface GameListItem {
   id: string
@@ -75,7 +76,7 @@ export async function GET(request: NextRequest) {
 
     // --- Blackjack games ---
     if (!type || type === 'blackjack') {
-      const bjWhere: Record<string, unknown> = { status: 'completed' }
+      const bjWhere: Record<string, unknown> = { status: 'completed', ...REAL_SESSION_RELATION }
       if (outcome) bjWhere.outcome = outcome
       if (minPayout) bjWhere.payout = { gte: Number(minPayout) }
       if (sessionId) bjWhere.sessionId = sessionId
@@ -127,7 +128,7 @@ export async function GET(request: NextRequest) {
 
     // --- Video Poker games ---
     if (!type || type === 'videoPoker') {
-      const vpWhere: Record<string, unknown> = { status: 'completed' }
+      const vpWhere: Record<string, unknown> = { status: 'completed', ...REAL_SESSION_RELATION }
       // Video poker uses handRank instead of outcome
       if (outcome && type === 'videoPoker') vpWhere.handRank = outcome
       if (minPayout) vpWhere.payout = { gte: Number(minPayout) }
