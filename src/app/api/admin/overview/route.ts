@@ -272,12 +272,14 @@ export async function GET(request: NextRequest) {
           createdAt: true,
         },
       }),
-      // House wallet balance — uses house UA from env
+      // House wallet balance — uses house address from env
       (async () => {
-        const houseUA = process.env.HOUSE_UNIFIED_ADDRESS
-        if (!houseUA) return null
+        const houseAddress = process.env.ZCASH_NETWORK === 'mainnet' || !process.env.ZCASH_NETWORK
+          ? process.env.HOUSE_ZADDR_MAINNET
+          : process.env.HOUSE_ZADDR_TESTNET
+        if (!houseAddress) return null
         try {
-          return await getAddressBalance(houseUA, DEFAULT_NETWORK)
+          return await getAddressBalance(houseAddress, DEFAULT_NETWORK)
         } catch {
           return null
         }
