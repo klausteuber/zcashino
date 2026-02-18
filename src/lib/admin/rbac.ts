@@ -70,10 +70,20 @@ const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
 }
 
 /**
+ * Normalize legacy role values to current AdminRole.
+ * Pre-RBAC tokens used role: 'admin' — treat as super_admin.
+ */
+function normalizeRole(role: string): AdminRole {
+  if (role === 'admin') return 'super_admin'
+  return role as AdminRole
+}
+
+/**
  * Check if a role has a specific permission.
  */
-export function hasPermission(role: AdminRole, permission: Permission): boolean {
-  const perms = ROLE_PERMISSIONS[role]
+export function hasPermission(role: AdminRole | string, permission: Permission): boolean {
+  const normalized = normalizeRole(role)
+  const perms = ROLE_PERMISSIONS[normalized]
   return perms ? perms.includes(permission) : false
 }
 

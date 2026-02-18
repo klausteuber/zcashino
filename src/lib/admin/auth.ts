@@ -63,23 +63,27 @@ export function getAdminConfigStatus(): AdminConfigStatus {
  * auto-create a super_admin user from env vars.
  */
 export async function ensureBootstrapAdmin(): Promise<void> {
-  const count = await prisma.adminUser.count()
-  if (count > 0) return
+  try {
+    const count = await prisma.adminUser.count()
+    if (count > 0) return
 
-  const username = getEnv('ADMIN_USERNAME') || 'admin'
-  const password = getEnv('ADMIN_PASSWORD')
-  if (!password) return
+    const username = getEnv('ADMIN_USERNAME') || 'admin'
+    const password = getEnv('ADMIN_PASSWORD')
+    if (!password) return
 
-  const passwordHash = await hashPassword(password)
-  await prisma.adminUser.create({
-    data: {
-      username,
-      passwordHash,
-      role: 'super_admin',
-      isActive: true,
-      createdBy: 'bootstrap',
-    },
-  })
+    const passwordHash = await hashPassword(password)
+    await prisma.adminUser.create({
+      data: {
+        username,
+        passwordHash,
+        role: 'super_admin',
+        isActive: true,
+        createdBy: 'bootstrap',
+      },
+    })
+  } catch {
+    // AdminUser table may not exist yet (pre-migration). Fall through to env var auth.
+  }
 }
 
 /**
@@ -99,33 +103,37 @@ export async function verifyAdminCredentials(
     return { ok: false, reason: 'not-configured', missing: status.missing }
   }
 
-  // Try DB-backed auth first
-  const user = await prisma.adminUser.findUnique({
-    where: { username: inputUsername },
-  })
-
-  if (user) {
-    if (!user.isActive) {
-      return { ok: false, reason: 'account-disabled' }
-    }
-
-    const passwordValid = await verifyPassword(inputPassword, user.passwordHash)
-    if (!passwordValid) {
-      return { ok: false, reason: 'invalid-credentials' }
-    }
-
-    // If 2FA is enabled, don't issue session yet — require TOTP step
-    if (user.totpEnabled && user.totpSecret) {
-      return { ok: true, username: user.username, role: user.role as AdminRole, userId: user.id, totpRequired: true }
-    }
-
-    // Update last login
-    await prisma.adminUser.update({
-      where: { id: user.id },
-      data: { lastLoginAt: new Date() },
+  // Try DB-backed auth first (may fail if AdminUser table hasn't been migrated)
+  try {
+    const user = await prisma.adminUser.findUnique({
+      where: { username: inputUsername },
     })
 
-    return { ok: true, username: user.username, role: user.role as AdminRole, userId: user.id }
+    if (user) {
+      if (!user.isActive) {
+        return { ok: false, reason: 'account-disabled' }
+      }
+
+      const passwordValid = await verifyPassword(inputPassword, user.passwordHash)
+      if (!passwordValid) {
+        return { ok: false, reason: 'invalid-credentials' }
+      }
+
+      // If 2FA is enabled, don't issue session yet — require TOTP step
+      if (user.totpEnabled && user.totpSecret) {
+        return { ok: true, username: user.username, role: user.role as AdminRole, userId: user.id, totpRequired: true }
+      }
+
+      // Update last login
+      await prisma.adminUser.update({
+        where: { id: user.id },
+        data: { lastLoginAt: new Date() },
+      })
+
+      return { ok: true, username: user.username, role: user.role as AdminRole, userId: user.id }
+    }
+  } catch {
+    // AdminUser table may not exist yet — fall through to env var auth
   }
 
   // Env var fallback (for bootstrapping before first DB user is created)
@@ -350,6 +358,11 @@ export function requireAdmin(
 
   if (!session) {
     return { ok: false, response: unauthorizedResponse() }
+  }
+
+  // Normalize legacy role: pre-RBAC tokens used 'admin' instead of 'super_admin'
+  if (session.role === ('admin' as AdminRole)) {
+    session.role = 'super_admin' as AdminRole
   }
 
   // Check permission if specified
