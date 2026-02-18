@@ -182,6 +182,9 @@ export default function AdminPage() {
   const [password, setPassword] = useState('')
   const [authError, setAuthError] = useState<string | null>(null)
   const [currentAdmin, setCurrentAdmin] = useState<string>('admin')
+  const [totpStep, setTotpStep] = useState(false)
+  const [totpTempToken, setTotpTempToken] = useState('')
+  const [totpCode, setTotpCode] = useState('')
 
   const [overview, setOverview] = useState<AdminOverview | null>(null)
   const [isLoadingOverview, setIsLoadingOverview] = useState(false)
@@ -287,13 +290,15 @@ export default function AdminPage() {
     setActionMessage(null)
 
     try {
+      // If we're in the TOTP step, send tempToken + totpCode
+      const body = totpStep
+        ? { tempToken: totpTempToken, totpCode }
+        : { username, password }
+
       const res = await fetch('/api/admin/auth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          username,
-          password,
-        }),
+        body: JSON.stringify(body),
       })
 
       const data = await res.json()
@@ -308,9 +313,21 @@ export default function AdminPage() {
         throw new Error(data.error || 'Login failed.')
       }
 
+      // Server says 2FA is required — show TOTP input
+      if (data.requires2fa) {
+        setTotpStep(true)
+        setTotpTempToken(data.tempToken)
+        setCurrentAdmin(data.username || username)
+        return
+      }
+
+      // Full login success
       setIsAuthenticated(true)
       setCurrentAdmin(data.username || username)
       setPassword('')
+      setTotpStep(false)
+      setTotpTempToken('')
+      setTotpCode('')
       await fetchOverview()
     } catch (err) {
       setAuthError(err instanceof Error ? err.message : 'Login failed.')
@@ -515,33 +532,75 @@ export default function AdminPage() {
           </div>
 
           <form onSubmit={handleLogin} className="space-y-4">
-            <div>
-              <label className="block text-sm text-venetian-gold/60 mb-1">
-                Username
-              </label>
-              <input
-                type="text"
-                value={username}
-                onChange={(event) => setUsername(event.target.value)}
-                className="w-full bg-midnight-black/80 border border-masque-gold/20 rounded px-3 py-2 text-bone-white"
-                autoComplete="username"
-                required
-              />
-            </div>
+            {!totpStep ? (
+              <>
+                <div>
+                  <label className="block text-sm text-venetian-gold/60 mb-1">
+                    Username
+                  </label>
+                  <input
+                    type="text"
+                    value={username}
+                    onChange={(event) => setUsername(event.target.value)}
+                    className="w-full bg-midnight-black/80 border border-masque-gold/20 rounded px-3 py-2 text-bone-white"
+                    autoComplete="username"
+                    required
+                  />
+                </div>
 
-            <div>
-              <label className="block text-sm text-venetian-gold/60 mb-1">
-                Password
-              </label>
-              <input
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                className="w-full bg-midnight-black/80 border border-masque-gold/20 rounded px-3 py-2 text-bone-white"
-                autoComplete="current-password"
-                required
-              />
-            </div>
+                <div>
+                  <label className="block text-sm text-venetian-gold/60 mb-1">
+                    Password
+                  </label>
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    className="w-full bg-midnight-black/80 border border-masque-gold/20 rounded px-3 py-2 text-bone-white"
+                    autoComplete="current-password"
+                    required
+                  />
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="text-sm text-venetian-gold/80 mb-2">
+                  Welcome back, <span className="text-masque-gold font-semibold">{currentAdmin}</span>.
+                  Enter the 6-digit code from your authenticator app.
+                </div>
+
+                <div>
+                  <label className="block text-sm text-venetian-gold/60 mb-1">
+                    Verification Code
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]{6}"
+                    maxLength={6}
+                    value={totpCode}
+                    onChange={(event) => setTotpCode(event.target.value.replace(/\D/g, ''))}
+                    className="w-full bg-midnight-black/80 border border-masque-gold/20 rounded px-3 py-2 text-bone-white text-center text-2xl tracking-[0.5em] font-mono"
+                    autoComplete="one-time-code"
+                    autoFocus
+                    required
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTotpStep(false)
+                    setTotpTempToken('')
+                    setTotpCode('')
+                    setAuthError(null)
+                  }}
+                  className="text-sm text-venetian-gold/50 hover:text-venetian-gold transition-colors"
+                >
+                  &larr; Back to sign in
+                </button>
+              </>
+            )}
 
             {authError && (
               <div className="text-sm text-blood-ruby">{authError}</div>
@@ -551,7 +610,7 @@ export default function AdminPage() {
               type="submit"
               className="w-full btn-gold-shimmer text-midnight-black px-4 py-2 rounded-lg font-semibold"
             >
-              Sign In
+              {totpStep ? 'Verify' : 'Sign In'}
             </button>
           </form>
         </div>

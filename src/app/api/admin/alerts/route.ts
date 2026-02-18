@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
     return createRateLimitResponse(readLimit)
   }
 
-  const adminCheck = requireAdmin(request)
+  const adminCheck = requireAdmin(request, 'view_alerts')
   if (!adminCheck.ok) {
     await logAdminEvent({
       request,
@@ -116,7 +116,7 @@ export async function POST(request: NextRequest) {
     return createRateLimitResponse(actionLimit)
   }
 
-  const adminCheck = requireAdmin(request)
+  const adminCheck = requireAdmin(request, 'view_alerts')
   if (!adminCheck.ok) {
     await logAdminEvent({
       request,
@@ -177,7 +177,7 @@ export async function PATCH(request: NextRequest) {
     return createRateLimitResponse(actionLimit)
   }
 
-  const adminCheck = requireAdmin(request)
+  const adminCheck = requireAdmin(request, 'dismiss_alerts')
   if (!adminCheck.ok) {
     await logAdminEvent({
       request,

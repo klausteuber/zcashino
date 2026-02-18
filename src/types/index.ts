@@ -41,6 +41,14 @@ export interface BlackjackSettlement {
   perfectPairsPayout: number
 }
 
+export interface BlackjackGameRules {
+  deckCount: number
+  dealerStandsOn: number
+  blackjackPayout: number
+  allowSurrender: boolean
+  allowPerfectPairs: boolean
+}
+
 export interface BlackjackGameState {
   phase: GamePhase
   playerHands: Hand[]
@@ -57,6 +65,7 @@ export interface BlackjackGameState {
   nonce: number
   lastPayout: number
   message: string
+  gameRules?: BlackjackGameRules
   // Perfect Pairs result (evaluated immediately on deal)
   perfectPairsResult?: {
     outcome: PerfectPairsOutcome
@@ -306,6 +315,7 @@ export interface VideoPokerGameState {
   multiplier: number | null
   lastPayout: number
   message: string
+  paytableKey?: string
 }
 
 export interface VideoPokerHandHistoryEntry {

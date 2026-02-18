@@ -4,10 +4,18 @@ export interface AdminSettings {
   blackjack: {
     minBet: number
     maxBet: number
+    deckCount: number
+    dealerStandsOn: number
+    blackjackPayout: number
+    allowSurrender: boolean
+    allowPerfectPairs: boolean
   }
   videoPoker: {
     minBet: number
     maxBet: number
+    enabledVariants: string[]
+    paytableJacksOrBetter: string
+    paytableDeucesWild: string
   }
   pool: {
     autoRefillThreshold: number
@@ -28,8 +36,22 @@ export interface AdminSettings {
 }
 
 const DEFAULT_SETTINGS: AdminSettings = {
-  blackjack: { minBet: 0.01, maxBet: 1 },
-  videoPoker: { minBet: 0.01, maxBet: 1 },
+  blackjack: {
+    minBet: 0.01,
+    maxBet: 1,
+    deckCount: 6,
+    dealerStandsOn: 17,
+    blackjackPayout: 1.5,
+    allowSurrender: false,
+    allowPerfectPairs: true,
+  },
+  videoPoker: {
+    minBet: 0.01,
+    maxBet: 1,
+    enabledVariants: ['jacks_or_better', 'deuces_wild'],
+    paytableJacksOrBetter: '9/6',
+    paytableDeucesWild: 'full_pay',
+  },
   pool: { autoRefillThreshold: 5, targetSize: 15, minHealthy: 5 },
   alerts: { largeWinThreshold: 1.0, highRtpThreshold: 1.5, consecutiveWins: 10 },
   rg: {
@@ -43,8 +65,16 @@ const DEFAULT_SETTINGS: AdminSettings = {
 export const ADMIN_SETTINGS_KEYS = [
   'blackjack.minBet',
   'blackjack.maxBet',
+  'blackjack.deckCount',
+  'blackjack.dealerStandsOn',
+  'blackjack.blackjackPayout',
+  'blackjack.allowSurrender',
+  'blackjack.allowPerfectPairs',
   'videoPoker.minBet',
   'videoPoker.maxBet',
+  'videoPoker.enabledVariants',
+  'videoPoker.paytableJacksOrBetter',
+  'videoPoker.paytableDeucesWild',
   'alerts.largeWinThreshold',
   'alerts.highRtpThreshold',
   'alerts.consecutiveWins',
@@ -85,6 +115,18 @@ function coerceInt(value: unknown): number | null {
   const intVal = Math.trunc(num)
   if (!Number.isFinite(intVal)) return null
   return intVal
+}
+
+function coerceBoolean(value: unknown): boolean | null {
+  if (typeof value === 'boolean') return value
+  if (value === 'true' || value === '1') return true
+  if (value === 'false' || value === '0') return false
+  return null
+}
+
+function coerceStringArray(value: unknown): string[] | null {
+  if (Array.isArray(value) && value.every((v) => typeof v === 'string')) return value
+  return null
 }
 
 function clampNonNegative(n: number): number {
@@ -129,10 +171,41 @@ function applySettingsToDefaults(rows: Array<{ key: string; value: string }>): A
     return num === null ? fallback : num
   }
 
+  const readBoolean = (key: SettingsKey, fallback: boolean) => {
+    const raw = byKey.get(key)
+    if (!raw) return fallback
+    const parsed = safeJsonParse(raw)
+    const bool = coerceBoolean(parsed)
+    return bool === null ? fallback : bool
+  }
+
+  const readString = (key: SettingsKey, fallback: string) => {
+    const raw = byKey.get(key)
+    if (!raw) return fallback
+    const parsed = safeJsonParse(raw)
+    return typeof parsed === 'string' && parsed.length > 0 ? parsed : fallback
+  }
+
+  const readStringArray = (key: SettingsKey, fallback: string[]) => {
+    const raw = byKey.get(key)
+    if (!raw) return fallback
+    const parsed = safeJsonParse(raw)
+    const arr = coerceStringArray(parsed)
+    return arr === null || arr.length === 0 ? fallback : arr
+  }
+
   const minBj = clampNonNegative(readNumber('blackjack.minBet', DEFAULT_SETTINGS.blackjack.minBet))
   const maxBj = clampNonNegative(readNumber('blackjack.maxBet', DEFAULT_SETTINGS.blackjack.maxBet))
+  const deckCount = Math.max(1, Math.min(8, readInt('blackjack.deckCount', DEFAULT_SETTINGS.blackjack.deckCount)))
+  const dealerStandsOn = Math.max(16, Math.min(18, readInt('blackjack.dealerStandsOn', DEFAULT_SETTINGS.blackjack.dealerStandsOn)))
+  const blackjackPayout = readNumber('blackjack.blackjackPayout', DEFAULT_SETTINGS.blackjack.blackjackPayout)
+  const allowSurrender = readBoolean('blackjack.allowSurrender', DEFAULT_SETTINGS.blackjack.allowSurrender)
+  const allowPerfectPairs = readBoolean('blackjack.allowPerfectPairs', DEFAULT_SETTINGS.blackjack.allowPerfectPairs)
   const minVp = clampNonNegative(readNumber('videoPoker.minBet', DEFAULT_SETTINGS.videoPoker.minBet))
   const maxVp = clampNonNegative(readNumber('videoPoker.maxBet', DEFAULT_SETTINGS.videoPoker.maxBet))
+  const enabledVariants = readStringArray('videoPoker.enabledVariants', DEFAULT_SETTINGS.videoPoker.enabledVariants)
+  const paytableJacksOrBetter = readString('videoPoker.paytableJacksOrBetter', DEFAULT_SETTINGS.videoPoker.paytableJacksOrBetter)
+  const paytableDeucesWild = readString('videoPoker.paytableDeucesWild', DEFAULT_SETTINGS.videoPoker.paytableDeucesWild)
 
   const poolAuto = clampNonNegative(readInt('pool.autoRefillThreshold', DEFAULT_SETTINGS.pool.autoRefillThreshold))
   const poolTarget = clampNonNegative(readInt('pool.targetSize', DEFAULT_SETTINGS.pool.targetSize))
@@ -151,10 +224,18 @@ function applySettingsToDefaults(rows: Array<{ key: string; value: string }>): A
     blackjack: {
       minBet: Math.min(minBj, maxBj || minBj),
       maxBet: Math.max(maxBj, minBj),
+      deckCount,
+      dealerStandsOn,
+      blackjackPayout,
+      allowSurrender,
+      allowPerfectPairs,
     },
     videoPoker: {
       minBet: Math.min(minVp, maxVp || minVp),
       maxBet: Math.max(maxVp, minVp),
+      enabledVariants,
+      paytableJacksOrBetter,
+      paytableDeucesWild,
     },
     pool: {
       autoRefillThreshold: poolAuto,

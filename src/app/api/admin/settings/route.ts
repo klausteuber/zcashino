@@ -9,18 +9,28 @@ import { logAdminEvent } from '@/lib/admin/audit'
 import { guardCypherAdminRequest } from '@/lib/admin/host-guard'
 import { ADMIN_SETTINGS_KEYS, invalidateAdminSettingsCache } from '@/lib/admin/runtime-settings'
 
-type SettingKind = 'number' | 'integer' | 'nullable-number' | 'nullable-integer'
+type SettingKind = 'number' | 'integer' | 'nullable-number' | 'nullable-integer' | 'boolean' | 'string' | 'string-array'
 type SettingSpec = {
   kind: SettingKind
   min?: number
   max?: number
+  allowedValues?: string[]
+  allowedItems?: string[]
 }
 
 const SETTING_SPECS: Record<string, SettingSpec> = {
   'blackjack.minBet': { kind: 'number', min: 0 },
   'blackjack.maxBet': { kind: 'number', min: 0 },
+  'blackjack.deckCount': { kind: 'integer', min: 1, max: 8 },
+  'blackjack.dealerStandsOn': { kind: 'integer', min: 16, max: 18 },
+  'blackjack.blackjackPayout': { kind: 'number', min: 1, max: 2, allowedValues: ['1.2', '1.5'] },
+  'blackjack.allowSurrender': { kind: 'boolean' },
+  'blackjack.allowPerfectPairs': { kind: 'boolean' },
   'videoPoker.minBet': { kind: 'number', min: 0 },
   'videoPoker.maxBet': { kind: 'number', min: 0 },
+  'videoPoker.enabledVariants': { kind: 'string-array', allowedItems: ['jacks_or_better', 'deuces_wild'] },
+  'videoPoker.paytableJacksOrBetter': { kind: 'string', allowedValues: ['9/6', '8/5', '7/5'] },
+  'videoPoker.paytableDeucesWild': { kind: 'string', allowedValues: ['full_pay'] },
   'alerts.largeWinThreshold': { kind: 'number', min: 0 },
   'alerts.highRtpThreshold': { kind: 'number', min: 1 },
   'alerts.consecutiveWins': { kind: 'integer', min: 1 },
@@ -33,12 +43,53 @@ const SETTING_SPECS: Record<string, SettingSpec> = {
   'rg.selfExclusionMinDays': { kind: 'integer', min: 1 },
 }
 
-function validateSettingValue(key: string, value: unknown): { ok: true; normalized: number | null } | { ok: false; error: string } {
+type ValidatedResult =
+  | { ok: true; normalized: number | boolean | string | string[] | null }
+  | { ok: false; error: string }
+
+function validateSettingValue(key: string, value: unknown): ValidatedResult {
   const spec = SETTING_SPECS[key]
   if (!spec) {
     return { ok: false, error: `Unknown setting key: ${key}` }
   }
 
+  // Boolean settings
+  if (spec.kind === 'boolean') {
+    if (typeof value === 'boolean') return { ok: true, normalized: value }
+    if (value === 'true' || value === '1') return { ok: true, normalized: true }
+    if (value === 'false' || value === '0') return { ok: true, normalized: false }
+    return { ok: false, error: `${key} must be true or false` }
+  }
+
+  // String settings
+  if (spec.kind === 'string') {
+    if (typeof value !== 'string' || value.trim().length === 0) {
+      return { ok: false, error: `${key} must be a non-empty string` }
+    }
+    if (spec.allowedValues && !spec.allowedValues.includes(value)) {
+      return { ok: false, error: `${key} must be one of: ${spec.allowedValues.join(', ')}` }
+    }
+    return { ok: true, normalized: value }
+  }
+
+  // String array settings
+  if (spec.kind === 'string-array') {
+    if (!Array.isArray(value) || !value.every((v) => typeof v === 'string')) {
+      return { ok: false, error: `${key} must be an array of strings` }
+    }
+    if (value.length === 0) {
+      return { ok: false, error: `${key} must have at least one item` }
+    }
+    if (spec.allowedItems) {
+      const invalid = value.filter((v: string) => !spec.allowedItems!.includes(v))
+      if (invalid.length > 0) {
+        return { ok: false, error: `${key} contains invalid items: ${invalid.join(', ')}` }
+      }
+    }
+    return { ok: true, normalized: value }
+  }
+
+  // Numeric settings (existing logic)
   const nullable = spec.kind.startsWith('nullable')
   const wantInteger = spec.kind.endsWith('integer')
 
@@ -69,6 +120,10 @@ function validateSettingValue(key: string, value: unknown): { ok: true; normaliz
     return { ok: false, error: `${key} must be <= ${spec.max}` }
   }
 
+  if (spec.allowedValues && !spec.allowedValues.includes(String(normalized))) {
+    return { ok: false, error: `${key} must be one of: ${spec.allowedValues.join(', ')}` }
+  }
+
   return { ok: true, normalized }
 }
 
@@ -92,7 +147,7 @@ export async function GET(request: NextRequest) {
     return createRateLimitResponse(readLimit)
   }
 
-  const adminCheck = requireAdmin(request)
+  const adminCheck = requireAdmin(request, 'manage_settings')
   if (!adminCheck.ok) {
     await logAdminEvent({
       request,
@@ -160,7 +215,7 @@ export async function PATCH(request: NextRequest) {
     return createRateLimitResponse(actionLimit)
   }
 
-  const adminCheck = requireAdmin(request)
+  const adminCheck = requireAdmin(request, 'manage_settings')
   if (!adminCheck.ok) {
     await logAdminEvent({
       request,

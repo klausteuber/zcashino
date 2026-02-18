@@ -7,7 +7,7 @@ import Link from 'next/link'
 // Setting field definitions
 // ---------------------------------------------------------------------------
 
-interface SettingField {
+interface NumberField {
   key: string
   label: string
   type: 'number' | 'integer'
@@ -15,6 +15,29 @@ interface SettingField {
   placeholder?: string
   suffix?: string
 }
+
+interface BooleanField {
+  key: string
+  label: string
+  type: 'boolean'
+  description?: string
+}
+
+interface SelectField {
+  key: string
+  label: string
+  type: 'select'
+  options: { value: string; label: string }[]
+}
+
+interface MultiSelectField {
+  key: string
+  label: string
+  type: 'multi-select'
+  options: { value: string; label: string }[]
+}
+
+type SettingField = NumberField | BooleanField | SelectField | MultiSelectField
 
 interface SettingCategory {
   title: string
@@ -32,6 +55,89 @@ const SETTING_CATEGORIES: SettingCategory[] = [
       { key: 'blackjack.maxBet', label: 'Blackjack max bet', type: 'number', step: 0.0001, suffix: 'ZEC' },
       { key: 'videoPoker.minBet', label: 'Video Poker min bet', type: 'number', step: 0.0001, suffix: 'ZEC' },
       { key: 'videoPoker.maxBet', label: 'Video Poker max bet', type: 'number', step: 0.0001, suffix: 'ZEC' },
+    ],
+  },
+  {
+    title: 'Blackjack Rules',
+    description:
+      'House rules for blackjack. Changes apply to new rounds only — in-progress games use the rules from when they started.',
+    fields: [
+      {
+        key: 'blackjack.deckCount',
+        label: 'Number of decks',
+        type: 'select',
+        options: [
+          { value: '1', label: '1 deck' },
+          { value: '2', label: '2 decks' },
+          { value: '4', label: '4 decks' },
+          { value: '6', label: '6 decks (standard)' },
+          { value: '8', label: '8 decks' },
+        ],
+      },
+      {
+        key: 'blackjack.dealerStandsOn',
+        label: 'Dealer stands on',
+        type: 'select',
+        options: [
+          { value: '17', label: 'Soft 17 (S17 — standard)' },
+          { value: '18', label: 'Soft 18' },
+        ],
+      },
+      {
+        key: 'blackjack.blackjackPayout',
+        label: 'Blackjack payout',
+        type: 'select',
+        options: [
+          { value: '1.5', label: '3:2 (1.5× — standard)' },
+          { value: '1.2', label: '6:5 (1.2×)' },
+        ],
+      },
+      {
+        key: 'blackjack.allowSurrender',
+        label: 'Allow surrender',
+        type: 'boolean',
+        description: 'Let players forfeit half their bet on the initial two cards.',
+      },
+      {
+        key: 'blackjack.allowPerfectPairs',
+        label: 'Allow Perfect Pairs side bet',
+        type: 'boolean',
+        description: 'Enable the Perfect Pairs optional side bet.',
+      },
+    ],
+  },
+  {
+    title: 'Video Poker Rules',
+    description:
+      'Configure available variants and paytable schedules for video poker.',
+    fields: [
+      {
+        key: 'videoPoker.enabledVariants',
+        label: 'Enabled variants',
+        type: 'multi-select',
+        options: [
+          { value: 'jacks_or_better', label: 'Jacks or Better' },
+          { value: 'deuces_wild', label: 'Deuces Wild' },
+        ],
+      },
+      {
+        key: 'videoPoker.paytableJacksOrBetter',
+        label: 'Jacks or Better paytable',
+        type: 'select',
+        options: [
+          { value: '9/6', label: '9/6 Full Pay (99.54% RTP)' },
+          { value: '8/5', label: '8/5 (97.30% RTP)' },
+          { value: '7/5', label: '7/5 (96.15% RTP)' },
+        ],
+      },
+      {
+        key: 'videoPoker.paytableDeucesWild',
+        label: 'Deuces Wild paytable',
+        type: 'select',
+        options: [
+          { value: 'full_pay', label: 'Full Pay (99.73% RTP)' },
+        ],
+      },
     ],
   },
   {
@@ -107,7 +213,14 @@ export default function AdminSettingsPage() {
       for (const category of SETTING_CATEGORIES) {
         for (const field of category.fields) {
           const stored = s[field.key]
-          initial[field.key] = stored != null ? String(stored) : ''
+          if (field.type === 'multi-select') {
+            // Store as JSON string for multi-select
+            initial[field.key] = Array.isArray(stored) ? JSON.stringify(stored) : '[]'
+          } else if (field.type === 'boolean') {
+            initial[field.key] = stored === true ? 'true' : 'false'
+          } else {
+            initial[field.key] = stored != null ? String(stored) : ''
+          }
         }
       }
       setLocalValues(initial)
@@ -123,17 +236,45 @@ export default function AdminSettingsPage() {
   }, [fetchSettings])
 
   // -----------------------------------------------------------------------
-  // Save a single field
+  // Save a value for any field type
   // -----------------------------------------------------------------------
 
-  const saveField = async (field: SettingField) => {
-    const raw = localValues[field.key] ?? ''
+  const saveValue = async (key: string, value: unknown) => {
+    setFieldStatus((prev) => ({ ...prev, [key]: 'saving' }))
+    setFieldErrors((prev) => ({ ...prev, [key]: '' }))
 
-    // Allow clearing a field (empty string)
-    if (raw.trim() === '') {
-      // Skip saving empty — or clear the value
-      return
+    try {
+      const res = await fetch('/api/admin/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key, value }),
+      })
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error || `HTTP ${res.status}`)
+      }
+
+      setSettings((prev) => ({ ...prev, [key]: value }))
+      setFieldStatus((prev) => ({ ...prev, [key]: 'saved' }))
+
+      setTimeout(() => {
+        setFieldStatus((prev) =>
+          prev[key] === 'saved' ? { ...prev, [key]: 'idle' } : prev
+        )
+      }, 2000)
+    } catch (err) {
+      setFieldStatus((prev) => ({ ...prev, [key]: 'error' }))
+      setFieldErrors((prev) => ({
+        ...prev,
+        [key]: err instanceof Error ? err.message : 'Save failed',
+      }))
     }
+  }
+
+  const saveNumberField = async (field: NumberField) => {
+    const raw = localValues[field.key] ?? ''
+    if (raw.trim() === '') return
 
     const numVal = Number(raw)
     if (isNaN(numVal)) {
@@ -148,37 +289,7 @@ export default function AdminSettingsPage() {
       return
     }
 
-    setFieldStatus((prev) => ({ ...prev, [field.key]: 'saving' }))
-    setFieldErrors((prev) => ({ ...prev, [field.key]: '' }))
-
-    try {
-      const res = await fetch('/api/admin/settings', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: field.key, value: numVal }),
-      })
-
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        throw new Error(body.error || `HTTP ${res.status}`)
-      }
-
-      setSettings((prev) => ({ ...prev, [field.key]: numVal }))
-      setFieldStatus((prev) => ({ ...prev, [field.key]: 'saved' }))
-
-      // Clear "saved" after 2 seconds
-      setTimeout(() => {
-        setFieldStatus((prev) =>
-          prev[field.key] === 'saved' ? { ...prev, [field.key]: 'idle' } : prev
-        )
-      }, 2000)
-    } catch (err) {
-      setFieldStatus((prev) => ({ ...prev, [field.key]: 'error' }))
-      setFieldErrors((prev) => ({
-        ...prev,
-        [field.key]: err instanceof Error ? err.message : 'Save failed',
-      }))
-    }
+    await saveValue(field.key, numVal)
   }
 
   // -----------------------------------------------------------------------
@@ -190,7 +301,192 @@ export default function AdminSettingsPage() {
     const local = localValues[key] ?? ''
     if (local.trim() === '' && stored == null) return false
     if (stored == null) return local.trim() !== ''
+    // For arrays, compare JSON
+    if (Array.isArray(stored)) return JSON.stringify(stored) !== local
     return String(stored) !== local
+  }
+
+  // -----------------------------------------------------------------------
+  // Status badge
+  // -----------------------------------------------------------------------
+
+  const StatusBadge = ({ fieldKey }: { fieldKey: string }) => {
+    const status = fieldStatus[fieldKey] ?? 'idle'
+    if (status === 'saving') return <span className="text-xs text-venetian-gold/60 animate-pulse">Saving…</span>
+    if (status === 'saved') return <span className="text-xs text-green-400">Saved</span>
+    if (status === 'error') return <span className="text-xs text-blood-ruby">{fieldErrors[fieldKey]}</span>
+    return null
+  }
+
+  // -----------------------------------------------------------------------
+  // Render field by type
+  // -----------------------------------------------------------------------
+
+  const renderField = (field: SettingField) => {
+    const status = fieldStatus[field.key] ?? 'idle'
+
+    // Number / Integer field
+    if (field.type === 'number' || field.type === 'integer') {
+      const nf = field as NumberField
+      const dirty = isDirty(field.key)
+      return (
+        <div key={field.key}>
+          <label className="block text-xs text-venetian-gold/70 mb-1">
+            {field.label}
+          </label>
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <input
+                type="number"
+                step={nf.step ?? 1}
+                value={localValues[field.key] ?? ''}
+                placeholder={nf.placeholder ?? ''}
+                onChange={(e) =>
+                  setLocalValues((prev) => ({ ...prev, [field.key]: e.target.value }))
+                }
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && dirty) saveNumberField(nf)
+                }}
+                className="w-full px-3 py-1.5 bg-midnight-black/70 border border-masque-gold/20 rounded-lg text-sm text-bone-white placeholder:text-bone-white/20 focus:outline-none focus:border-masque-gold/50 transition-colors font-mono"
+              />
+              {nf.suffix && (
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-venetian-gold/40 pointer-events-none">
+                  {nf.suffix}
+                </span>
+              )}
+            </div>
+            <button
+              onClick={() => saveNumberField(nf)}
+              disabled={!dirty || status === 'saving'}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                status === 'saved'
+                  ? 'bg-green-700/30 text-green-400 border border-green-500/30'
+                  : status === 'error'
+                    ? 'bg-blood-ruby/20 text-blood-ruby border border-blood-ruby/30'
+                    : dirty
+                      ? 'bg-masque-gold/20 text-masque-gold border border-masque-gold/40 hover:bg-masque-gold/30'
+                      : 'bg-midnight-black/30 text-bone-white/20 border border-bone-white/10 cursor-not-allowed'
+              }`}
+            >
+              {status === 'saving' ? '…' : status === 'saved' ? '✓' : status === 'error' ? '!' : 'Save'}
+            </button>
+          </div>
+          {status === 'error' && fieldErrors[field.key] && (
+            <p className="text-xs text-blood-ruby mt-1">{fieldErrors[field.key]}</p>
+          )}
+        </div>
+      )
+    }
+
+    // Boolean toggle
+    if (field.type === 'boolean') {
+      const bf = field as BooleanField
+      const isOn = localValues[field.key] === 'true'
+      return (
+        <div key={field.key} className="flex items-start justify-between gap-3 py-1">
+          <div className="flex-1 min-w-0">
+            <div className="text-xs text-venetian-gold/70">{field.label}</div>
+            {bf.description && (
+              <div className="text-[10px] text-bone-white/30 mt-0.5 leading-tight">{bf.description}</div>
+            )}
+            <StatusBadge fieldKey={field.key} />
+          </div>
+          <button
+            onClick={async () => {
+              const newVal = !isOn
+              setLocalValues((prev) => ({ ...prev, [field.key]: String(newVal) }))
+              await saveValue(field.key, newVal)
+            }}
+            disabled={status === 'saving'}
+            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
+              isOn ? 'bg-masque-gold' : 'bg-bone-white/20'
+            }`}
+          >
+            <span
+              className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-bone-white shadow-sm transition-transform ${
+                isOn ? 'translate-x-4' : 'translate-x-0'
+              }`}
+            />
+          </button>
+        </div>
+      )
+    }
+
+    // Select dropdown
+    if (field.type === 'select') {
+      const sf = field as SelectField
+      return (
+        <div key={field.key}>
+          <label className="block text-xs text-venetian-gold/70 mb-1">
+            {field.label}
+          </label>
+          <div className="flex items-center gap-2">
+            <select
+              value={localValues[field.key] ?? ''}
+              onChange={async (e) => {
+                const val = e.target.value
+                setLocalValues((prev) => ({ ...prev, [field.key]: val }))
+                // Auto-save on selection — need to convert numeric strings back to numbers for numeric settings
+                const numVal = Number(val)
+                await saveValue(field.key, Number.isFinite(numVal) && sf.options.some((o) => o.value === val) ? (val.includes('.') || !isNaN(numVal) ? numVal : val) : val)
+              }}
+              disabled={status === 'saving'}
+              className="flex-1 px-3 py-1.5 bg-midnight-black/70 border border-masque-gold/20 rounded-lg text-sm text-bone-white focus:outline-none focus:border-masque-gold/50 transition-colors"
+            >
+              {sf.options.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+            <StatusBadge fieldKey={field.key} />
+          </div>
+        </div>
+      )
+    }
+
+    // Multi-select checkboxes
+    if (field.type === 'multi-select') {
+      const mf = field as MultiSelectField
+      let selected: string[] = []
+      try {
+        selected = JSON.parse(localValues[field.key] ?? '[]')
+      } catch { /* keep empty */ }
+      return (
+        <div key={field.key}>
+          <label className="block text-xs text-venetian-gold/70 mb-1.5">
+            {field.label}
+          </label>
+          <div className="space-y-1.5">
+            {mf.options.map((opt) => {
+              const checked = selected.includes(opt.value)
+              return (
+                <label key={opt.value} className="flex items-center gap-2 cursor-pointer group">
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={async () => {
+                      const next = checked
+                        ? selected.filter((v) => v !== opt.value)
+                        : [...selected, opt.value]
+                      if (next.length === 0) return // Must have at least one
+                      setLocalValues((prev) => ({ ...prev, [field.key]: JSON.stringify(next) }))
+                      await saveValue(field.key, next)
+                    }}
+                    disabled={status === 'saving' || (checked && selected.length === 1)}
+                    className="h-3.5 w-3.5 rounded border-masque-gold/30 bg-midnight-black/70 text-masque-gold focus:ring-masque-gold/30 accent-masque-gold"
+                  />
+                  <span className="text-sm text-bone-white/80 group-hover:text-bone-white transition-colors">
+                    {opt.label}
+                  </span>
+                </label>
+              )
+            })}
+          </div>
+          <StatusBadge fieldKey={field.key} />
+        </div>
+      )
+    }
+
+    return null
   }
 
   // -----------------------------------------------------------------------
@@ -245,8 +541,8 @@ export default function AdminSettingsPage() {
             Settings are enforced in real-time by game and alert logic.
           </p>
           <p className="text-xs text-venetian-gold/50 mt-1">
-            Bet limits, responsible gambling limits, alert thresholds, and pool health parameters
-            are applied immediately. All changes are audit-logged.
+            Game rules, bet limits, responsible gambling limits, alert thresholds, and pool health
+            parameters are applied immediately. All changes are audit-logged.
           </p>
         </div>
 
@@ -265,71 +561,7 @@ export default function AdminSettingsPage() {
               </p>
 
               <div className="space-y-3">
-                {category.fields.map((field) => {
-                  const status = fieldStatus[field.key] ?? 'idle'
-                  const error = fieldErrors[field.key] ?? ''
-                  const dirty = isDirty(field.key)
-
-                  return (
-                    <div key={field.key}>
-                      <label className="block text-xs text-venetian-gold/70 mb-1">
-                        {field.label}
-                      </label>
-                      <div className="flex items-center gap-2">
-                        <div className="relative flex-1">
-                          <input
-                            type="number"
-                            step={field.step ?? 1}
-                            value={localValues[field.key] ?? ''}
-                            placeholder={field.placeholder ?? ''}
-                            onChange={(e) =>
-                              setLocalValues((prev) => ({
-                                ...prev,
-                                [field.key]: e.target.value,
-                              }))
-                            }
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter' && dirty) saveField(field)
-                            }}
-                            className="w-full px-3 py-1.5 bg-midnight-black/70 border border-masque-gold/20 rounded-lg text-sm text-bone-white placeholder:text-bone-white/20 focus:outline-none focus:border-masque-gold/50 transition-colors font-mono"
-                          />
-                          {field.suffix && (
-                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-venetian-gold/40 pointer-events-none">
-                              {field.suffix}
-                            </span>
-                          )}
-                        </div>
-
-                        <button
-                          onClick={() => saveField(field)}
-                          disabled={!dirty || status === 'saving'}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                            status === 'saved'
-                              ? 'bg-green-700/30 text-green-400 border border-green-500/30'
-                              : status === 'error'
-                                ? 'bg-blood-ruby/20 text-blood-ruby border border-blood-ruby/30'
-                                : dirty
-                                  ? 'bg-masque-gold/20 text-masque-gold border border-masque-gold/40 hover:bg-masque-gold/30'
-                                  : 'bg-midnight-black/30 text-bone-white/20 border border-bone-white/10 cursor-not-allowed'
-                          }`}
-                        >
-                          {status === 'saving'
-                            ? '…'
-                            : status === 'saved'
-                              ? '✓'
-                              : status === 'error'
-                                ? '!'
-                                : 'Save'}
-                        </button>
-                      </div>
-
-                      {/* Error message */}
-                      {status === 'error' && error && (
-                        <p className="text-xs text-blood-ruby mt-1">{error}</p>
-                      )}
-                    </div>
-                  )
-                })}
+                {category.fields.map(renderField)}
               </div>
             </div>
           ))}

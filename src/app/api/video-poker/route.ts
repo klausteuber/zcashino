@@ -49,8 +49,6 @@ function createWagerLimitResponse(result: ReturnType<typeof checkWagerAllowed>) 
   }, { status: 403 })
 }
 
-const VALID_VARIANTS: VideoPokerVariant[] = ['jacks_or_better', 'deuces_wild']
-
 // POST /api/video-poker — Start new game or draw
 export async function POST(request: NextRequest) {
   const rateLimit = checkPublicRateLimit(request, 'game-action')
@@ -159,10 +157,18 @@ async function handleStartGame(
     maxBet: settings.videoPoker.maxBet,
   }
 
-  // Validate variant
-  if (!VALID_VARIANTS.includes(variant as VideoPokerVariant)) {
-    return NextResponse.json({ error: 'Invalid variant. Use jacks_or_better or deuces_wild' }, { status: 400 })
+  // Validate variant against admin-configured enabled variants
+  if (!settings.videoPoker.enabledVariants.includes(variant)) {
+    return NextResponse.json({
+      error: `Variant "${variant}" is not currently enabled. Available: ${settings.videoPoker.enabledVariants.join(', ')}`,
+      code: 'VARIANT_DISABLED',
+    }, { status: 400 })
   }
+
+  // Determine paytable key from settings based on variant
+  const paytableKey = variant === 'jacks_or_better'
+    ? settings.videoPoker.paytableJacksOrBetter
+    : settings.videoPoker.paytableDeucesWild
 
   // Validate bet
   if (baseBet < betLimits.minBet || baseBet > betLimits.maxBet) {
@@ -196,6 +202,7 @@ async function handleStartGame(
       betMultiplier,
       totalBet,
       betLimits,
+      paytableKey,
       clientSeedInput
     )
   }
@@ -232,7 +239,8 @@ async function handleStartGame(
     clientSeed,
     nonce,
     fairnessVersion,
-    betLimits
+    betLimits,
+    paytableKey
   )
 
   let gameId = ''
@@ -266,6 +274,7 @@ async function handleStartGame(
           commitmentTimestamp: blockTimestamp,
           initialState: JSON.stringify({
             hand: gameState.hand.map(c => ({ rank: c.rank, suit: c.suit })),
+            paytableKey,
           }),
           status: 'active',
         },
@@ -350,6 +359,7 @@ async function handleStartGameSessionNonce(
   betMultiplier: number,
   totalBet: number,
   betLimits: { minBet: number; maxBet: number },
+  paytableKey: string,
   clientSeedInput?: string
 ) {
   const requestedClientSeed = clientSeedInput?.trim()
@@ -398,7 +408,8 @@ async function handleStartGameSessionNonce(
         allocated.clientSeed,
         allocated.nonce,
         HMAC_FAIRNESS_VERSION,
-        betLimits
+        betLimits,
+        paytableKey
       )
       gameState = startedGameState
 
@@ -421,6 +432,7 @@ async function handleStartGameSessionNonce(
           commitmentTimestamp: allocated.commitmentTimestamp,
           initialState: JSON.stringify({
             hand: startedGameState.hand.map(c => ({ rank: c.rank, suit: c.suit })),
+            paytableKey,
           }),
           status: 'active',
         },
@@ -536,6 +548,9 @@ async function handleDraw(
     return NextResponse.json({ error: 'Server seed unavailable for this game.' }, { status: 503 })
   }
 
+  const storedInitial = JSON.parse(game.initialState || '{}')
+  const storedPaytableKey: string | undefined = storedInitial.paytableKey
+
   const initialState = createInitialState(
     session.balance + game.totalBet,
     game.variant as VideoPokerVariant
@@ -550,7 +565,8 @@ async function handleDraw(
     game.nonce,
     normalizeFairnessVersion(game.fairnessVersion),
     // Use a permissive range so admin bet-limit changes don't break in-flight games.
-    { minBet: 0, maxBet: Math.max(game.baseBet, 1) }
+    { minBet: 0, maxBet: Math.max(game.baseBet, 1) },
+    storedPaytableKey
   )
 
   // Execute draw with held cards

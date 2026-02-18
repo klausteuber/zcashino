@@ -22,6 +22,7 @@ import { isKillSwitchActive } from '@/lib/kill-switch'
 import { roundZec } from '@/lib/wallet'
 import type {
   BlackjackAction,
+  BlackjackGameRules,
   BlackjackGameState,
   BlockchainCommitment,
   FairnessVersion
@@ -194,6 +195,13 @@ async function handleStartGame(
     }, { status: 400 })
   }
 
+  if (!settings.blackjack.allowPerfectPairs && normalizedPerfectPairsBet > 0) {
+    return NextResponse.json({
+      error: 'Perfect Pairs side bet is currently disabled.',
+      code: 'SIDE_BET_DISABLED',
+    }, { status: 400 })
+  }
+
   if (normalizedPerfectPairsBet < 0 || normalizedPerfectPairsBet > normalizedMainBet) {
     return NextResponse.json({
       error: 'Invalid side bet amount. Perfect Pairs must be between 0 and the main bet.',
@@ -211,6 +219,14 @@ async function handleStartGame(
     return createWagerLimitResponse(wagerCheck)
   }
 
+  const gameRules: BlackjackGameRules = {
+    deckCount: settings.blackjack.deckCount,
+    dealerStandsOn: settings.blackjack.dealerStandsOn,
+    blackjackPayout: settings.blackjack.blackjackPayout,
+    allowSurrender: settings.blackjack.allowSurrender,
+    allowPerfectPairs: settings.blackjack.allowPerfectPairs,
+  }
+
   if (getProvablyFairMode() === SESSION_NONCE_MODE) {
     return handleStartGameSessionNonce(
       request,
@@ -219,6 +235,7 @@ async function handleStartGame(
       normalizedPerfectPairsBet,
       totalBet,
       betLimits,
+      gameRules,
       clientSeedInput
     )
   }
@@ -255,7 +272,8 @@ async function handleStartGame(
     clientSeed,
     nonce,
     fairnessVersion,
-    betLimits
+    betLimits,
+    gameRules
   )
 
   let gameId = ''
@@ -288,7 +306,8 @@ async function handleStartGame(
           initialState: JSON.stringify({
             deck: gameState.deck.slice(0, 10),
             playerCards: gameState.playerHands[0]?.cards,
-            dealerCards: gameState.dealerHand.cards
+            dealerCards: gameState.dealerHand.cards,
+            gameRules,
           }),
           status: 'active'
         }
@@ -379,6 +398,7 @@ async function handleStartGameSessionNonce(
   normalizedPerfectPairsBet: number,
   totalBet: number,
   betLimits: { minBet: number; maxBet: number },
+  gameRules: BlackjackGameRules,
   clientSeedInput?: string
 ) {
   const requestedClientSeed = clientSeedInput?.trim()
@@ -427,7 +447,8 @@ async function handleStartGameSessionNonce(
         allocated.clientSeed,
         allocated.nonce,
         HMAC_FAIRNESS_VERSION,
-        betLimits
+        betLimits,
+        gameRules
       )
       gameState = startedGameState
 
@@ -449,7 +470,8 @@ async function handleStartGameSessionNonce(
           initialState: JSON.stringify({
             deck: startedGameState.deck.slice(0, 10),
             playerCards: startedGameState.playerHands[0]?.cards,
-            dealerCards: startedGameState.dealerHand.cards
+            dealerCards: startedGameState.dealerHand.cards,
+            gameRules,
           }),
           status: 'active'
         }
@@ -580,6 +602,10 @@ async function handleGameAction(
     session.balance + game.mainBet + game.perfectPairsBet + game.insuranceBet
   )
 
+  // Read stored game rules from initial state for replay consistency
+  const storedInitial = JSON.parse(game.initialState || '{}')
+  const storedGameRules: BlackjackGameRules | undefined = storedInitial.gameRules
+
   // Start round to get initial dealt cards (same seeds = same deck order)
   let gameState = startRound(
     initialState,
@@ -591,7 +617,8 @@ async function handleGameAction(
     game.nonce,
     normalizeFairnessVersion(game.fairnessVersion),
     // Use a permissive range so admin bet-limit changes don't break in-flight games.
-    { minBet: 0, maxBet: Math.max(game.mainBet, 1) }
+    { minBet: 0, maxBet: Math.max(game.mainBet, 1) },
+    storedGameRules
   )
 
   // Restore insurance bet if it was taken (insurance is not in actionHistory)
@@ -736,6 +763,10 @@ async function handleInsuranceAction(
   // Reconstruct game state from initial deal
   const initialState = createInitialState(session.balance + game.mainBet + game.perfectPairsBet)
 
+  // Read stored game rules from initial state for replay consistency
+  const storedInitial = JSON.parse(game.initialState || '{}')
+  const storedGameRules: BlackjackGameRules | undefined = storedInitial.gameRules
+
   // Start round to get initial dealt cards
   let gameState = startRound(
     initialState,
@@ -747,7 +778,8 @@ async function handleInsuranceAction(
     game.nonce,
     normalizeFairnessVersion(game.fairnessVersion),
     // Use a permissive range so admin bet-limit changes don't break in-flight games.
-    { minBet: 0, maxBet: Math.max(game.mainBet, 1) }
+    { minBet: 0, maxBet: Math.max(game.mainBet, 1) },
+    storedGameRules
   )
 
   // Check if insurance can be taken (dealer showing Ace, no insurance yet)

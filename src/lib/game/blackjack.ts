@@ -1,5 +1,6 @@
 import type {
   BlackjackGameState,
+  BlackjackGameRules,
   BlackjackAction,
   Hand,
   Card,
@@ -71,10 +72,12 @@ export function startRound(
   clientSeed: string,
   nonce: number,
   fairnessVersion: FairnessVersion = LEGACY_FAIRNESS_VERSION,
-  betLimits?: { minBet?: number; maxBet?: number }
+  betLimits?: { minBet?: number; maxBet?: number },
+  gameRules?: BlackjackGameRules
 ): BlackjackGameState {
   const minBet = betLimits?.minBet ?? MIN_BET
   const maxBet = betLimits?.maxBet ?? MAX_BET
+  const deckCount = gameRules?.deckCount ?? NUM_DECKS
 
   // Validate bets
   if (mainBet < minBet || mainBet > maxBet) {
@@ -94,7 +97,7 @@ export function startRound(
 
   // Create and shuffle deck using combined seed
   const combinedSeed = `${serverSeed}:${clientSeed}:${nonce}`
-  const shoe = createShoe(NUM_DECKS)
+  const shoe = createShoe(deckCount)
   const shuffledDeck = shuffleDeck(shoe, combinedSeed, fairnessVersion)
 
   // Deal initial cards
@@ -178,7 +181,8 @@ export function startRound(
     nonce,
     lastPayout: 0,
     message,
-    perfectPairsResult
+    perfectPairsResult,
+    gameRules,
   }
 
   // If immediate blackjack, resolve the round to calculate payout
@@ -545,8 +549,9 @@ function playDealerHand(state: BlackjackGameState): BlackjackGameState {
   let dealerCards = state.dealerHand.cards.map(c => ({ ...c, faceUp: true }))
   let deck = [...state.deck]
 
-  // Dealer hits until 17 or higher (stands on S17)
-  while (calculateHandValue(dealerCards) < DEALER_STANDS_ON) {
+  // Dealer hits until stand threshold or higher
+  const dealerStandsOn = state.gameRules?.dealerStandsOn ?? DEALER_STANDS_ON
+  while (calculateHandValue(dealerCards) < dealerStandsOn) {
     dealerCards = [...dealerCards, deck[0]]
     deck = deck.slice(1)
   }
@@ -575,6 +580,7 @@ function playDealerHand(state: BlackjackGameState): BlackjackGameState {
  * Resolve round and calculate payouts
  */
 function resolveRound(state: BlackjackGameState): BlackjackGameState {
+  const blackjackPayout = state.gameRules?.blackjackPayout ?? BLACKJACK_PAYOUT
   const dealerValue = calculateHandValue(state.dealerHand.cards)
   const dealerBlackjack = state.dealerHand.isBlackjack
   const dealerBusted = state.dealerHand.isBusted
@@ -612,8 +618,8 @@ function resolveRound(state: BlackjackGameState): BlackjackGameState {
         reason = 'Both blackjack - push'
       } else {
         outcome = 'blackjack'
-        payout = roundZec(hand.bet * (1 + BLACKJACK_PAYOUT))
-        reason = 'Blackjack pays 3:2'
+        payout = roundZec(hand.bet * (1 + blackjackPayout))
+        reason = blackjackPayout === 1.5 ? 'Blackjack pays 3:2' : `Blackjack pays ${blackjackPayout}:1`
       }
     } else if (dealerBusted) {
       outcome = 'win'
@@ -717,6 +723,17 @@ export function getAvailableActions(state: BlackjackGameState): BlackjackAction[
     && !isResplitAcesAttempt
   ) {
     actions.push('split')
+  }
+
+  // Surrender: only on first two cards, unsplit hand, when enabled by game rules
+  if (
+    state.gameRules?.allowSurrender
+    && currentHand.cards.length === 2
+    && state.playerHands.length === 1
+    && !currentHand.isSplit
+    && !currentHand.isDoubled
+  ) {
+    actions.push('surrender')
   }
 
   return actions

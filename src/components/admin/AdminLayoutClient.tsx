@@ -15,6 +15,7 @@ export default function AdminLayoutClient({
   const [authChecked, setAuthChecked] = useState(false)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [currentAdmin, setCurrentAdmin] = useState<string>('admin')
+  const [adminRole, setAdminRole] = useState<string>('analyst')
 
   const checkAuth = useCallback(async () => {
     try {
@@ -24,6 +25,7 @@ export default function AdminLayoutClient({
       if (data.authenticated) {
         setIsAuthenticated(true)
         setCurrentAdmin(data.username || 'admin')
+        setAdminRole(data.role || 'analyst')
       } else {
         setIsAuthenticated(false)
       }
@@ -55,7 +57,7 @@ export default function AdminLayoutClient({
 
     return (
       <div className="flex min-h-screen">
-        <AdminSidebar currentAdmin={currentAdmin} onLogout={handleLogout} />
+        <AdminSidebar currentAdmin={currentAdmin} adminRole={adminRole} onLogout={handleLogout} />
         <div className="flex-1 ml-48 transition-all duration-200">
           {children}
         </div>
@@ -86,7 +88,7 @@ export default function AdminLayoutClient({
 
   return (
     <div className="flex min-h-screen">
-      <AdminSidebar currentAdmin={currentAdmin} onLogout={handleLogout} />
+      <AdminSidebar currentAdmin={currentAdmin} adminRole={adminRole} onLogout={handleLogout} />
       <div className="flex-1 ml-48 transition-all duration-200">
         {children}
       </div>

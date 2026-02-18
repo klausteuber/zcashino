@@ -574,6 +574,22 @@ The `handleRealSelect` callback called `setStep('deposit')` unconditionally, but
 
 ---
 
+### Admin kill switch banner always visible (2026-02-18)
+
+**Symptom:** Admin dashboard permanently shows "WARNING: Kill switch active — new games and withdrawals are blocked." even though kill switch is off.
+
+**Root Cause:** The banner condition checked `overview.killSwitch` instead of `overview.killSwitch?.active`. The API returns `killSwitch: { active: false, activatedAt: null, activatedBy: null }` — an object, which is **always truthy** in JavaScript regardless of the `active` property value.
+
+**Fix:** Changed both checks from `overview.killSwitch` to `overview.killSwitch?.active`:
+- Line 606: outer container visibility condition
+- Line 620: inner banner render condition
+
+**Lesson:** When an API returns a status object like `{ active: boolean }`, never check truthiness of the object itself. Always check the specific boolean property. Objects are always truthy — even `{}`, `{ active: false }`, and `{ enabled: 0 }`.
+
+**File:** `src/app/admin/page.tsx`
+
+---
+
 ### Hover glow visible on mobile (touch devices)
 
 **Symptom:** On mobile, tapping a button shows the hover glow that stays visible after releasing.

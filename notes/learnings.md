@@ -332,3 +332,8 @@ In-memory limits and remote font fetches are acceptable in dev, but must be call
 
 4. **Reset modal state on close, not on open.**
    Resetting `step` to `'welcome'` when `!isOpen` (in a useEffect) ensures the modal always starts fresh on the next open. Resetting on open can race with auto-advance logic. The pattern: close resets state, open triggers auto-advance if conditions are met.
+
+## Admin Dashboard Learnings (2026-02-18)
+
+1. **Never check truthiness of status objects — check the boolean property.**
+   `overview.killSwitch` is `{ active: false, activatedAt: null, activatedBy: null }` — an object that is always truthy. The admin banner condition `overview.killSwitch && (...)` displayed the "Kill switch active" warning permanently. The fix: `overview.killSwitch?.active`. This is a general JavaScript pitfall: `!!{}` is `true`, `!!{ active: false }` is `true`. Always destructure or access the specific boolean field.

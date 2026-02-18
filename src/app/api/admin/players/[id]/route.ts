@@ -8,6 +8,7 @@ import {
 import { logAdminEvent } from '@/lib/admin/audit'
 import { guardCypherAdminRequest } from '@/lib/admin/host-guard'
 import { roundZec } from '@/lib/wallet'
+import { assessPlayerRisk } from '@/lib/admin/risk-scoring'
 
 /**
  * GET /api/admin/players/[id]
@@ -32,7 +33,7 @@ export async function GET(
     return createRateLimitResponse(readLimit)
   }
 
-  const adminCheck = requireAdmin(request)
+  const adminCheck = requireAdmin(request, 'view_players')
   if (!adminCheck.ok) {
     await logAdminEvent({
       request,
@@ -74,7 +75,7 @@ export async function GET(
       )
     }
 
-    const [transactions, bjGames, vpGames, bjCount, vpCount, txCount] =
+    const [transactions, bjGames, vpGames, bjCount, vpCount, bjCompleted, vpCompleted, txCount, riskFlags] =
       await Promise.all([
         prisma.transaction.findMany({
           where: { sessionId: id },
@@ -123,10 +124,19 @@ export async function GET(
         }),
         prisma.blackjackGame.count({ where: { sessionId: id } }),
         prisma.videoPokerGame.count({ where: { sessionId: id } }),
+        prisma.blackjackGame.count({ where: { sessionId: id, status: 'completed' } }),
+        prisma.videoPokerGame.count({ where: { sessionId: id, status: 'completed' } }),
         prisma.transaction.count({ where: { sessionId: id } }),
+        assessPlayerRisk(id),
       ])
 
     const housePnl = session.totalWagered - session.totalWon
+    const sessionDurationHours =
+      (session.lastActiveAt.getTime() - session.createdAt.getTime()) / (1000 * 60 * 60)
+    const totalHands = bjCompleted + vpCompleted
+    const realizedRtp = session.totalWagered > 0
+      ? Math.round((session.totalWon / session.totalWagered) * 10000) / 100
+      : 0
 
     await logAdminEvent({
       request,
@@ -158,6 +168,14 @@ export async function GET(
         createdAt: session.createdAt,
         updatedAt: session.updatedAt,
         depositWallet: session.wallet,
+      },
+      risk: riskFlags,
+      stats: {
+        totalHands,
+        blackjackCompleted: bjCompleted,
+        videoPokerCompleted: vpCompleted,
+        sessionDurationHours: Math.round(sessionDurationHours * 10) / 10,
+        realizedRtp,
       },
       transactions,
       blackjackGames: bjGames,
@@ -208,7 +226,7 @@ export async function PATCH(
     return createRateLimitResponse(writeLimit)
   }
 
-  const adminCheck = requireAdmin(request)
+  const adminCheck = requireAdmin(request, 'update_player_limits')
   if (!adminCheck.ok) {
     await logAdminEvent({
       request,

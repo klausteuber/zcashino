@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation'
 
 interface AdminSidebarProps {
   currentAdmin: string
+  adminRole: string
   onLogout: () => void
 }
 
@@ -13,6 +14,7 @@ interface NavItem {
   label: string
   href: string
   icon: string
+  requiredRole?: string
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -22,10 +24,12 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Games', href: '/admin/games', icon: '*' },
   { label: 'Withdrawals', href: '/admin/withdrawals', icon: '$' },
   { label: 'Alerts', href: '/admin/alerts', icon: '!' },
-  { label: 'Settings', href: '/admin/settings', icon: '%' },
+  { label: 'Audit Logs', href: '/admin/audit-logs', icon: '&' },
+  { label: 'Settings', href: '/admin/settings', icon: '%', requiredRole: 'super_admin' },
+  { label: 'Users', href: '/admin/users', icon: '+', requiredRole: 'super_admin' },
 ]
 
-export default function AdminSidebar({ currentAdmin, onLogout }: AdminSidebarProps) {
+export default function AdminSidebar({ currentAdmin, adminRole, onLogout }: AdminSidebarProps) {
   const pathname = usePathname()
   const [collapsed, setCollapsed] = useState(false)
 
@@ -58,7 +62,9 @@ export default function AdminSidebar({ currentAdmin, onLogout }: AdminSidebarPro
 
       {/* Navigation */}
       <nav className="flex-1 py-2 overflow-y-auto">
-        {NAV_ITEMS.map((item) => {
+        {NAV_ITEMS.filter(
+          (item) => !item.requiredRole || item.requiredRole === adminRole
+        ).map((item) => {
           const active = isActive(item.href)
           return (
             <Link
@@ -83,8 +89,9 @@ export default function AdminSidebar({ currentAdmin, onLogout }: AdminSidebarPro
       {/* Footer */}
       <div className="p-3 border-t border-masque-gold/20">
         {!collapsed && (
-          <div className="text-xs text-venetian-gold/50 truncate mb-2">
-            {currentAdmin}
+          <div className="mb-2">
+            <div className="text-xs text-venetian-gold/50 truncate">{currentAdmin}</div>
+            <div className="text-[10px] text-venetian-gold/30 truncate">{adminRole.replace('_', ' ')}</div>
           </div>
         )}
         <button

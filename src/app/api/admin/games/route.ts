@@ -7,6 +7,7 @@ import {
 } from '@/lib/admin/rate-limit'
 import { logAdminEvent } from '@/lib/admin/audit'
 import { guardCypherAdminRequest } from '@/lib/admin/host-guard'
+import { toCsvResponse, isCsvRequest } from '@/lib/admin/csv-export'
 
 interface GameListItem {
   id: string
@@ -40,7 +41,7 @@ export async function GET(request: NextRequest) {
     return createRateLimitResponse(readLimit)
   }
 
-  const adminCheck = requireAdmin(request)
+  const adminCheck = requireAdmin(request, 'view_games')
   if (!adminCheck.ok) {
     await logAdminEvent({
       request,
@@ -64,6 +65,10 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(Number(searchParams.get('limit')) || 25, 100)
     const offset = Number(searchParams.get('offset')) || 0
 
+    const isCsv = isCsvRequest(request)
+    const effectiveLimit = isCsv ? 10000 : limit
+    const effectiveOffset = isCsv ? 0 : offset
+
     const results: GameListItem[] = []
     let bjCount = 0
     let vpCount = 0
@@ -85,8 +90,8 @@ export async function GET(request: NextRequest) {
         prisma.blackjackGame.findMany({
           where: bjWhere,
           orderBy: sort === 'payout' ? { payout: order } : { completedAt: order },
-          take: limit,
-          skip: offset,
+          take: effectiveLimit,
+          skip: effectiveOffset,
           select: {
             id: true,
             sessionId: true,
@@ -138,8 +143,8 @@ export async function GET(request: NextRequest) {
         prisma.videoPokerGame.findMany({
           where: vpWhere,
           orderBy: sort === 'payout' ? { payout: order } : { completedAt: order },
-          take: limit,
-          skip: offset,
+          take: effectiveLimit,
+          skip: effectiveOffset,
           select: {
             id: true,
             sessionId: true,
@@ -186,6 +191,32 @@ export async function GET(request: NextRequest) {
     }
 
     const total = bjCount + vpCount
+
+    // CSV export
+    if (isCsv) {
+      const rows = results.map((g) => ({
+        id: g.id,
+        type: g.type,
+        sessionId: g.sessionId,
+        bet: g.bet,
+        outcome: g.outcome ?? '',
+        payout: g.payout ?? 0,
+        profit: g.bet - (g.payout ?? 0),
+        status: g.status,
+        createdAt: g.createdAt.toISOString(),
+        completedAt: g.completedAt?.toISOString() ?? '',
+      }))
+
+      await logAdminEvent({
+        request,
+        action: 'admin.games.export',
+        success: true,
+        actor: adminCheck.session.username,
+        details: `Exported ${rows.length} games as CSV`,
+      })
+
+      return toCsvResponse(rows, `games-${new Date().toISOString().slice(0, 10)}.csv`)
+    }
 
     await logAdminEvent({
       request,

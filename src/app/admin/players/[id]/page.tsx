@@ -88,8 +88,28 @@ interface VideoPokerGameRow {
   completedAt: string | null
 }
 
+interface RiskFlags {
+  isHighRoller: boolean
+  velocityAlert: boolean
+  lossChasingAlert: boolean
+  rtpOutlier: boolean
+  sessionMarathon: boolean
+  rapidCycle: boolean
+  riskLevel: 'low' | 'medium' | 'high' | 'critical'
+}
+
+interface PlayerStats {
+  totalHands: number
+  blackjackCompleted: number
+  videoPokerCompleted: number
+  sessionDurationHours: number
+  realizedRtp: number
+}
+
 interface PlayerDetailData {
   session: SessionDetail
+  risk: RiskFlags
+  stats: PlayerStats
   transactions: TransactionRow[]
   blackjackGames: BlackjackGameRow[]
   videoPokerGames: VideoPokerGameRow[]
@@ -101,6 +121,21 @@ interface PlayerDetailData {
 }
 
 type TabId = 'transactions' | 'blackjack' | 'videoPoker'
+
+const RISK_COLORS: Record<string, { bg: string; text: string; border: string; label: string }> = {
+  low: { bg: 'bg-green-500/10', text: 'text-green-400', border: 'border-green-500/30', label: 'LOW' },
+  medium: { bg: 'bg-yellow-500/10', text: 'text-yellow-400', border: 'border-yellow-500/30', label: 'MEDIUM' },
+  high: { bg: 'bg-orange-500/10', text: 'text-orange-400', border: 'border-orange-500/30', label: 'HIGH' },
+  critical: { bg: 'bg-blood-ruby/20', text: 'text-blood-ruby', border: 'border-blood-ruby/40', label: 'CRITICAL' },
+}
+
+const RISK_FLAG_INFO: Record<string, { label: string; desc: string }> = {
+  velocityAlert: { label: 'Velocity Alert', desc: 'Recent wager rate is >3x the session average' },
+  lossChasingAlert: { label: 'Loss Chasing', desc: 'Increasing bet sizes after consecutive losses' },
+  rtpOutlier: { label: 'RTP Outlier', desc: 'Realized RTP is >150% over 50+ hands' },
+  sessionMarathon: { label: 'Session Marathon', desc: 'Active session duration exceeds 4 hours' },
+  rapidCycle: { label: 'Rapid Cycle', desc: 'Deposit → wager → withdrawal within 1 hour' },
+}
 
 // --- Status badge helper ---
 function StatusBadge({ status }: { status: string }) {
@@ -192,7 +227,7 @@ export default function AdminPlayerDetailPage() {
     )
   }
 
-  const { session: s, transactions, blackjackGames, videoPokerGames, counts } = data
+  const { session: s, risk, stats, transactions, blackjackGames, videoPokerGames, counts } = data
 
   const tabs: { id: TabId; label: string; count: number }[] = [
     { id: 'transactions', label: 'Transactions', count: counts.transactions },
@@ -265,6 +300,82 @@ export default function AdminPlayerDetailPage() {
             prefix={s.housePnl >= 0 ? '+' : ''}
           />
         </div>
+
+        {/* Risk Assessment + Stats */}
+        {risk && (
+          <div className="mb-6 p-4 border border-masque-gold/15 rounded bg-midnight-black/60">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-xs font-semibold text-masque-gold uppercase tracking-wide">Risk Assessment</h3>
+              {(() => {
+                const rc = RISK_COLORS[risk.riskLevel] || RISK_COLORS.low
+                return (
+                  <span className={`text-[11px] px-2 py-0.5 ${rc.bg} ${rc.text} border ${rc.border} rounded font-semibold`}>
+                    {rc.label} RISK
+                  </span>
+                )
+              })()}
+            </div>
+
+            {/* Stats row */}
+            {stats && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                <div className="text-xs">
+                  <span className="text-bone-white/40">Total Hands</span>
+                  <p className="font-mono text-bone-white text-sm">{stats.totalHands.toLocaleString()}</p>
+                </div>
+                <div className="text-xs">
+                  <span className="text-bone-white/40">Session Duration</span>
+                  <p className="font-mono text-bone-white text-sm">{stats.sessionDurationHours}h</p>
+                </div>
+                <div className="text-xs">
+                  <span className="text-bone-white/40">Realized RTP</span>
+                  <p className={`font-mono text-sm ${stats.realizedRtp > 100 ? 'text-blood-ruby' : 'text-green-400'}`}>
+                    {stats.realizedRtp}%
+                  </p>
+                </div>
+                <div className="text-xs">
+                  <span className="text-bone-white/40">High Roller</span>
+                  <p className="text-sm">
+                    {risk.isHighRoller ? (
+                      <span className="text-masque-gold font-semibold">Yes</span>
+                    ) : (
+                      <span className="text-bone-white/40">No</span>
+                    )}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Risk flags */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              {Object.entries(RISK_FLAG_INFO).map(([key, info]) => {
+                const isActive = risk[key as keyof RiskFlags] as boolean
+                return (
+                  <div
+                    key={key}
+                    className={`flex items-center gap-2 px-3 py-2 rounded text-xs ${
+                      isActive
+                        ? 'bg-blood-ruby/10 border border-blood-ruby/30'
+                        : 'bg-bone-white/5 border border-bone-white/10'
+                    }`}
+                  >
+                    <span className={`text-sm ${isActive ? 'text-blood-ruby' : 'text-bone-white/20'}`}>
+                      {isActive ? '!' : '-'}
+                    </span>
+                    <div>
+                      <span className={isActive ? 'text-blood-ruby font-semibold' : 'text-bone-white/40'}>
+                        {info.label}
+                      </span>
+                      <p className={`text-[10px] ${isActive ? 'text-blood-ruby/70' : 'text-bone-white/25'}`}>
+                        {info.desc}
+                      </p>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Deposit wallet info */}
         {s.depositWallet && (

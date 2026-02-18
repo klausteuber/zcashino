@@ -7,6 +7,8 @@ import {
 } from '@/lib/admin/rate-limit'
 import { logAdminEvent } from '@/lib/admin/audit'
 import { guardCypherAdminRequest } from '@/lib/admin/host-guard'
+import { toCsvResponse, isCsvRequest } from '@/lib/admin/csv-export'
+import { getHistoricalPrices, captureDaily } from '@/lib/admin/price-history'
 
 type ValidPeriod = '24h' | '7d' | '30d' | 'all'
 const VALID_PERIODS: ValidPeriod[] = ['24h', '7d', '30d', 'all']
@@ -55,7 +57,7 @@ export async function GET(request: NextRequest) {
     return createRateLimitResponse(readLimit)
   }
 
-  const adminCheck = requireAdmin(request)
+  const adminCheck = requireAdmin(request, 'view_analytics')
   if (!adminCheck.ok) {
     await logAdminEvent({
       request,
@@ -228,6 +230,161 @@ export async function GET(request: NextRequest) {
       }))
       .sort((a, b) => a.date.localeCompare(b.date))
 
+    // --- USD-adjusted GGR (Item 8) ---
+    // Capture today's price if missing, then fetch historical prices for the range
+    let priceMap = new Map<string, number>()
+    try {
+      await captureDaily()
+      if (daily.length > 0) {
+        priceMap = await getHistoricalPrices(daily[0].date, daily[daily.length - 1].date)
+      }
+    } catch {
+      // Price data is best-effort; continue without it
+    }
+
+    // Enrich daily trends with USD values
+    const dailyWithUsd = daily.map((d) => {
+      const totalWagered = d.bjWagered + d.vpWagered
+      const totalPayout = d.bjPayout + d.vpPayout
+      const ggr = totalWagered - totalPayout
+      const price = priceMap.get(d.date) ?? null
+      return {
+        ...d,
+        totalWagered,
+        totalPayout,
+        ggr,
+        priceUsd: price,
+        ggrUsd: price !== null ? ggr * price : null,
+        wageredUsd: price !== null ? totalWagered * price : null,
+      }
+    })
+
+    // --- Retention & Acquisition (Item 5) ---
+    const [newSessionsByDay, retentionCohorts] = await Promise.all([
+      // New sessions per day (acquisition)
+      prisma.$queryRaw`
+        SELECT DATE(createdAt) as date, COUNT(*) as count
+        FROM Session WHERE createdAt >= ${periodStart}
+        GROUP BY DATE(createdAt) ORDER BY date
+      ` as Promise<Array<{ date: string; count: bigint }>>,
+
+      // D1/D7/D30 retention cohorts
+      prisma.$queryRaw`
+        SELECT
+          DATE(s.createdAt) as cohort_date,
+          COUNT(DISTINCT s.id) as cohort_size,
+          COUNT(DISTINCT CASE
+            WHEN s.lastActiveAt >= datetime(s.createdAt, '+1 day') THEN s.id END) as d1,
+          COUNT(DISTINCT CASE
+            WHEN s.lastActiveAt >= datetime(s.createdAt, '+7 day') THEN s.id END) as d7,
+          COUNT(DISTINCT CASE
+            WHEN s.lastActiveAt >= datetime(s.createdAt, '+30 day') THEN s.id END) as d30
+        FROM Session s
+        WHERE s.createdAt >= ${periodStart} AND s.totalWagered > 0
+        GROUP BY DATE(s.createdAt) ORDER BY cohort_date
+      ` as Promise<Array<{
+        cohort_date: string
+        cohort_size: bigint
+        d1: bigint
+        d7: bigint
+        d30: bigint
+      }>>,
+    ])
+
+    // First-wager activation: sessions whose FIRST game was in this period
+    const firstWagerByDay = await prisma.$queryRaw`
+      SELECT DATE(first_game) as date, COUNT(*) as count
+      FROM (
+        SELECT sessionId, MIN(completedAt) as first_game
+        FROM (
+          SELECT sessionId, completedAt FROM BlackjackGame WHERE status = 'completed'
+          UNION ALL
+          SELECT sessionId, completedAt FROM VideoPokerGame WHERE status = 'completed'
+        )
+        GROUP BY sessionId
+        HAVING first_game >= ${periodStart}
+      )
+      GROUP BY DATE(first_game) ORDER BY date
+    ` as Array<{ date: string; count: bigint }>
+
+    const retention = {
+      newSessionsByDay: newSessionsByDay.map((r) => ({
+        date: r.date,
+        count: Number(r.count),
+      })),
+      firstWagerByDay: firstWagerByDay.map((r) => ({
+        date: r.date,
+        count: Number(r.count),
+      })),
+      cohorts: retentionCohorts.map((r) => ({
+        cohortDate: r.cohort_date,
+        cohortSize: Number(r.cohort_size),
+        d1: Number(r.d1),
+        d7: Number(r.d7),
+        d30: Number(r.d30),
+        d1Pct: Number(r.cohort_size) > 0 ? Math.round((Number(r.d1) / Number(r.cohort_size)) * 100) : 0,
+        d7Pct: Number(r.cohort_size) > 0 ? Math.round((Number(r.d7) / Number(r.cohort_size)) * 100) : 0,
+        d30Pct: Number(r.cohort_size) > 0 ? Math.round((Number(r.d30) / Number(r.cohort_size)) * 100) : 0,
+      })),
+    }
+
+    // --- Time-of-Day / Day-of-Week (Item 6) ---
+    const activityHeatmap = await prisma.$queryRaw`
+      SELECT
+        CAST(strftime('%w', completedAt) AS INTEGER) as dow,
+        CAST(strftime('%H', completedAt) AS INTEGER) as hour,
+        COUNT(*) as hands,
+        SUM(amount) as wagered
+      FROM (
+        SELECT completedAt, mainBet + perfectPairsBet + insuranceBet as amount
+        FROM BlackjackGame WHERE status = 'completed' AND completedAt >= ${periodStart}
+        UNION ALL
+        SELECT completedAt, totalBet as amount
+        FROM VideoPokerGame WHERE status = 'completed' AND completedAt >= ${periodStart}
+      )
+      GROUP BY dow, hour ORDER BY dow, hour
+    ` as Array<{ dow: number; hour: number; hands: bigint; wagered: number }>
+
+    const activityPatterns = {
+      heatmap: activityHeatmap.map((r) => ({
+        dow: r.dow,
+        hour: r.hour,
+        hands: Number(r.hands),
+        wagered: r.wagered || 0,
+      })),
+    }
+
+    // CSV export: daily trends with USD
+    if (isCsvRequest(request)) {
+      const rows = dailyWithUsd.map((d) => ({
+        date: d.date,
+        deposits: d.deposits,
+        withdrawals: d.withdrawals,
+        netFlow: d.netFlow,
+        bjWagered: d.bjWagered,
+        bjPayout: d.bjPayout,
+        vpWagered: d.vpWagered,
+        vpPayout: d.vpPayout,
+        totalWagered: d.totalWagered,
+        totalPayout: d.totalPayout,
+        ggr: d.ggr,
+        zecPriceUsd: d.priceUsd ?? '',
+        ggrUsd: d.ggrUsd ?? '',
+        wageredUsd: d.wageredUsd ?? '',
+        activeSessions: d.activeSessions,
+      }))
+
+      await logAdminEvent({
+        request,
+        action: 'admin.analytics.export',
+        success: true,
+        actor: adminCheck.session.username,
+        details: `Exported ${rows.length} daily analytics rows as CSV (period=${period})`,
+      })
+
+      return toCsvResponse(rows, `analytics-${period}-${new Date().toISOString().slice(0, 10)}.csv`)
+    }
+
     // Compute summary values
     const bjWagered = (bjStats._sum.mainBet || 0) + (bjStats._sum.perfectPairsBet || 0) + (bjStats._sum.insuranceBet || 0)
     const bjPayout = bjStats._sum.payout || 0
@@ -304,8 +461,10 @@ export async function GET(request: NextRequest) {
         videoPokerRTP: 0.9954,
       },
       trends: {
-        daily,
+        daily: dailyWithUsd,
       },
+      retention,
+      activityPatterns,
     })
   } catch (error) {
     console.error('Admin analytics error:', error)

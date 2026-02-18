@@ -30,7 +30,7 @@ const RANK_VALUES: Record<Rank, number> = {
 
 // Jacks or Better 9/6 Full Pay (~0.46% house edge)
 // Maps hand rank → [1-coin, 2-coin, 3-coin, 4-coin, 5-coin] multipliers
-const JACKS_OR_BETTER_PAYTABLE: Record<JacksOrBetterHandRank, number[]> = {
+const JOB_9_6: Record<JacksOrBetterHandRank, number[]> = {
   royal_flush:      [250, 500, 750, 1000, 4000],
   straight_flush:   [50, 100, 150, 200, 250],
   four_of_a_kind:   [25, 50, 75, 100, 125],
@@ -41,6 +41,44 @@ const JACKS_OR_BETTER_PAYTABLE: Record<JacksOrBetterHandRank, number[]> = {
   two_pair:         [2, 4, 6, 8, 10],
   jacks_or_better:  [1, 2, 3, 4, 5],
   nothing:          [0, 0, 0, 0, 0],
+}
+
+// Jacks or Better 8/5 (~2.7% house edge)
+const JOB_8_5: Record<JacksOrBetterHandRank, number[]> = {
+  royal_flush:      [250, 500, 750, 1000, 4000],
+  straight_flush:   [50, 100, 150, 200, 250],
+  four_of_a_kind:   [25, 50, 75, 100, 125],
+  full_house:       [8, 16, 24, 32, 40],
+  flush:            [5, 10, 15, 20, 25],
+  straight:         [4, 8, 12, 16, 20],
+  three_of_a_kind:  [3, 6, 9, 12, 15],
+  two_pair:         [2, 4, 6, 8, 10],
+  jacks_or_better:  [1, 2, 3, 4, 5],
+  nothing:          [0, 0, 0, 0, 0],
+}
+
+// Jacks or Better 7/5 (~3.8% house edge)
+const JOB_7_5: Record<JacksOrBetterHandRank, number[]> = {
+  royal_flush:      [250, 500, 750, 1000, 4000],
+  straight_flush:   [50, 100, 150, 200, 250],
+  four_of_a_kind:   [25, 50, 75, 100, 125],
+  full_house:       [7, 14, 21, 28, 35],
+  flush:            [5, 10, 15, 20, 25],
+  straight:         [4, 8, 12, 16, 20],
+  three_of_a_kind:  [3, 6, 9, 12, 15],
+  two_pair:         [2, 4, 6, 8, 10],
+  jacks_or_better:  [1, 2, 3, 4, 5],
+  nothing:          [0, 0, 0, 0, 0],
+}
+
+// Backward-compatible alias
+const JACKS_OR_BETTER_PAYTABLE = JOB_9_6
+
+// Lookup for JoB paytable variants by key
+const JOB_PAYTABLES: Record<string, Record<JacksOrBetterHandRank, number[]>> = {
+  '9/6': JOB_9_6,
+  '8/5': JOB_8_5,
+  '7/5': JOB_7_5,
 }
 
 // Deuces Wild Full Pay (~0.76% house edge)
@@ -58,16 +96,20 @@ const DEUCES_WILD_PAYTABLE: Record<DeucesWildHandRank, number[]> = {
   nothing:             [0, 0, 0, 0, 0],
 }
 
-export function getPaytable(variant: VideoPokerVariant): Record<string, number[]> {
-  return variant === 'jacks_or_better' ? JACKS_OR_BETTER_PAYTABLE : DEUCES_WILD_PAYTABLE
+export function getPaytable(variant: VideoPokerVariant, paytableKey?: string): Record<string, number[]> {
+  if (variant === 'jacks_or_better') {
+    return (paytableKey && JOB_PAYTABLES[paytableKey]) || JOB_9_6
+  }
+  return DEUCES_WILD_PAYTABLE
 }
 
 export function getPayoutMultiplier(
   variant: VideoPokerVariant,
   rank: VideoPokerHandRank,
-  betMultiplier: number
+  betMultiplier: number,
+  paytableKey?: string
 ): number {
-  const paytable = getPaytable(variant)
+  const paytable = getPaytable(variant, paytableKey)
   const row = paytable[rank]
   if (!row) return 0
   const coinIndex = Math.min(Math.max(betMultiplier, 1), MAX_MULTIPLIER) - 1
@@ -78,9 +120,10 @@ export function calculatePayout(
   baseBet: number,
   betMultiplier: number,
   variant: VideoPokerVariant,
-  rank: VideoPokerHandRank
+  rank: VideoPokerHandRank,
+  paytableKey?: string
 ): number {
-  const multiplier = getPayoutMultiplier(variant, rank, betMultiplier)
+  const multiplier = getPayoutMultiplier(variant, rank, betMultiplier, paytableKey)
   return roundZec(baseBet * multiplier)
 }
 
@@ -473,7 +516,8 @@ export function startRound(
   clientSeed: string,
   nonce: number,
   fairnessVersion: FairnessVersion = LEGACY_FAIRNESS_VERSION,
-  betLimits?: { minBet?: number; maxBet?: number }
+  betLimits?: { minBet?: number; maxBet?: number },
+  paytableKey?: string
 ): VideoPokerGameState {
   const minBet = betLimits?.minBet ?? MIN_BET
   const maxBet = betLimits?.maxBet ?? MAX_BET
@@ -517,6 +561,7 @@ export function startRound(
     multiplier: null,
     lastPayout: 0,
     message: 'Select cards to hold, then draw',
+    paytableKey,
   }
 }
 
@@ -548,7 +593,7 @@ export function holdAndDraw(
 
   // Evaluate final hand
   const evaluation = evaluateHand(finalHand, state.variant)
-  const multiplier = getPayoutMultiplier(state.variant, evaluation.rank, state.betMultiplier)
+  const multiplier = getPayoutMultiplier(state.variant, evaluation.rank, state.betMultiplier, state.paytableKey)
   const payout = roundZec(state.baseBet * multiplier)
 
   const message = payout > 0

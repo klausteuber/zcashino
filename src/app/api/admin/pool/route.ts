@@ -9,6 +9,8 @@ import prisma from '@/lib/db'
 import { getOperationStatus, sendZec, checkNodeStatus, getAddressBalance } from '@/lib/wallet/rpc'
 import { DEFAULT_NETWORK, roundZec, WITHDRAWAL_FEE } from '@/lib/wallet'
 import { requireAdmin } from '@/lib/admin/auth'
+import { hasPermission } from '@/lib/admin/rbac'
+import type { AdminRole } from '@/lib/admin/rbac'
 import {
   checkAdminRateLimit,
   createRateLimitResponse,
@@ -49,7 +51,7 @@ export async function GET(request: NextRequest) {
     return createRateLimitResponse(readLimit)
   }
 
-  const adminCheck = requireAdmin(request)
+  const adminCheck = requireAdmin(request, 'view_overview')
   if (!adminCheck.ok) {
     await logAdminEvent({
       request,
@@ -353,6 +355,9 @@ export async function POST(request: NextRequest) {
       }
 
       case 'requeue-withdrawal': {
+        if (!hasPermission(adminCheck.session.role as AdminRole, 'approve_withdrawals')) {
+          return NextResponse.json({ error: 'Forbidden: insufficient permissions' }, { status: 403 })
+        }
         const { transactionId } = body as { transactionId?: string }
         if (!transactionId || typeof transactionId !== 'string') {
           return NextResponse.json({ error: 'transactionId required' }, { status: 400 })
@@ -434,6 +439,9 @@ export async function POST(request: NextRequest) {
       }
 
       case 'toggle-kill-switch': {
+        if (!hasPermission(adminCheck.session.role as AdminRole, 'toggle_kill_switch')) {
+          return NextResponse.json({ error: 'Forbidden: insufficient permissions' }, { status: 403 })
+        }
         const { enabled } = body
         if (typeof enabled !== 'boolean') {
           return NextResponse.json(
@@ -462,6 +470,9 @@ export async function POST(request: NextRequest) {
       }
 
       case 'approve-withdrawal': {
+        if (!hasPermission(adminCheck.session.role as AdminRole, 'approve_withdrawals')) {
+          return NextResponse.json({ error: 'Forbidden: insufficient permissions' }, { status: 403 })
+        }
         const { transactionId: approveId } = body
         if (!approveId) {
           return NextResponse.json({ error: 'transactionId required' }, { status: 400 })
@@ -576,6 +587,9 @@ export async function POST(request: NextRequest) {
       }
 
       case 'reject-withdrawal': {
+        if (!hasPermission(adminCheck.session.role as AdminRole, 'approve_withdrawals')) {
+          return NextResponse.json({ error: 'Forbidden: insufficient permissions' }, { status: 403 })
+        }
         const { transactionId: rejectId, reason: rejectReason } = body
         if (!rejectId) {
           return NextResponse.json({ error: 'transactionId required' }, { status: 400 })

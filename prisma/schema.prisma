@@ -384,3 +384,71 @@ model AdminConfig {
   updatedAt DateTime @updatedAt
   updatedBy String?
 }
+
+// Admin users with role-based access control
+model AdminUser {
+  id             String    @id @default(cuid())
+  username       String    @unique
+  passwordHash   String                    // bcrypt hash
+  role           String    @default("analyst")  // analyst, operator, super_admin
+  isActive       Boolean   @default(true)
+  totpSecret     String?                   // For TOTP 2FA
+  totpEnabled    Boolean   @default(false)
+  lastLoginAt    DateTime?
+  lastLoginIp    String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  createdBy      String?                   // Who created this admin
+
+  @@index([username])
+  @@index([role])
+}
+
+// Daily ZEC/USD price snapshots for historical P&L normalization
+model ZecPriceSnapshot {
+  id        String   @id @default(cuid())
+  date      String   @unique  // YYYY-MM-DD
+  priceUsd  Float              // ZEC/USD closing price for the day
+  source    String   @default("coingecko")
+  createdAt DateTime @default(now())
+
+  @@index([date])
+}
+
+// Promotions — schema only for now; management UI deferred until retention data (Item 5) is available
+model Promotion {
+  id              String    @id @default(cuid())
+  name            String
+  type            String    // deposit_match, free_play, cashback
+  status          String    @default("draft") // draft, active, paused, expired
+  config          String    // JSON: { matchPercent, maxBonus, wagerRequirement, minDeposit }
+  startDate       DateTime?
+  endDate         DateTime?
+  maxRedemptions  Int?
+  redemptionCount Int       @default(0)
+  createdBy       String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  redemptions PromotionRedemption[]
+
+  @@index([status])
+  @@index([type])
+}
+
+model PromotionRedemption {
+  id          String    @id @default(cuid())
+  promotionId String
+  promotion   Promotion @relation(fields: [promotionId], references: [id])
+  sessionId   String
+  bonusAmount Float
+  wagered     Float     @default(0)  // Track wagering requirement progress
+  wagerTarget Float                   // Required wagering to unlock bonus
+  status      String    @default("active") // active, completed, forfeited, expired
+  createdAt   DateTime  @default(now())
+  completedAt DateTime?
+
+  @@index([promotionId])
+  @@index([sessionId])
+  @@index([status])
+}

@@ -38,9 +38,19 @@ interface PlayerRow {
   lossLimit: number | null
   sessionLimit: number | null
   excludedUntil: string | null
+  riskLevel?: string
+  riskFlagCount?: number
 }
 
 type SortField = 'balance' | 'wagered' | 'pnl'
+type RiskFilter = '' | 'low' | 'medium' | 'high' | 'critical'
+
+const RISK_COLORS: Record<string, { bg: string; text: string; border: string; label: string }> = {
+  low: { bg: 'bg-green-500/10', text: 'text-green-400', border: 'border-green-500/30', label: 'LOW' },
+  medium: { bg: 'bg-yellow-500/10', text: 'text-yellow-400', border: 'border-yellow-500/30', label: 'MED' },
+  high: { bg: 'bg-orange-500/10', text: 'text-orange-400', border: 'border-orange-500/30', label: 'HIGH' },
+  critical: { bg: 'bg-blood-ruby/20', text: 'text-blood-ruby', border: 'border-blood-ruby/40', label: 'CRIT' },
+}
 
 export default function AdminPlayersPage() {
   const [players, setPlayers] = useState<PlayerRow[]>([])
@@ -53,6 +63,8 @@ export default function AdminPlayersPage() {
   const [order, setOrder] = useState<'asc' | 'desc'>('desc')
   const [offset, setOffset] = useState(0)
   const [highRollers, setHighRollers] = useState(false)
+  const [riskFilter, setRiskFilter] = useState<RiskFilter>('')
+  const [exporting, setExporting] = useState(false)
   const limit = 25
 
   // High-roller IDs for badge display
@@ -102,6 +114,7 @@ export default function AdminPlayersPage() {
       })
       if (debouncedSearch) params.set('search', debouncedSearch)
       if (highRollers) params.set('highRollers', 'true')
+      if (riskFilter) params.set('riskLevel', riskFilter)
 
       const res = await fetch(`/api/admin/players?${params}`)
       if (!res.ok) {
@@ -116,11 +129,35 @@ export default function AdminPlayersPage() {
     } finally {
       setLoading(false)
     }
-  }, [sort, order, offset, debouncedSearch, highRollers])
+  }, [sort, order, offset, debouncedSearch, highRollers, riskFilter])
 
   useEffect(() => {
     fetchPlayers()
   }, [fetchPlayers])
+
+  async function handleExportCsv() {
+    setExporting(true)
+    try {
+      const sortParam = sort === 'wagered' ? 'totalWagered' : sort
+      const params = new URLSearchParams({ sort: sortParam, order, format: 'csv' })
+      if (debouncedSearch) params.set('search', debouncedSearch)
+      if (highRollers) params.set('highRollers', 'true')
+
+      const res = await fetch(`/api/admin/players?${params}`)
+      if (!res.ok) throw new Error('Export failed')
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `players-${new Date().toISOString().slice(0, 10)}.csv`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      setError('CSV export failed')
+    } finally {
+      setExporting(false)
+    }
+  }
 
   const totalPages = Math.ceil(total / limit)
   const currentPage = Math.floor(offset / limit) + 1
@@ -133,12 +170,21 @@ export default function AdminPlayersPage() {
           <h1 className="text-2xl font-bold text-masque-gold font-[family-name:var(--font-cinzel)]">
             Player Explorer
           </h1>
-          <Link
-            href="/admin"
-            className="text-sm text-venetian-gold hover:text-masque-gold transition-colors"
-          >
-            Back to Dashboard
-          </Link>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleExportCsv}
+              disabled={exporting}
+              className="px-3 py-1.5 text-sm border border-masque-gold/30 rounded text-venetian-gold hover:text-masque-gold hover:border-masque-gold/60 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              {exporting ? 'Exporting...' : 'Export CSV'}
+            </button>
+            <Link
+              href="/admin"
+              className="text-sm text-venetian-gold hover:text-masque-gold transition-colors"
+            >
+              Back to Dashboard
+            </Link>
+          </div>
         </div>
 
         {/* Controls */}
@@ -179,6 +225,22 @@ export default function AdminPlayersPage() {
             {order === 'desc' ? 'Desc' : 'Asc'}
           </button>
 
+          {/* Risk filter */}
+          <select
+            value={riskFilter}
+            onChange={(e) => {
+              setRiskFilter(e.target.value as RiskFilter)
+              setOffset(0)
+            }}
+            className="px-3 py-2 bg-midnight-black border border-masque-gold/30 rounded text-bone-white text-sm focus:border-masque-gold focus:outline-none"
+          >
+            <option value="">Risk: All</option>
+            <option value="low">Risk: Low</option>
+            <option value="medium">Risk: Medium</option>
+            <option value="high">Risk: High</option>
+            <option value="critical">Risk: Critical</option>
+          </select>
+
           {/* High rollers toggle */}
           <button
             onClick={() => {
@@ -208,6 +270,7 @@ export default function AdminPlayersPage() {
             <thead>
               <tr className="border-b border-masque-gold/20 bg-midnight-black/80">
                 <th className="text-left px-4 py-3 text-masque-gold font-semibold">Session ID</th>
+                <th className="text-center px-4 py-3 text-masque-gold font-semibold">Risk</th>
                 <th className="text-right px-4 py-3 text-masque-gold font-semibold">Balance</th>
                 <th className="text-right px-4 py-3 text-masque-gold font-semibold">Wagered</th>
                 <th className="text-right px-4 py-3 text-masque-gold font-semibold">Won</th>
@@ -219,13 +282,13 @@ export default function AdminPlayersPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-bone-white/50">
+                  <td colSpan={8} className="px-4 py-8 text-center text-bone-white/50">
                     Loading players...
                   </td>
                 </tr>
               ) : players.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-bone-white/50">
+                  <td colSpan={8} className="px-4 py-8 text-center text-bone-white/50">
                     No players found.
                   </td>
                 </tr>
@@ -251,6 +314,19 @@ export default function AdminPlayersPage() {
                             HIGH ROLLER
                           </span>
                         )}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        {(() => {
+                          const rl = p.riskLevel || 'low'
+                          const rc = RISK_COLORS[rl] || RISK_COLORS.low
+                          return rl !== 'low' ? (
+                            <span className={`text-[10px] px-1.5 py-0.5 ${rc.bg} ${rc.text} border ${rc.border} rounded font-semibold`}>
+                              {rc.label}
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-bone-white/30">—</span>
+                          )
+                        })()}
                       </td>
                       <td className="px-4 py-3 text-right font-mono text-bone-white">
                         {formatZec(p.balance)}

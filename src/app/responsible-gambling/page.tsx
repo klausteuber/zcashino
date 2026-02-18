@@ -4,6 +4,7 @@ import { BrandWordmark } from '@/components/brand/BrandWordmark'
 import JesterLogo from '@/components/ui/JesterLogo'
 import { getBrandUrlForPath, getCanonicalUrlForPath } from '@/lib/brand/config'
 import { getServerBrand } from '@/lib/brand/server'
+import ResponsibleGamblingTools from '@/components/responsible-gambling/ResponsibleGamblingTools'
 
 export async function generateMetadata(): Promise<Metadata> {
   const brand = await getServerBrand()
@@ -99,6 +100,9 @@ export default function ResponsibleGamblingPage() {
               </div>
             </div>
           </section>
+
+          {/* Interactive limits & self-exclusion (client component) */}
+          <ResponsibleGamblingTools />
 
           <section className="bg-midnight-black/40 backdrop-blur-sm rounded-xl p-6 border border-masque-gold/20">
             <h2 className="text-2xl font-display font-semibold text-bone-white mb-4">Tips for Safe Gambling</h2>

@@ -1,17 +1,15 @@
 import { createHmac, timingSafeEqual } from 'crypto'
 import { NextRequest, NextResponse } from 'next/server'
+import prisma from '@/lib/db'
+import { type AdminRole, type Permission, hasPermission, verifyPassword, hashPassword } from './rbac'
+import { verifyTotpCode } from './totp'
 
 export const ADMIN_SESSION_COOKIE = 'zcashino_admin_session'
 const ADMIN_SESSION_TTL_MS = 8 * 60 * 60 * 1000 // 8 hours
-
-interface AdminConfig {
-  username: string
-  password: string
-  sessionSecret: string
-}
+const TOTP_TEMP_TOKEN_TTL_MS = 5 * 60 * 1000 // 5 minutes for TOTP step
 
 export interface AdminSessionPayload {
-  role: 'admin'
+  role: AdminRole
   username: string
   exp: number
 }
@@ -19,17 +17,13 @@ export interface AdminSessionPayload {
 export interface AdminConfigStatus {
   configured: boolean
   missing: string[]
-  config?: AdminConfig
+  sessionSecret?: string
 }
 
 function safeEqual(a: string, b: string): boolean {
   const left = Buffer.from(a)
   const right = Buffer.from(b)
-
-  if (left.length !== right.length) {
-    return false
-  }
-
+  if (left.length !== right.length) return false
   return timingSafeEqual(left, right)
 }
 
@@ -42,66 +36,110 @@ function getEnv(name: string): string | undefined {
   return value && value.trim().length > 0 ? value.trim() : undefined
 }
 
+/**
+ * Check whether admin auth is configured.
+ * Requires ADMIN_SESSION_SECRET at minimum. DB users or env fallback provide credentials.
+ */
 export function getAdminConfigStatus(): AdminConfigStatus {
-  const username = getEnv('ADMIN_USERNAME') || 'admin'
-  const password = getEnv('ADMIN_PASSWORD')
   const sessionSecret = getEnv('ADMIN_SESSION_SECRET')
   const isProduction = process.env.NODE_ENV === 'production'
 
   const missing: string[] = []
-  if (!password) missing.push('ADMIN_PASSWORD')
   if (!sessionSecret) missing.push('ADMIN_SESSION_SECRET')
-  if (isProduction && password && password.length < 12) {
-    missing.push('ADMIN_PASSWORD (minimum 12 chars in production)')
-  }
   if (isProduction && sessionSecret && sessionSecret.length < 32) {
     missing.push('ADMIN_SESSION_SECRET (minimum 32 chars in production)')
   }
 
   if (missing.length > 0) {
-    return {
-      configured: false,
-      missing,
-    }
+    return { configured: false, missing }
   }
 
-  return {
-    configured: true,
-    missing: [],
-    config: {
-      username,
-      password: password!,
-      sessionSecret: sessionSecret!,
-    },
-  }
+  return { configured: true, missing: [], sessionSecret: sessionSecret! }
 }
 
-export function verifyAdminCredentials(
+/**
+ * Bootstrap: ensure at least one super_admin exists.
+ * If no AdminUser rows exist and ADMIN_USERNAME/ADMIN_PASSWORD are set,
+ * auto-create a super_admin user from env vars.
+ */
+export async function ensureBootstrapAdmin(): Promise<void> {
+  const count = await prisma.adminUser.count()
+  if (count > 0) return
+
+  const username = getEnv('ADMIN_USERNAME') || 'admin'
+  const password = getEnv('ADMIN_PASSWORD')
+  if (!password) return
+
+  const passwordHash = await hashPassword(password)
+  await prisma.adminUser.create({
+    data: {
+      username,
+      passwordHash,
+      role: 'super_admin',
+      isActive: true,
+      createdBy: 'bootstrap',
+    },
+  })
+}
+
+/**
+ * Verify credentials against AdminUser table, with env var fallback.
+ * When the user has TOTP 2FA enabled, returns totpRequired instead of a full session.
+ */
+export async function verifyAdminCredentials(
   inputUsername: string,
   inputPassword: string
-):
-  | { ok: true; username: string }
-  | { ok: false; reason: 'invalid-credentials' | 'not-configured'; missing?: string[] } {
+): Promise<
+  | { ok: true; username: string; role: AdminRole; userId: string; totpRequired?: false }
+  | { ok: true; username: string; role: AdminRole; userId: string; totpRequired: true }
+  | { ok: false; reason: 'invalid-credentials' | 'not-configured' | 'account-disabled'; missing?: string[] }
+> {
   const status = getAdminConfigStatus()
-  if (!status.configured || !status.config) {
-    return {
-      ok: false,
-      reason: 'not-configured',
-      missing: status.missing,
+  if (!status.configured) {
+    return { ok: false, reason: 'not-configured', missing: status.missing }
+  }
+
+  // Try DB-backed auth first
+  const user = await prisma.adminUser.findUnique({
+    where: { username: inputUsername },
+  })
+
+  if (user) {
+    if (!user.isActive) {
+      return { ok: false, reason: 'account-disabled' }
+    }
+
+    const passwordValid = await verifyPassword(inputPassword, user.passwordHash)
+    if (!passwordValid) {
+      return { ok: false, reason: 'invalid-credentials' }
+    }
+
+    // If 2FA is enabled, don't issue session yet — require TOTP step
+    if (user.totpEnabled && user.totpSecret) {
+      return { ok: true, username: user.username, role: user.role as AdminRole, userId: user.id, totpRequired: true }
+    }
+
+    // Update last login
+    await prisma.adminUser.update({
+      where: { id: user.id },
+      data: { lastLoginAt: new Date() },
+    })
+
+    return { ok: true, username: user.username, role: user.role as AdminRole, userId: user.id }
+  }
+
+  // Env var fallback (for bootstrapping before first DB user is created)
+  const envUsername = getEnv('ADMIN_USERNAME') || 'admin'
+  const envPassword = getEnv('ADMIN_PASSWORD')
+  if (envPassword) {
+    const usernameValid = safeEqual(inputUsername, envUsername)
+    const passwordValid = safeEqual(inputPassword, envPassword)
+    if (usernameValid && passwordValid) {
+      return { ok: true, username: envUsername, role: 'super_admin', userId: 'env-fallback' }
     }
   }
 
-  const usernameValid = safeEqual(inputUsername, status.config.username)
-  const passwordValid = safeEqual(inputPassword, status.config.password)
-
-  if (!usernameValid || !passwordValid) {
-    return { ok: false, reason: 'invalid-credentials' }
-  }
-
-  return {
-    ok: true,
-    username: status.config.username,
-  }
+  return { ok: false, reason: 'invalid-credentials' }
 }
 
 export function createSignedAdminToken(
@@ -118,26 +156,17 @@ export function verifySignedAdminToken(
   secret: string
 ): AdminSessionPayload | null {
   const [payloadEncoded, signature] = token.split('.')
-  if (!payloadEncoded || !signature) {
-    return null
-  }
+  if (!payloadEncoded || !signature) return null
 
   const expectedSignature = signSessionPayload(payloadEncoded, secret)
-  if (!safeEqual(signature, expectedSignature)) {
-    return null
-  }
+  if (!safeEqual(signature, expectedSignature)) return null
 
   try {
     const payloadJson = Buffer.from(payloadEncoded, 'base64url').toString('utf8')
     const payload = JSON.parse(payloadJson) as AdminSessionPayload
 
-    if (payload.role !== 'admin' || typeof payload.username !== 'string') {
-      return null
-    }
-
-    if (typeof payload.exp !== 'number' || payload.exp <= Date.now()) {
-      return null
-    }
+    if (typeof payload.username !== 'string' || typeof payload.role !== 'string') return null
+    if (typeof payload.exp !== 'number' || payload.exp <= Date.now()) return null
 
     return payload
   } catch {
@@ -145,38 +174,120 @@ export function verifySignedAdminToken(
   }
 }
 
-export function createAdminSessionToken(username: string): string {
+export function createAdminSessionToken(username: string, role: AdminRole): string {
   const status = getAdminConfigStatus()
-  if (!status.configured || !status.config) {
+  if (!status.configured || !status.sessionSecret) {
     throw new Error('Admin auth is not configured')
   }
 
   return createSignedAdminToken(
-    {
-      role: 'admin',
-      username,
-      exp: Date.now() + ADMIN_SESSION_TTL_MS,
-    },
-    status.config.sessionSecret
+    { role, username, exp: Date.now() + ADMIN_SESSION_TTL_MS },
+    status.sessionSecret
   )
 }
 
 export function parseAdminSessionToken(token?: string): AdminSessionPayload | null {
-  if (!token) {
-    return null
-  }
+  if (!token) return null
 
   const status = getAdminConfigStatus()
-  if (!status.configured || !status.config) {
-    return null
+  if (!status.configured || !status.sessionSecret) return null
+
+  return verifySignedAdminToken(token, status.sessionSecret)
+}
+
+// --- TOTP 2FA temp tokens ---
+
+interface TotpTempPayload {
+  purpose: 'totp-step'
+  userId: string
+  exp: number
+}
+
+/**
+ * Create a short-lived temp token for the 2FA step.
+ * Valid for 5 minutes — just enough time to enter the TOTP code.
+ */
+export function createTotpTempToken(userId: string): string {
+  const status = getAdminConfigStatus()
+  if (!status.configured || !status.sessionSecret) {
+    throw new Error('Admin auth is not configured')
   }
 
-  return verifySignedAdminToken(token, status.config.sessionSecret)
+  const payload: TotpTempPayload = {
+    purpose: 'totp-step',
+    userId,
+    exp: Date.now() + TOTP_TEMP_TOKEN_TTL_MS,
+  }
+  const payloadEncoded = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url')
+  const signature = signSessionPayload(payloadEncoded, status.sessionSecret)
+  return `${payloadEncoded}.${signature}`
+}
+
+/**
+ * Parse and validate a TOTP temp token. Returns userId if valid.
+ */
+export function parseTotpTempToken(token: string): string | null {
+  const status = getAdminConfigStatus()
+  if (!status.configured || !status.sessionSecret) return null
+
+  const [payloadEncoded, signature] = token.split('.')
+  if (!payloadEncoded || !signature) return null
+
+  const expectedSignature = signSessionPayload(payloadEncoded, status.sessionSecret)
+  if (!safeEqual(signature, expectedSignature)) return null
+
+  try {
+    const payloadJson = Buffer.from(payloadEncoded, 'base64url').toString('utf8')
+    const payload = JSON.parse(payloadJson) as TotpTempPayload
+    if (payload.purpose !== 'totp-step') return null
+    if (typeof payload.userId !== 'string') return null
+    if (typeof payload.exp !== 'number' || payload.exp <= Date.now()) return null
+    return payload.userId
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Complete the 2FA login step: verify TOTP code + temp token, then issue full session.
+ */
+export async function verifyTotpStep(
+  tempToken: string,
+  totpCode: string
+): Promise<
+  | { ok: true; username: string; role: AdminRole; sessionToken: string }
+  | { ok: false; reason: 'invalid-token' | 'invalid-code' | 'account-disabled' }
+> {
+  const userId = parseTotpTempToken(tempToken)
+  if (!userId) {
+    return { ok: false, reason: 'invalid-token' }
+  }
+
+  const user = await prisma.adminUser.findUnique({ where: { id: userId } })
+  if (!user || !user.isActive) {
+    return { ok: false, reason: 'account-disabled' }
+  }
+
+  if (!user.totpSecret || !user.totpEnabled) {
+    return { ok: false, reason: 'invalid-token' }
+  }
+
+  const codeValid = verifyTotpCode(user.totpSecret, totpCode)
+  if (!codeValid) {
+    return { ok: false, reason: 'invalid-code' }
+  }
+
+  // Update last login
+  await prisma.adminUser.update({
+    where: { id: user.id },
+    data: { lastLoginAt: new Date() },
+  })
+
+  const sessionToken = createAdminSessionToken(user.username, user.role as AdminRole)
+  return { ok: true, username: user.username, role: user.role as AdminRole, sessionToken }
 }
 
 export function setAdminSessionCookie(response: NextResponse, token: string): void {
-  // Only set Secure flag when HTTPS is actually available.
-  // Using secure cookies over plain HTTP causes browsers to silently reject the cookie.
   const useSecure = process.env.FORCE_HTTPS === 'true'
   response.cookies.set({
     name: ADMIN_SESSION_COOKIE,
@@ -205,41 +316,46 @@ function unauthorizedResponse() {
   )
 }
 
+function forbiddenResponse(permission: Permission) {
+  return NextResponse.json(
+    { error: `Forbidden. Required permission: ${permission}` },
+    { status: 403 }
+  )
+}
+
 function notConfiguredResponse(missing: string[]) {
   return NextResponse.json(
-    {
-      error: 'Admin dashboard is not configured.',
-      missing,
-    },
+    { error: 'Admin dashboard is not configured.', missing },
     { status: 503 }
   )
 }
 
+/**
+ * Require admin authentication.
+ * Optionally checks a specific permission against the admin's role.
+ */
 export function requireAdmin(
-  request: NextRequest
+  request: NextRequest,
+  requiredPermission?: Permission
 ):
   | { ok: true; session: AdminSessionPayload }
   | { ok: false; response: NextResponse } {
   const status = getAdminConfigStatus()
   if (!status.configured) {
-    return {
-      ok: false,
-      response: notConfiguredResponse(status.missing),
-    }
+    return { ok: false, response: notConfiguredResponse(status.missing) }
   }
 
   const token = request.cookies.get(ADMIN_SESSION_COOKIE)?.value
   const session = parseAdminSessionToken(token)
 
   if (!session) {
-    return {
-      ok: false,
-      response: unauthorizedResponse(),
-    }
+    return { ok: false, response: unauthorizedResponse() }
   }
 
-  return {
-    ok: true,
-    session,
+  // Check permission if specified
+  if (requiredPermission && !hasPermission(session.role, requiredPermission)) {
+    return { ok: false, response: forbiddenResponse(requiredPermission) }
   }
+
+  return { ok: true, session }
 }

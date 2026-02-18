@@ -38,7 +38,7 @@ interface Withdrawal {
 }
 
 type StatusFilter = 'all' | 'pending_approval' | 'pending' | 'failed' | 'confirmed'
-type SortField = 'amount' | 'age'
+type SortField = 'amount' | 'createdAt'
 type SortOrder = 'asc' | 'desc'
 
 const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
@@ -56,14 +56,21 @@ const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
 export default function AdminWithdrawalsPage() {
   const { formatZecWithUsd } = useZecPrice()
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([])
+  const [total, setTotal] = useState(0)
+  const [totalPages, setTotalPages] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [actionMessage, setActionMessage] = useState<string | null>(null)
+  const [exporting, setExporting] = useState(false)
 
-  // Filters & sorting
+  // Filters & sorting (server-side)
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
-  const [sortField, setSortField] = useState<SortField>('age')
+  const [sortField, setSortField] = useState<SortField>('createdAt')
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
+  const [page, setPage] = useState(1)
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
+  const [sessionSearch, setSessionSearch] = useState('')
 
   // Bulk selection
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -72,15 +79,30 @@ export default function AdminWithdrawalsPage() {
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null)
   const [bulkLoading, setBulkLoading] = useState(false)
 
+  const limit = 50
+
   // -------------------------------------------------------------------
-  // Data fetching
+  // Data fetching — now uses dedicated /api/admin/withdrawals endpoint
   // -------------------------------------------------------------------
 
   const fetchWithdrawals = useCallback(async () => {
-    setLoading(true)
     setError(null)
     try {
-      const res = await fetch('/api/admin/overview', { cache: 'no-store' })
+      const params = new URLSearchParams({
+        page: String(page),
+        limit: String(limit),
+        sortBy: sortField,
+        sortOrder,
+      })
+
+      if (statusFilter !== 'all') params.set('status', statusFilter)
+      if (startDate) params.set('startDate', startDate)
+      if (endDate) params.set('endDate', endDate)
+      if (sessionSearch) params.set('sessionId', sessionSearch)
+
+      const res = await fetch(`/api/admin/withdrawals?${params}`, {
+        cache: 'no-store',
+      })
       if (!res.ok) {
         if (res.status === 401) {
           setError('Your admin session expired. Please sign in again.')
@@ -90,15 +112,18 @@ export default function AdminWithdrawalsPage() {
         throw new Error(body.error || `HTTP ${res.status}`)
       }
       const data = await res.json()
-      setWithdrawals(data.recentWithdrawals || [])
+      setWithdrawals(data.withdrawals)
+      setTotal(data.total)
+      setTotalPages(data.totalPages)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch withdrawals')
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [page, statusFilter, sortField, sortOrder, startDate, endDate, sessionSearch])
 
   useEffect(() => {
+    setLoading(true)
     fetchWithdrawals()
   }, [fetchWithdrawals])
 
@@ -111,33 +136,47 @@ export default function AdminWithdrawalsPage() {
   }, [fetchWithdrawals])
 
   // -------------------------------------------------------------------
-  // Derived data
+  // CSV Export
   // -------------------------------------------------------------------
 
-  const statusCounts: Record<StatusFilter, number> = {
-    all: withdrawals.length,
-    pending_approval: withdrawals.filter((w) => w.status === 'pending_approval').length,
-    pending: withdrawals.filter((w) => w.status === 'pending').length,
-    failed: withdrawals.filter((w) => w.status === 'failed').length,
-    confirmed: withdrawals.filter((w) => w.status === 'confirmed').length,
+  async function handleExport() {
+    setExporting(true)
+    try {
+      const params = new URLSearchParams({ format: 'csv' })
+      if (statusFilter !== 'all') params.set('status', statusFilter)
+      if (startDate) params.set('startDate', startDate)
+      if (endDate) params.set('endDate', endDate)
+      if (sessionSearch) params.set('sessionId', sessionSearch)
+
+      const res = await fetch(`/api/admin/withdrawals?${params}`)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `withdrawals-${new Date().toISOString().slice(0, 10)}.csv`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to export')
+    } finally {
+      setExporting(false)
+    }
   }
 
-  const filtered = withdrawals.filter(
-    (w) => statusFilter === 'all' || w.status === statusFilter
-  )
+  // -------------------------------------------------------------------
+  // Derived counts (from current page data — approximate)
+  // -------------------------------------------------------------------
 
-  const sorted = [...filtered].sort((a, b) => {
-    if (sortField === 'amount') {
-      return sortOrder === 'asc' ? a.amount - b.amount : b.amount - a.amount
-    }
-    // age — sort by createdAt
-    const aTime = new Date(a.createdAt).getTime()
-    const bTime = new Date(b.createdAt).getTime()
-    return sortOrder === 'asc' ? aTime - bTime : bTime - aTime
-  })
+  const pendingApprovalOnPage = withdrawals.filter(
+    (w) => w.status === 'pending_approval'
+  ).length
 
   // -------------------------------------------------------------------
-  // Actions
+  // Actions (unchanged — still go through /api/admin/pool)
   // -------------------------------------------------------------------
 
   const handleWithdrawalAction = async (transactionId: string, approve: boolean) => {
@@ -150,7 +189,7 @@ export default function AdminWithdrawalsPage() {
     let rejectReason = ''
     if (!approve) {
       const input = window.prompt('Rejection reason (required):', '')
-      if (input === null) return // Cancelled
+      if (input === null) return
       rejectReason = input.trim() || 'Rejected by admin'
     }
 
@@ -252,7 +291,7 @@ export default function AdminWithdrawalsPage() {
     let bulkRejectReason = ''
     if (!approve) {
       const input = window.prompt(`Rejection reason for ${count} withdrawal(s):`, '')
-      if (input === null) return // Cancelled
+      if (input === null) return
       bulkRejectReason = input.trim() || 'Rejected by admin (bulk)'
     }
 
@@ -307,7 +346,7 @@ export default function AdminWithdrawalsPage() {
   }
 
   const toggleSelectAll = () => {
-    const visiblePendingApproval = sorted.filter((w) => w.status === 'pending_approval')
+    const visiblePendingApproval = withdrawals.filter((w) => w.status === 'pending_approval')
     const allSelected = visiblePendingApproval.every((w) => selectedIds.has(w.id))
     if (allSelected) {
       setSelectedIds(new Set())
@@ -327,6 +366,7 @@ export default function AdminWithdrawalsPage() {
       setSortField(field)
       setSortOrder('desc')
     }
+    setPage(1)
   }
 
   const sortIndicator = (field: SortField) => {
@@ -343,15 +383,29 @@ export default function AdminWithdrawalsPage() {
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-bold text-masque-gold font-[family-name:var(--font-cinzel)]">
-            Withdrawals
-          </h1>
-          <Link
-            href="/admin"
-            className="text-sm text-venetian-gold hover:text-masque-gold transition-colors"
-          >
-            Back to Dashboard
-          </Link>
+          <div>
+            <h1 className="text-2xl font-bold text-masque-gold font-[family-name:var(--font-cinzel)]">
+              Withdrawals
+            </h1>
+            <p className="text-[11px] text-bone-white/40 mt-0.5">
+              {total.toLocaleString()} total entries
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleExport}
+              disabled={exporting}
+              className="text-sm px-3 py-1.5 rounded border border-masque-gold/30 text-masque-gold hover:border-masque-gold hover:bg-masque-gold/10 transition-colors disabled:opacity-50"
+            >
+              {exporting ? 'Exporting...' : 'Export CSV'}
+            </button>
+            <Link
+              href="/admin"
+              className="text-sm text-venetian-gold hover:text-masque-gold transition-colors"
+            >
+              Back to Dashboard
+            </Link>
+          </div>
         </div>
 
         {/* Error */}
@@ -368,25 +422,76 @@ export default function AdminWithdrawalsPage() {
           </div>
         )}
 
-        {/* Status filter tabs */}
-        <div className="flex flex-wrap gap-2 mb-4">
-          {STATUS_FILTERS.map(({ key, label }) => (
+        {/* Filters row */}
+        <div className="flex flex-wrap gap-3 mb-4">
+          {/* Status filter tabs */}
+          <div className="flex gap-1 bg-midnight-black/80 border border-masque-gold/20 rounded-lg p-1">
+            {STATUS_FILTERS.map(({ key, label }) => (
+              <button
+                key={key}
+                onClick={() => {
+                  setStatusFilter(key)
+                  setPage(1)
+                  setSelectedIds(new Set())
+                }}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                  statusFilter === key
+                    ? 'bg-masque-gold text-midnight-black'
+                    : 'text-bone-white/70 hover:text-bone-white'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {/* Session search */}
+          <input
+            type="text"
+            placeholder="Session ID..."
+            value={sessionSearch}
+            onChange={(e) => {
+              setSessionSearch(e.target.value)
+              setPage(1)
+            }}
+            className="px-3 py-2 bg-midnight-black border border-masque-gold/30 rounded text-bone-white text-sm focus:border-masque-gold focus:outline-none placeholder:text-bone-white/30 w-36"
+          />
+
+          {/* Date range */}
+          <input
+            type="date"
+            value={startDate}
+            onChange={(e) => {
+              setStartDate(e.target.value)
+              setPage(1)
+            }}
+            className="px-3 py-2 bg-midnight-black border border-masque-gold/30 rounded text-bone-white text-sm focus:border-masque-gold focus:outline-none"
+          />
+          <input
+            type="date"
+            value={endDate}
+            onChange={(e) => {
+              setEndDate(e.target.value)
+              setPage(1)
+            }}
+            className="px-3 py-2 bg-midnight-black border border-masque-gold/30 rounded text-bone-white text-sm focus:border-masque-gold focus:outline-none"
+          />
+
+          {/* Clear filters */}
+          {(statusFilter !== 'all' || startDate || endDate || sessionSearch) && (
             <button
-              key={key}
               onClick={() => {
-                setStatusFilter(key)
-                setSelectedIds(new Set())
+                setStatusFilter('all')
+                setStartDate('')
+                setEndDate('')
+                setSessionSearch('')
+                setPage(1)
               }}
-              className={`text-sm px-4 py-1.5 rounded-lg border transition-colors ${
-                statusFilter === key
-                  ? 'border-masque-gold/60 bg-masque-gold/20 text-masque-gold'
-                  : 'border-masque-gold/20 text-venetian-gold/50 hover:text-masque-gold hover:border-masque-gold/40'
-              }`}
+              className="px-3 py-2 text-sm text-bone-white/50 hover:text-bone-white transition-colors"
             >
-              {label}
-              <span className="ml-1.5 text-xs opacity-70">({statusCounts[key]})</span>
+              Clear
             </button>
-          ))}
+          )}
         </div>
 
         {/* Bulk actions */}
@@ -424,13 +529,13 @@ export default function AdminWithdrawalsPage() {
             <thead>
               <tr className="border-b border-masque-gold/20 bg-midnight-black/80">
                 {/* Checkbox column — only show if there are pending_approval items */}
-                {statusCounts.pending_approval > 0 && (
+                {pendingApprovalOnPage > 0 && (
                   <th className="w-10 px-3 py-3">
                     <input
                       type="checkbox"
                       checked={
-                        sorted.filter((w) => w.status === 'pending_approval').length > 0 &&
-                        sorted
+                        pendingApprovalOnPage > 0 &&
+                        withdrawals
                           .filter((w) => w.status === 'pending_approval')
                           .every((w) => selectedIds.has(w.id))
                       }
@@ -459,9 +564,9 @@ export default function AdminWithdrawalsPage() {
                 </th>
                 <th
                   className="text-left px-4 py-3 text-masque-gold font-semibold cursor-pointer select-none hover:text-bone-white transition-colors"
-                  onClick={() => handleSortToggle('age')}
+                  onClick={() => handleSortToggle('createdAt')}
                 >
-                  Age{sortIndicator('age')}
+                  Age{sortIndicator('createdAt')}
                 </th>
                 <th className="text-right px-4 py-3 text-masque-gold font-semibold">
                   Actions
@@ -469,26 +574,26 @@ export default function AdminWithdrawalsPage() {
               </tr>
             </thead>
             <tbody>
-              {loading ? (
+              {loading && withdrawals.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={statusCounts.pending_approval > 0 ? 8 : 7}
+                    colSpan={pendingApprovalOnPage > 0 ? 8 : 7}
                     className="px-4 py-8 text-center text-bone-white/50"
                   >
                     Loading withdrawals...
                   </td>
                 </tr>
-              ) : sorted.length === 0 ? (
+              ) : withdrawals.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={statusCounts.pending_approval > 0 ? 8 : 7}
+                    colSpan={pendingApprovalOnPage > 0 ? 8 : 7}
                     className="px-4 py-8 text-center text-bone-white/50"
                   >
                     No withdrawals matching filter.
                   </td>
                 </tr>
               ) : (
-                sorted.map((w) => {
+                withdrawals.map((w) => {
                   const ageMs = Date.now() - new Date(w.createdAt).getTime()
                   const ageHours = ageMs / (1000 * 60 * 60)
                   const ageText =
@@ -510,7 +615,7 @@ export default function AdminWithdrawalsPage() {
                       className="border-b border-masque-gold/10 hover:bg-masque-gold/5 transition-colors"
                     >
                       {/* Checkbox */}
-                      {statusCounts.pending_approval > 0 && (
+                      {pendingApprovalOnPage > 0 && (
                         <td className="w-10 px-3 py-3">
                           {w.status === 'pending_approval' ? (
                             <input
@@ -628,11 +733,37 @@ export default function AdminWithdrawalsPage() {
           </table>
         </div>
 
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between mt-6 text-sm text-bone-white/60">
+            <span>
+              Page {page} of {totalPages} ({total.toLocaleString()} total)
+            </span>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setPage(Math.max(1, page - 1))}
+                disabled={page === 1}
+                className="px-3 py-1.5 rounded border border-masque-gold/30 text-bone-white/70 hover:text-bone-white hover:border-masque-gold transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                Previous
+              </button>
+              <button
+                onClick={() => setPage(page + 1)}
+                disabled={page >= totalPages}
+                className="px-3 py-1.5 rounded border border-masque-gold/30 text-bone-white/70 hover:text-bone-white hover:border-masque-gold transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Summary footer */}
-        <div className="mt-4 text-xs text-bone-white/30">
-          Showing {sorted.length} of {withdrawals.length} total withdrawals
-          {statusFilter !== 'all' && ` (filtered: ${statusFilter})`}
-        </div>
+        {totalPages <= 1 && (
+          <div className="mt-4 text-xs text-bone-white/30">
+            Showing {withdrawals.length} of {total} total withdrawals
+          </div>
+        )}
       </div>
     </div>
   )

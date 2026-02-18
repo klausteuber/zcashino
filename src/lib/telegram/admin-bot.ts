@@ -199,7 +199,7 @@ function buildInternalAdminRequest(opts: {
   path: '/api/admin/overview' | '/api/admin/pool'
   body?: Record<string, unknown>
 }): NextRequest {
-  const token = createAdminSessionToken('telegram-bot')
+  const token = createAdminSessionToken('telegram-bot', 'super_admin')
 
   const headers: Record<string, string> = {
     host: 'localhost',

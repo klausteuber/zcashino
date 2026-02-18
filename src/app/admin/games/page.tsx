@@ -107,6 +107,7 @@ export default function AdminGamesPage() {
   const [order, setOrder] = useState<'asc' | 'desc'>('desc')
   const [limit] = useState(25)
   const [offset, setOffset] = useState(0)
+  const [exporting, setExporting] = useState(false)
 
   const fetchGames = useCallback(async () => {
     setLoading(true)
@@ -169,6 +170,33 @@ export default function AdminGamesPage() {
     setOffset(0)
   }
 
+  async function handleExportCsv() {
+    setExporting(true)
+    try {
+      const params = new URLSearchParams({ format: 'csv', sort, order })
+      if (typeFilter) params.set('type', typeFilter)
+      if (outcomeFilter) params.set('outcome', outcomeFilter)
+      if (minPayout) params.set('minPayout', minPayout)
+      if (sessionIdFilter) params.set('sessionId', sessionIdFilter)
+      if (fromDate) params.set('from', fromDate)
+      if (toDate) params.set('to', toDate)
+
+      const res = await fetch(`/api/admin/games?${params.toString()}`)
+      if (!res.ok) throw new Error('Export failed')
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `games-${new Date().toISOString().slice(0, 10)}.csv`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      setError('CSV export failed')
+    } finally {
+      setExporting(false)
+    }
+  }
+
   const totalPages = Math.ceil(total / limit)
   const currentPage = Math.floor(offset / limit) + 1
 
@@ -180,12 +208,21 @@ export default function AdminGamesPage() {
           <h1 className="text-2xl font-bold text-masque-gold font-[family-name:var(--font-cinzel)]">
             Game History
           </h1>
-          <Link
-            href="/admin"
-            className="text-sm text-venetian-gold hover:text-masque-gold transition-colors"
-          >
-            Back to Dashboard
-          </Link>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleExportCsv}
+              disabled={exporting}
+              className="px-3 py-1.5 text-sm border border-masque-gold/30 rounded text-venetian-gold hover:text-masque-gold hover:border-masque-gold/60 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              {exporting ? 'Exporting...' : 'Export CSV'}
+            </button>
+            <Link
+              href="/admin"
+              className="text-sm text-venetian-gold hover:text-masque-gold transition-colors"
+            >
+              Back to Dashboard
+            </Link>
+          </div>
         </div>
 
         {/* Filters */}
