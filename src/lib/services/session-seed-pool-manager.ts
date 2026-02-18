@@ -6,6 +6,7 @@ import { getAdminSettings } from '@/lib/admin/runtime-settings'
 
 const SESSION_SEED_POOL_CHECK_INTERVAL_MS = parseInt(process.env.SESSION_SEED_POOL_CHECK_INTERVAL_MS || '300000', 10)
 const SESSION_SEED_REFILL_MAX_PER_RUN = 1
+const STALE_SEED_AGE_MS = 24 * 60 * 60 * 1000 // 24 hours
 
 const FAIRNESS_SEED_STATUS = {
   AVAILABLE: 'available',
@@ -65,6 +66,49 @@ export async function getSessionSeedPoolStatus(): Promise<SessionSeedPoolStatus>
   }
 }
 
+/**
+ * Reclaim seeds assigned to sessions that are stale (inactive 24h+, never used).
+ * A seed with nextNonce=0 was never used for any game hand, so it's safe to
+ * detach from the session and return to the available pool.
+ */
+async function reclaimStaleSessions(): Promise<number> {
+  const cutoff = new Date(Date.now() - STALE_SEED_AGE_MS)
+
+  // Find fairness states where the session hasn't been active in 24h and nonce is 0
+  const staleStates = await prisma.sessionFairnessState.findMany({
+    where: {
+      nextNonce: 0,
+      seed: { status: FAIRNESS_SEED_STATUS.ASSIGNED },
+      session: { lastActiveAt: { lt: cutoff } },
+    },
+    select: { sessionId: true, seedId: true },
+  })
+
+  if (staleStates.length === 0) return 0
+
+  let reclaimed = 0
+  for (const state of staleStates) {
+    try {
+      await prisma.$transaction([
+        prisma.sessionFairnessState.delete({ where: { sessionId: state.sessionId } }),
+        prisma.fairnessSeed.update({
+          where: { id: state.seedId, status: FAIRNESS_SEED_STATUS.ASSIGNED },
+          data: { status: FAIRNESS_SEED_STATUS.AVAILABLE, assignedAt: null },
+        }),
+      ])
+      reclaimed++
+    } catch {
+      // Race condition — another request may have used the seed. Skip it.
+    }
+  }
+
+  if (reclaimed > 0) {
+    console.log(`[SessionSeedPoolManager] Reclaimed ${reclaimed} stale assigned seed(s)`)
+  }
+
+  return reclaimed
+}
+
 export async function checkAndRefillSessionSeedPool(
   network: ZcashNetwork = DEFAULT_NETWORK
 ): Promise<void> {
@@ -73,6 +117,11 @@ export async function checkAndRefillSessionSeedPool(
   }
 
   refillInFlight = (async () => {
+    // Reclaim unused seeds from stale sessions before checking levels
+    await reclaimStaleSessions().catch((err) =>
+      console.error('[SessionSeedPoolManager] Stale reclaim failed:', err)
+    )
+
     const tuning = await getPoolTuning()
     const status = await getSessionSeedPoolStatus()
     cachedPoolStatus = status
@@ -128,6 +177,7 @@ export async function startSessionSeedPoolManager(
     await initializeSessionSeedPool(network)
     lastCheck = new Date()
     cachedPoolStatus = await getSessionSeedPoolStatus()
+    console.log(`[SessionSeedPoolManager] Started (interval: ${SESSION_SEED_POOL_CHECK_INTERVAL_MS / 1000}s, available: ${cachedPoolStatus.available}, assigned: ${cachedPoolStatus.assigned})`)
   } catch (error) {
     console.error('[SessionSeedPoolManager] Initialization failed:', error)
   }
