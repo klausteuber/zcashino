@@ -534,6 +534,46 @@ if (result.count > 0) {
 
 **Fix:** Ensure the parent has `overflow: hidden` if child content might extend past the bevel, or apply the clip-path to a wrapper that contains all content.
 
+### Session seed pool drained by abandoned sessions (2026-02-18)
+
+**Symptom:** Pool stays at target (15 available) but `assigned` count grows unbounded (35+). Seeds are consumed faster than refilled even with low traffic.
+
+**Root Cause:** Every new session claims a fairness seed eagerly (on first page load / API call). Most visitors never play a hand — they claim a seed, browse, and leave. The seed stays `assigned` forever because there's no cleanup for unused claims.
+
+**Fix:** Added `reclaimStaleSessions()` to the 5-minute periodic check in `session-seed-pool-manager.ts`. Reclaims seeds where:
+- `nextNonce = 0` (seed never used for any game hand)
+- Session `lastActiveAt` is older than 24 hours
+- Seed status is still `assigned`
+
+Safe because: a seed with nonce 0 has never been used to derive a game outcome, so returning it to the pool doesn't affect fairness integrity.
+
+**File:** `src/lib/services/session-seed-pool-manager.ts`
+
+---
+
+### Deposit modal renders empty — black screen (2026-02-18)
+
+**Symptom:** Clicking "Deposit" → "Real ZEC" shows a dark backdrop with no modal content. The modal container is only 2px tall with zero children. Affects both brands (21z and CypherJester).
+
+**Root Cause:** Two-part failure in falsy value handling:
+
+1. `BlackjackGame.tsx:394` — `data.depositAddress || ''` converted null/undefined deposit address into empty string `''`
+2. `OnboardingModal.tsx:160` — Conditional render `step === 'deposit' && localDepositAddress && (...)` treated `''` as falsy
+
+The `handleRealSelect` callback called `setStep('deposit')` unconditionally, but the `DepositScreen` component only rendered when `localDepositAddress` was truthy. Empty string `''` is falsy in JavaScript, so the step transitioned but nothing rendered — leaving a dark `bg-black/80` backdrop with an empty container.
+
+**Fix:**
+1. Changed fallback from `|| ''` to `|| null` — don't mask null as empty string
+2. Added validation before `setStep('deposit')` — only transition if `result.depositAddress` is truthy
+3. Added `'error'` step with retry UI — shows "Something Went Wrong" instead of blank screen
+4. Added auto-advance — when modal opens with existing deposit address, skip welcome screen
+
+**Lesson:** Never use `|| ''` as a fallback for values used in conditional rendering. Empty string is falsy. Use `|| null` and handle null explicitly.
+
+**Files:** `src/components/onboarding/OnboardingModal.tsx`, `src/components/game/BlackjackGame.tsx`
+
+---
+
 ### Hover glow visible on mobile (touch devices)
 
 **Symptom:** On mobile, tapping a button shows the hover glow that stays visible after releasing.

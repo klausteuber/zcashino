@@ -304,3 +304,31 @@ In-memory limits and remote font fetches are acceptable in dev, but must be call
 
 7. **Verify deployed CSS by checking bundle hash, not just route health.**
    After deployment, routes returning 200 doesn't mean your CSS changes are live. The CSS bundle hash (e.g., `321fafd1c4b23bb6.css` vs `b065e617b503309a.css`) changes when CSS is updated. Grep the bundle for specific class names or keyframe identifiers to confirm.
+
+## Session Seed Pool Reclamation Learnings (2026-02-18)
+
+1. **Assigned seeds without usage are a pool drain, not a pool feature.**
+   35 of 52 seeds were stuck in `assigned` status — claimed by sessions that visited but never played (nextNonce=0). These one-time visitors consumed seeds that could never be reclaimed, slowly exhausting the pool. The fix: a periodic reclaim job that returns unused assigned seeds (nextNonce=0, session inactive 24h+) back to `available`.
+
+2. **Background services should always log on startup.**
+   The session seed pool manager started silently — no log line on success, only on failure. Compared to `[Sweep] Started successfully` and `[alert-generator] Starting alert generator`, the pool manager was invisible in container logs, making it impossible to confirm it was running without checking the DB directly. Every background service should log its startup state.
+
+3. **Reclamation must be safe against in-flight usage.**
+   A seed with nextNonce=0 is safe to reclaim because no game hand has ever used it. Seeds with nextNonce>0 have been used to generate game outcomes and cannot be returned to the pool — they must remain assigned to preserve provable fairness integrity. The reclaim uses `$transaction` with status guards to handle race conditions where a session resumes during reclamation.
+
+4. **Pool "health" should account for reclaimable seeds.**
+   After deploying reclamation, the first startup cycle recovered 24 seeds, jumping available from 15 to 39. The pool was never actually low — it just had resources locked by abandoned sessions. Future pool health metrics should distinguish between truly consumed seeds and reclaimable ones.
+
+## Modal State Machine Learnings (2026-02-18)
+
+1. **Never use `|| ''` for values consumed by conditional rendering.**
+   `data.depositAddress || ''` silently converts null to empty string. Empty string is falsy in JavaScript, so `localDepositAddress && (<Component />)` evaluates to false. This caused the deposit modal to show a dark backdrop with zero content — a completely invisible failure. Use `|| null` and handle null explicitly with an error state.
+
+2. **Multi-step modals need an error state, not just happy-path steps.**
+   The OnboardingModal had steps: welcome → setup → deposit → confirming → ready. When the async session creation returned without a deposit address, the step advanced to `'deposit'` but the render condition failed silently. Adding an explicit `'error'` step with retry UI ensures every failure path has a visible outcome. Users see "Something Went Wrong" instead of a black screen.
+
+3. **Auto-advance modals to the most relevant step on open.**
+   When a modal opens and the data it needs is already available (existing session with deposit address), skip intermediate steps. The deposit modal was showing "Welcome → Choose Demo or Real" every time, even for users who already had a real session with a deposit address. Auto-advancing with a `useEffect` that checks `isOpen && depositAddress && sessionId` gives returning users a direct path.
+
+4. **Reset modal state on close, not on open.**
+   Resetting `step` to `'welcome'` when `!isOpen` (in a useEffect) ensures the modal always starts fresh on the next open. Resetting on open can race with auto-advance logic. The pattern: close resets state, open triggers auto-advance if conditions are met.
