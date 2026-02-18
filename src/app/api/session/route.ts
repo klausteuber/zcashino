@@ -186,7 +186,23 @@ export async function GET(request: NextRequest) {
           }
         } catch (err) {
           console.error('[SessionAPI] Failed to create deposit wallet:', err)
-          // Non-fatal: session still works, wallet can be created later
+          const errMsg = err instanceof Error ? err.message : String(err)
+          // Return session with a specific wallet error so the frontend can show a useful message
+          return NextResponse.json({
+            id: session.id,
+            walletAddress: session.walletAddress,
+            balance: 0,
+            isDemo: false,
+            depositAddress: null,
+            walletError: errMsg.includes('node not connected')
+              ? 'node_unavailable'
+              : errMsg.includes('unique constraint') || errMsg.includes('Unique constraint')
+              ? 'wallet_conflict'
+              : 'wallet_creation_failed',
+            walletErrorMessage: errMsg.includes('node not connected')
+              ? 'The Zcash node is temporarily unavailable. Please try again in a moment.'
+              : 'Failed to generate deposit address. Please try again.',
+          })
         }
       }
     }
@@ -208,8 +224,20 @@ export async function GET(request: NextRequest) {
     return await createSessionResponse(session)
   } catch (error) {
     console.error('Session error:', error)
+    const errMsg = error instanceof Error ? error.message : String(error)
+    // Provide a more specific error code for the frontend
+    const errorCode = errMsg.includes('node not connected')
+      ? 'node_unavailable'
+      : errMsg.includes('database') || errMsg.includes('prisma')
+      ? 'database_error'
+      : 'session_error'
     return NextResponse.json(
-      { error: 'Failed to get session' },
+      {
+        error: errorCode === 'node_unavailable'
+          ? 'The Zcash node is temporarily unavailable. Please try again in a moment.'
+          : 'Failed to get session. Please try again.',
+        errorCode,
+      },
       { status: 500 }
     )
   }

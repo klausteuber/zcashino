@@ -14,7 +14,7 @@ interface OnboardingModalProps {
   onDepositComplete: (balance: number) => void
   sessionId: string | null
   depositAddress: string | null
-  onCreateRealSession: () => Promise<{ sessionId: string; depositAddress: string | null } | null>
+  onCreateRealSession: () => Promise<{ sessionId: string; depositAddress: string | null; walletError?: string; walletErrorMessage?: string } | null>
   onSetWithdrawalAddress?: (address: string) => Promise<boolean>
   /** Skip welcome screen and go directly to deposit flow */
   initialStep?: 'welcome' | 'deposit'
@@ -97,15 +97,32 @@ export function OnboardingModal({
     setIsLoading(true)
     setErrorMessage(null)
     try {
+      // Pre-flight health check — fail fast with a clear message if the node is down
+      try {
+        const healthRes = await fetch('/api/health', { signal: AbortSignal.timeout(4000) })
+        if (healthRes.ok) {
+          const health = await healthRes.json()
+          if (health.zcashNode && !health.zcashNode.connected) {
+            setErrorMessage('The Zcash node is temporarily offline. Please try again in a minute.')
+            setStep('error')
+            setIsLoading(false)
+            return
+          }
+        }
+      } catch {
+        // Health check itself failed — proceed anyway, session creation will catch it
+        console.warn('[Onboarding] Health check failed, proceeding with session creation')
+      }
+
       const result = await onCreateRealSession()
       if (result && result.depositAddress) {
         setLocalSessionId(result.sessionId)
         setLocalDepositAddress(result.depositAddress)
         setStep('deposit')
       } else if (result) {
-        // Session created but no deposit address — wallet creation likely failed
-        setLocalSessionId(result.sessionId)
-        setErrorMessage('Failed to generate deposit address. Please try again.')
+        // Session created but no deposit address — check for specific wallet error
+        if (result.sessionId) setLocalSessionId(result.sessionId)
+        setErrorMessage(result.walletErrorMessage || 'Failed to generate deposit address. Please try again.')
         setStep('error')
       } else {
         setErrorMessage('Failed to create session. Please try again.')

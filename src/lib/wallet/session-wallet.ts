@@ -14,8 +14,13 @@ export async function createDepositWalletForSession(sessionId: string) {
   let transparentAddr: string
   let accountIndex = 0
 
-  // Check if we have RPC connection
-  const nodeStatus = await checkNodeStatus(network)
+  // Check if we have RPC connection — retry once after 2s if the first check fails
+  let nodeStatus = await checkNodeStatus(network)
+  if (!nodeStatus.connected) {
+    console.warn('[SessionWallet] Node unreachable, retrying in 2s...')
+    await new Promise(resolve => setTimeout(resolve, 2000))
+    nodeStatus = await checkNodeStatus(network)
+  }
 
   if (nodeStatus.connected) {
     // Generate both unified (user-facing) and transparent companion address
@@ -36,22 +41,24 @@ export async function createDepositWalletForSession(sessionId: string) {
     unifiedAddr = `utest${seed}${seed}${seed}`.slice(0, 60)
   }
 
-  // Get next address index
-  const lastWallet = await prisma.depositWallet.findFirst({
-    orderBy: { addressIndex: 'desc' },
-  })
-  const addressIndex = (lastWallet?.addressIndex ?? -1) + 1
+  // Atomically get next address index and create wallet in a transaction
+  // to prevent race conditions from concurrent session creation
+  const wallet = await prisma.$transaction(async (tx) => {
+    const lastWallet = await tx.depositWallet.findFirst({
+      orderBy: { addressIndex: 'desc' },
+    })
+    const addressIndex = (lastWallet?.addressIndex ?? -1) + 1
 
-  // Create wallet record
-  const wallet = await prisma.depositWallet.create({
-    data: {
-      sessionId,
-      unifiedAddr,
-      transparentAddr,
-      network,
-      accountIndex,
-      addressIndex,
-    },
+    return tx.depositWallet.create({
+      data: {
+        sessionId,
+        unifiedAddr,
+        transparentAddr,
+        network,
+        accountIndex,
+        addressIndex,
+      },
+    })
   })
 
   return wallet

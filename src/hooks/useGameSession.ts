@@ -38,7 +38,7 @@ export interface UseGameSessionReturn {
 
   // Session actions
   handleDemoSelect: () => Promise<void>
-  handleCreateRealSession: () => Promise<{ sessionId: string; depositAddress: string | null } | null>
+  handleCreateRealSession: () => Promise<{ sessionId: string; depositAddress: string | null; walletError?: string; walletErrorMessage?: string } | null>
   handleDepositComplete: (balance: number) => void
   handleSwitchToReal: () => void
   handleSetWithdrawalAddress: (address: string) => Promise<boolean>
@@ -144,12 +144,34 @@ export function useGameSession(): UseGameSessionReturn {
     try {
       const walletId = `real_${Date.now()}_${Math.random().toString(36).slice(2)}`
       const res = await fetch(`/api/session?wallet=${walletId}`)
-      if (!res.ok) throw new Error('Failed to create session')
+      if (res.status === 429) {
+        const data = await res.json()
+        const retryAfter = data.retryAfterSeconds || 60
+        return {
+          sessionId: '',
+          depositAddress: null,
+          walletError: 'rate_limited',
+          walletErrorMessage: `Too many attempts. Please wait ${retryAfter} seconds and try again.`,
+        } as { sessionId: string; depositAddress: string | null; walletError?: string; walletErrorMessage?: string }
+      }
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || 'Failed to create session')
+      }
       const data = await res.json()
+      if (data.error) throw new Error(data.error)
       setSession(data)
       setFairness(data.fairness || null)
-      localStorage.setItem('zcashino_session_id', data.id)
-      return { sessionId: data.id, depositAddress: data.depositAddress || null }
+      if (data.id) {
+        localStorage.setItem('zcashino_session_id', data.id)
+      }
+      // Pass through wallet error fields if present (session created but wallet failed)
+      return {
+        sessionId: data.id,
+        depositAddress: data.depositAddress || null,
+        walletError: data.walletError,
+        walletErrorMessage: data.walletErrorMessage,
+      }
     } catch (err) {
       console.error('Failed to create real session:', err)
       return null

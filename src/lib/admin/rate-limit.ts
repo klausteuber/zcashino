@@ -44,7 +44,7 @@ const DEFAULT_BUCKET_CONFIG: Record<AdminRateLimitBucket | PublicRateLimitBucket
     windowMs: 60 * 1000,
   },
   'session-create': {
-    maxRequests: 10,
+    maxRequests: 20,
     windowMs: 60 * 1000,
   },
   'wallet-action': {
