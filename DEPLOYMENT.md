@@ -486,7 +486,7 @@ TELEGRAM_ADMIN_CHAT_IDS=...
 2. Set the webhook (must be HTTPS, and should be the **cypher** domain):
 
 ```bash
-node scripts/telegram-set-webhook.js --base-url https://cypherjester.com
+./scripts/telegram-set-webhook.sh --base-url https://cypherjester.com
 ```
 
 3. In Telegram, message your bot:
