@@ -5,6 +5,7 @@ import {
   startRound,
   executeAction,
   takeInsurance,
+  declineInsurance,
   getAvailableActions,
 } from '@/lib/game/blackjack'
 import {
@@ -152,6 +153,9 @@ export async function POST(request: NextRequest) {
 
       case 'insurance':
         return handleInsuranceAction(request, session, payload.gameId)
+
+      case 'decline_insurance':
+        return handleDeclineInsurance(request, session, payload.gameId)
 
       default:
         return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
@@ -847,6 +851,115 @@ async function handleInsuranceAction(
   return NextResponse.json({
     gameId,
     gameState: sanitizeGameState({ ...gameState, insuranceBet: insuranceAmount }),
+    balance: roundZec(updatedSession?.balance ?? 0),
+    totalWagered: roundZec(updatedSession?.totalWagered ?? 0),
+    totalWon: roundZec(updatedSession?.totalWon ?? 0)
+  })
+}
+
+async function handleDeclineInsurance(
+  request: NextRequest,
+  session: {
+    id: string
+    balance: number
+    totalWagered: number
+    totalWon: number
+    lossLimit: number | null
+    sessionLimit: number | null
+    createdAt: Date
+  },
+  gameId: string
+) {
+  if (!gameId) {
+    return NextResponse.json({ error: 'Game ID required' }, { status: 400 })
+  }
+
+  const game = await prisma.blackjackGame.findUnique({
+    where: { id: gameId }
+  })
+
+  if (!game) {
+    return NextResponse.json({ error: 'Game not found' }, { status: 404 })
+  }
+
+  if (game.sessionId !== session.id) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+  }
+
+  if (game.status !== 'active') {
+    return NextResponse.json({ error: 'Game already completed' }, { status: 400 })
+  }
+
+  const resolvedServerSeed = await resolveGameServerSeed(game.serverSeed, game.fairnessSeedId)
+  if (!resolvedServerSeed) {
+    return NextResponse.json({
+      error: 'Server seed unavailable for this game.'
+    }, { status: 503 })
+  }
+
+  // Reconstruct game state from initial deal
+  const initialState = createInitialState(session.balance + game.mainBet + game.perfectPairsBet)
+
+  const storedInitial = JSON.parse(game.initialState || '{}')
+  const storedGameRules: BlackjackGameRules | undefined = storedInitial.gameRules
+
+  let gameState = startRound(
+    initialState,
+    game.mainBet,
+    game.perfectPairsBet,
+    resolvedServerSeed,
+    game.serverSeedHash,
+    game.clientSeed,
+    game.nonce,
+    normalizeFairnessVersion(game.fairnessVersion),
+    { minBet: 0, maxBet: Math.max(game.mainBet, 1) },
+    storedGameRules
+  )
+
+  // Insurance should not have been taken yet if declining
+  if (game.insuranceBet > 0) {
+    return NextResponse.json({ error: 'Insurance already taken' }, { status: 400 })
+  }
+
+  if (gameState.dealerHand.cards[0]?.rank !== 'A') {
+    return NextResponse.json({ error: 'No insurance to decline' }, { status: 400 })
+  }
+
+  if (gameState.dealerPeeked) {
+    return NextResponse.json({ error: 'Dealer already peeked' }, { status: 400 })
+  }
+
+  gameState = declineInsurance(gameState)
+
+  const updateData: Record<string, unknown> = {
+    finalState: JSON.stringify({
+      playerHands: gameState.playerHands,
+      dealerHand: gameState.dealerHand,
+      phase: gameState.phase,
+      message: gameState.message,
+      insuranceBet: 0,
+      dealerPeeked: gameState.dealerPeeked,
+      settlement: gameState.settlement ?? null,
+    })
+  }
+
+  if (gameState.phase === 'complete') {
+    await processGameCompletion(request, gameId, session.id, gameState)
+    updateData.outcome = determineOutcome(gameState)
+  }
+
+  await prisma.blackjackGame.update({
+    where: { id: gameId },
+    data: updateData
+  })
+
+  const updatedSession = await prisma.session.findUnique({
+    where: { id: session.id }
+  })
+
+  return NextResponse.json({
+    gameId,
+    gameState: sanitizeGameState(gameState),
     balance: roundZec(updatedSession?.balance ?? 0),
     totalWagered: roundZec(updatedSession?.totalWagered ?? 0),
     totalWon: roundZec(updatedSession?.totalWon ?? 0)

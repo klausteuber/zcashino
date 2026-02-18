@@ -337,3 +337,20 @@ In-memory limits and remote font fetches are acceptable in dev, but must be call
 
 1. **Never check truthiness of status objects — check the boolean property.**
    `overview.killSwitch` is `{ active: false, activatedAt: null, activatedBy: null }` — an object that is always truthy. The admin banner condition `overview.killSwitch && (...)` displayed the "Kill switch active" warning permanently. The fix: `overview.killSwitch?.active`. This is a general JavaScript pitfall: `!!{}` is `true`, `!!{ active: false }` is `true`. Always destructure or access the specific boolean field.
+
+## Game Startup Funnel Redesign (2026-02-18)
+
+1. **localStorage per-domain isolation causes cross-brand inconsistency.**
+   The `zcashino_onboarding_seen` flag is per-domain. CypherJester (visited before) auto-skipped the modal while 21z.cash (fresh domain) showed it. When localStorage flags control UX flow, behavior diverges across domains sharing the same codebase. Fix: don't gate on localStorage flags — derive behavior from session state.
+
+2. **Extract shared hooks when two components duplicate session logic.**
+   BlackjackGame and VideoPokerGame each had ~100 lines of identical session init, onboarding, and handler code. The `useGameSession` hook eliminated duplication and made both components consistent. When two game components share the same session lifecycle, extract the hook early.
+
+3. **Demo-first reduces friction more than choice modals.**
+   A "Choose Demo or Real" modal creates decision paralysis for first-time visitors. Auto-creating a demo session with zero clicks lets users experience the product immediately. Conversion nudges (banner, win toast, depleted prompt) handle the upgrade path without interrupting gameplay.
+
+4. **Conversion nudge timing matters — trigger on positive moments.**
+   The win nudge toast fires once per session after a demo win (positive emotion). The depleted prompt fires when balance drops below minimum bet (natural pause point). Both are non-blocking. Avoid interrupting active gameplay with conversion prompts.
+
+5. **VideoPokerGame had OnboardingModal as early return, not overlay.**
+   BlackjackGame rendered the modal as an overlay on top of the game. VideoPokerGame used an early return pattern that blocked the entire game UI. Converting to overlay pattern made both consistent and allowed the game to render behind the modal.

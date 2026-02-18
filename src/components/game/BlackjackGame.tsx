@@ -20,7 +20,7 @@ import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 import { useGameSession } from '@/hooks/useGameSession'
 import type { SessionData } from '@/hooks/useGameSession'
 import { OnboardingModal } from '@/components/onboarding/OnboardingModal'
-import { DemoBanner } from '@/components/onboarding/DemoBanner'
+
 import { DemoWinNudge } from '@/components/onboarding/DemoWinNudge'
 import { DemoDepletedPrompt } from '@/components/onboarding/DemoDepletedPrompt'
 import { DepositWidget, DepositWidgetCompact } from '@/components/wallet/DepositWidget'
@@ -560,6 +560,35 @@ export default function BlackjackGame() {
 
     if (!takeInsurance) {
       setInsuranceDeclined(true)
+      // Send decline to server to trigger dealer blackjack peek
+      setIsLoading(true)
+      setError(null)
+      try {
+        const res = await fetch('/api/game', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'decline_insurance',
+            sessionId: session.id,
+            gameId
+          })
+        })
+        if (res.ok) {
+          const data = await res.json()
+          setGameState(data.gameState)
+          setSession(prev => prev ? {
+            ...prev,
+            balance: data.balance,
+            totalWagered: data.totalWagered ?? prev.totalWagered,
+            totalWon: data.totalWon ?? prev.totalWon
+          } : null)
+        }
+      } catch (err) {
+        // Non-critical — peek will still happen on next action via executeAction
+        console.error('Decline insurance error:', err)
+      } finally {
+        setIsLoading(false)
+      }
       return
     }
 
@@ -910,16 +939,6 @@ export default function BlackjackGame() {
           </div>
         </div>
       </header>
-
-      {/* Demo Banner */}
-      {session && isDemo && (
-        <div className="container mx-auto px-2 sm:px-4 pt-2">
-          <DemoBanner
-            balance={session.balance}
-            onDepositClick={handleSwitchToReal}
-          />
-        </div>
-      )}
 
       {/* Error Display */}
       {combinedError && (
@@ -1272,7 +1291,7 @@ export default function BlackjackGame() {
             </div>
           )}
 
-          {gameState?.phase === 'playerTurn' && (
+          {gameState?.phase === 'playerTurn' && !showInsuranceOffer && (
             <div className="flex gap-4 flex-wrap justify-center">
               {availableActions.includes('hit') && (
                 <button
@@ -1464,25 +1483,17 @@ export default function BlackjackGame() {
                   {isAutoBetEnabled && <span className="text-jester-purple-light ml-1">(auto)</span>}
                 </div>
                 {/* Chip selector row */}
-                <div className="flex justify-center gap-1.5 mb-3">
-                  {CHIP_VALUES.map(value => (
-                    <button
-                      key={value}
-                      onClick={() => {
-                        setSelectedBet(value)
-                        // Update perfect pairs proportionally if enabled
-                        if (perfectPairsBet > 0) setPerfectPairsBet(value * 0.1)
-                        playSound('chipPlace')
-                      }}
-                      className={`w-10 h-10 rounded-full text-xs font-bold transition-all duration-150 border-2 ${
-                        selectedBet === value
-                          ? 'border-masque-gold bg-masque-gold/30 text-masque-gold scale-110 shadow-lg shadow-masque-gold/20'
-                          : 'border-venetian-gold/30 bg-midnight-black/60 text-venetian-gold/70 hover:border-masque-gold/50 hover:scale-105'
-                      }`}
-                    >
-                      {value}
-                    </button>
-                  ))}
+                <div className="mb-3">
+                  <ChipStack
+                    values={CHIP_VALUES}
+                    selectedValue={selectedBet}
+                    onSelect={(value) => {
+                      setSelectedBet(value)
+                      if (perfectPairsBet > 0) setPerfectPairsBet(value * 0.1)
+                      playSound('chipPlace')
+                    }}
+                    size="sm"
+                  />
                 </div>
                 {/* Side bet toggle + summary */}
                 <div className="flex items-center justify-between">

@@ -597,3 +597,17 @@ The `handleRealSelect` callback called `setStep('deposit')` unconditionally, but
 **Root Cause:** Many mobile browsers trigger `:hover` on tap and leave it active until the user taps elsewhere.
 
 **Note:** This is a known browser behavior. The glow is subtle enough that it's acceptable. A `@media (hover: hover)` wrapper could restrict glow to pointer devices only, but this would also exclude stylus users.
+
+---
+
+### localStorage per-domain causes inconsistent UX across brands (2026-02-18)
+
+**Symptom:** Clicking "Play Blackjack" on cypherjester.com went to demo mode, but on 21z.cash went to real ZEC choice modal.
+
+**Root Cause:** `localStorage.getItem('zcashino_onboarding_seen')` is per-domain. CypherJester had it set from prior testing; 21z.cash did not. The onboarding modal only showed when this flag was absent.
+
+**Fix:** Removed dependency on the `zcashino_onboarding_seen` flag entirely. The `useGameSession` hook checks for `zcashino_session_id` — if present, restore session; if absent, auto-create demo. No localStorage flag gates the UX flow.
+
+**Lesson:** Never use per-domain localStorage flags to control UX that must be identical across domains sharing the same codebase. Derive UX state from actual data (session exists? demo or real?) not from flags that may differ per origin.
+
+**Files:** `src/hooks/useGameSession.ts`, `src/components/game/BlackjackGame.tsx`, `src/components/game/VideoPokerGame.tsx`

@@ -4,6 +4,7 @@ import {
   createInitialState,
   startRound,
   takeInsurance,
+  declineInsurance,
   executeAction,
   getAvailableActions,
   BLACKJACK_PAYOUT,
@@ -742,6 +743,80 @@ describe('settlement and insurance flows', () => {
       perfectPairsPayout: 0,
       mainHandsPayout: 0.4,
     })
+  })
+
+  it('declineInsurance when dealer has blackjack immediately resolves', () => {
+    const state = playerTurnState(
+      [card('9'), card('7')],
+      [card('A'), card('K', 'hearts', false)],
+      [],
+      {
+        balance: 0.9,
+        currentBet: 0.1,
+        dealerPeeked: false,
+      }
+    )
+
+    const result = declineInsurance(state)
+    expect(result.phase).toBe('complete')
+    expect(result.dealerPeeked).toBe(true)
+    expect(result.insuranceBet).toBe(0)
+    expect(result.dealerHand.cards.every((c) => c.faceUp)).toBe(true)
+    expect(result.message).toContain('Dealer wins')
+  })
+
+  it('declineInsurance when dealer has no blackjack continues playerTurn', () => {
+    const state = playerTurnState(
+      [card('9'), card('7')],
+      [card('A'), card('9', 'hearts', false)],
+      [card('3')],
+      {
+        balance: 0.9,
+        currentBet: 0.1,
+        dealerPeeked: false,
+      }
+    )
+
+    const result = declineInsurance(state)
+    expect(result.phase).toBe('playerTurn')
+    expect(result.dealerPeeked).toBe(true)
+    expect(result.insuranceBet).toBe(0)
+    expect(result.message).toContain('Your turn')
+
+    // Player should now be able to hit
+    const afterHit = executeAction(result, 'hit')
+    expect(afterHit.playerHands[0].cards).toHaveLength(3)
+  })
+
+  it('declineInsurance rejects when dealer not showing Ace', () => {
+    const state = playerTurnState(
+      [card('9'), card('7')],
+      [card('10'), card('9', 'hearts', false)],
+      [],
+      {
+        balance: 0.9,
+        dealerPeeked: false,
+      }
+    )
+
+    const result = declineInsurance(state)
+    expect(result.message).toContain('No insurance to decline')
+    expect(result.dealerPeeked).toBe(false)
+  })
+
+  it('declineInsurance rejects when already peeked', () => {
+    const state = playerTurnState(
+      [card('9'), card('7')],
+      [card('A'), card('9', 'hearts', false)],
+      [],
+      {
+        balance: 0.9,
+        dealerPeeked: true,
+      }
+    )
+
+    const result = declineInsurance(state)
+    expect(result.message).toContain('No insurance to decline')
   })
 
 })
