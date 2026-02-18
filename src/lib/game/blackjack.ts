@@ -663,7 +663,8 @@ function resolveRound(state: BlackjackGameState): BlackjackGameState {
   }
 
   // Build result message
-  const winningHands = results.filter(r => r.outcome === 'win' || r.outcome === 'blackjack')
+  // Note: `totalPayout` includes returning stake (e.g. push), so use `settlement.net`
+  // when deciding whether the player actually won.
   const allSurrendered = results.length > 0
     && results.every(r => r.outcome === 'surrender')
     && insurancePayout === 0
@@ -675,11 +676,11 @@ function resolveRound(state: BlackjackGameState): BlackjackGameState {
 
   const message = allSurrendered
     ? 'Surrender - half bet returned'
-    : onlyPushes
-    ? 'Push - bet returned'
-    : totalPayout > 0
-    ? `You won ${totalPayout.toFixed(4)} ZEC!`
-    : 'Dealer wins'
+    : onlyPushes || settlement.net === 0
+      ? 'Push - bet returned'
+      : settlement.net > 0
+        ? `You won ${settlement.net.toFixed(4)} ZEC!`
+        : 'Dealer wins'
 
   return {
     ...state,

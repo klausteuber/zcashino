@@ -595,6 +595,8 @@ describe('payout scenarios', () => {
     )
     const result = executeAction(state, 'stand')
     expect(result.phase).toBe('complete')
+    expect(result.message.toLowerCase()).toContain('push')
+    expect(result.message.toLowerCase()).not.toContain('won')
     // Push: payout = bet (0.1)
     expect(result.balance).toBe(0.9 + 0.1)
   })

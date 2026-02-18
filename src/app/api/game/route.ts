@@ -908,11 +908,12 @@ function determineOutcome(gameState: BlackjackGameState): string {
   if (gameState.playerHands.length > 0 && gameState.playerHands.every(hand => hand.isSurrendered)) {
     return 'surrender'
   }
-  if (gameState.playerHands[0]?.isBlackjack) return 'blackjack'
-  if (gameState.playerHands[0]?.isBusted) return 'lose'
-  if (gameState.dealerHand.isBusted) return 'win'
-  if (gameState.message.includes('Push')) return 'push'
-  if (gameState.lastPayout > 0) return 'win'
+  const hasNaturalPlayerBlackjack = gameState.playerHands.some(h => h.isBlackjack && !h.isSplit)
+  if (hasNaturalPlayerBlackjack && !gameState.dealerHand.isBlackjack) return 'blackjack'
+
+  const net = roundZec(gameState.settlement?.net ?? 0)
+  if (net === 0) return 'push'
+  if (net > 0) return 'win'
   return 'lose'
 }
 

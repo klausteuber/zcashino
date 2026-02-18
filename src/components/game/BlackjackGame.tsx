@@ -300,6 +300,9 @@ export default function BlackjackGame() {
     // Result animation and sounds when game completes
     if (currentPhase === 'complete' && prevPhase !== 'complete') {
       const payout = gameState?.lastPayout ?? 0
+      const net = typeof gameState?.settlement?.net === 'number'
+        ? gameState.settlement.net
+        : null
       const message = gameState?.message?.toLowerCase() ?? ''
       const allSurrendered = !!gameState?.playerHands?.length
         && gameState.playerHands.every(hand => hand.isSurrendered)
@@ -313,11 +316,11 @@ export default function BlackjackGame() {
         setResultAnimation('loss')
         setTimeout(() => playSound('lose'), 300)
         setTimeout(() => setResultAnimation(null), 3000)
-      } else if (message.includes('push')) {
+      } else if (message.includes('push') || net === 0) {
         setResultAnimation('push')
         setTimeout(() => playSound('push'), 300)
         setTimeout(() => setResultAnimation(null), 3000)
-      } else if (payout > 0) {
+      } else if (net !== null ? net > 0 : payout > 0) {
         setResultAnimation('win')
         setTimeout(() => playSound('win'), 300)
         setTimeout(() => setResultAnimation(null), 3000)
@@ -333,8 +336,8 @@ export default function BlackjackGame() {
         let outcome: HandHistoryEntry['outcome'] = 'lose'
         if (message.includes('blackjack')) outcome = 'blackjack'
         else if (allSurrendered || message.includes('surrender')) outcome = 'surrender'
-        else if (message.includes('push')) outcome = 'push'
-        else if (payout > 0) outcome = 'win'
+        else if (message.includes('push') || net === 0) outcome = 'push'
+        else if (net !== null ? net > 0 : payout > 0) outcome = 'win'
 
         setHandHistory(prev => [{
           id: currentGameId,
@@ -1477,8 +1480,15 @@ export default function BlackjackGame() {
                   + (gameState.perfectPairsBet ?? 0)
                 const netResult = gameState.settlement?.net ?? (payout - totalStake)
                 const isPush = gameState.message?.toLowerCase().includes('push')
+                const isBreakEven = Math.abs(netResult) < 0.00005
 
-                if (payout > 0) {
+                if (isPush || isBreakEven) {
+                  return (
+                    <div className="text-xl font-bold text-venetian-gold px-6 py-3 rounded-lg bg-venetian-gold/10 border border-venetian-gold/30 result-pop">
+                      Push - Bet Returned
+                    </div>
+                  )
+                } else if (netResult > 0) {
                   return (
                     <div className={`text-2xl font-bold px-6 py-3 rounded-lg result-pop ${
                       resultAnimation === 'blackjack' ? 'blackjack-glow bg-masque-gold/20 text-masque-gold' : 'win-glow bg-green-500/20 text-green-400'
@@ -1489,16 +1499,13 @@ export default function BlackjackGame() {
                       )}
                     </div>
                   )
-                } else if (isPush) {
-                  return (
-                    <div className="text-xl font-bold text-venetian-gold px-6 py-3 rounded-lg bg-venetian-gold/10 border border-venetian-gold/30 result-pop">
-                      Push - Bet Returned
-                    </div>
-                  )
                 } else {
                   return (
                     <div className="text-xl font-bold text-blood-ruby px-6 py-3 rounded-lg bg-blood-ruby/10 border border-blood-ruby/30 loss-shake">
-                      -{totalStake.toFixed(4)} ZEC
+                      -{Math.abs(netResult).toFixed(4)} ZEC
+                      {payout > 0 && (
+                        <span className="text-sm ml-2 opacity-70">(+{payout.toFixed(4)} returned)</span>
+                      )}
                     </div>
                   )
                 }
