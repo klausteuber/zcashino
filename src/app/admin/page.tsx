@@ -603,7 +603,7 @@ export default function AdminPage() {
         {overview && (
           <>
             {/* Critical Status Banner */}
-            {(overview.pool.available === 0 || !overview.nodeStatus.connected || overview.killSwitch) && (
+            {(overview.pool.available === 0 || !overview.nodeStatus.connected || overview.killSwitch?.active) && (
               <div className="space-y-2">
                 {overview.pool.available === 0 && (
                   <div className="bg-crimson-mask/20 border border-crimson-mask/60 rounded-lg p-3 flex items-center gap-2">
@@ -617,7 +617,7 @@ export default function AdminPage() {
                     <span className="text-crimson-mask font-semibold">CRITICAL: Zcash node offline — deposits and withdrawals unavailable.</span>
                   </div>
                 )}
-                {overview.killSwitch && (
+                {overview.killSwitch?.active && (
                   <div className="bg-masque-gold/10 border border-masque-gold/40 rounded-lg p-3 flex items-center gap-2">
                     <span className="text-masque-gold font-bold text-lg">!</span>
                     <span className="text-masque-gold font-semibold">WARNING: Kill switch active — new games and withdrawals are blocked.</span>
