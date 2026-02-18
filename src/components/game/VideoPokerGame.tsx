@@ -7,13 +7,16 @@ import type {
   VideoPokerGameState,
   VideoPokerHandRank,
   BlockchainCommitment,
-  VideoPokerHandHistoryEntry,
-  SessionFairnessSummary
+  VideoPokerHandHistoryEntry
 } from '@/types'
 import VideoPokerHand from '@/components/game/VideoPokerHand'
 import PaytableDisplay from '@/components/game/PaytableDisplay'
 import { ChipStack } from '@/components/game/Chip'
+import { useGameSession } from '@/hooks/useGameSession'
 import { OnboardingModal } from '@/components/onboarding/OnboardingModal'
+import { DemoBanner } from '@/components/onboarding/DemoBanner'
+import { DemoWinNudge } from '@/components/onboarding/DemoWinNudge'
+import { DemoDepletedPrompt } from '@/components/onboarding/DemoDepletedPrompt'
 import { DepositWidget, DepositWidgetCompact } from '@/components/wallet/DepositWidget'
 import { WithdrawalModal } from '@/components/wallet/WithdrawalModal'
 import JesterLogo from '@/components/ui/JesterLogo'
@@ -31,20 +34,6 @@ function generateClientSeedHex(bytes: number = 16): string {
   return Array.from(random).map((value) => value.toString(16).padStart(2, '0')).join('')
 }
 
-interface SessionData {
-  id: string
-  walletAddress: string
-  balance: number
-  totalWagered: number
-  totalWon: number
-  fairness?: SessionFairnessSummary | null
-  isDemo?: boolean
-  isAuthenticated?: boolean
-  depositAddress?: string
-  withdrawalAddress?: string | null
-  maintenanceMode?: boolean
-}
-
 interface FairnessRevealBundle {
   mode: 'session_nonce_v1'
   serverSeed: string
@@ -57,24 +46,40 @@ interface FairnessRevealBundle {
 }
 
 export default function VideoPokerGame() {
-  const [session, setSession] = useState<SessionData | null>(null)
+  // Session management via shared hook (auto-creates demo for first-time visitors)
+  const {
+    session, setSession,
+    isLoading: sessionLoading,
+    error: sessionError, setError: setSessionError,
+    showOnboarding, setShowOnboarding,
+    onboardingMode,
+    depositAddress,
+    fairness, setFairness,
+    handleDemoSelect,
+    handleCreateRealSession,
+    handleDepositComplete,
+    handleSwitchToReal,
+    handleSetWithdrawalAddress,
+    handleResetDemoBalance,
+    demoWinNudgeShown,
+    demoHandCount,
+  } = useGameSession()
+
   const [gameState, setGameState] = useState<Omit<VideoPokerGameState, 'deck'> | null>(null)
   const [gameId, setGameId] = useState<string | null>(null)
   const [commitment, setCommitment] = useState<BlockchainCommitment | null>(null)
-  const [fairness, setFairness] = useState<SessionFairnessSummary | null>(null)
   const [clientSeedInput, setClientSeedInput] = useState<string>('')
   const [revealBundle, setRevealBundle] = useState<FairnessRevealBundle | null>(null)
   const [variant, setVariant] = useState<VideoPokerVariant>('jacks_or_better')
   const [selectedBet, setSelectedBet] = useState<number>(0.01)
   const [betMultiplier, setBetMultiplier] = useState<number>(5)
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(false)
   const [isActing, setIsActing] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Onboarding
-  const [showOnboarding, setShowOnboarding] = useState(false)
-  const [hasSeenOnboarding, setHasSeenOnboarding] = useState(false)
-  const [depositAddress, setDepositAddress] = useState<string | null>(null)
+  // Demo win nudge state
+  const [showWinNudge, setShowWinNudge] = useState(false)
+  const [winNudgeAmount, setWinNudgeAmount] = useState(0)
 
   // Withdrawal
   const [showWithdrawal, setShowWithdrawal] = useState(false)
@@ -91,13 +96,6 @@ export default function VideoPokerGame() {
 
   // Local held cards state (user toggles before submitting draw)
   const [localHeldCards, setLocalHeldCards] = useState<boolean[]>([false, false, false, false, false])
-
-  // Check localStorage for onboarding
-  useEffect(() => {
-    // TODO(brand-migration): keep zcashino_* keys until a coordinated live-session migration to 21z_* is planned.
-    const seen = localStorage.getItem('zcashino_onboarding_seen')
-    if (seen) setHasSeenOnboarding(true)
-  }, [])
 
   useEffect(() => {
     const savedClientSeed = localStorage.getItem('zcashino_client_seed')
@@ -118,66 +116,30 @@ export default function VideoPokerGame() {
     }
   }, [fairness?.mode, fairness?.clientSeed])
 
-  const initSession = useCallback(async (existingSessionId?: string) => {
-    try {
-      setIsLoading(true)
-      const url = existingSessionId
-        ? `/api/session?sessionId=${existingSessionId}`
-        : '/api/session'
-      const res = await fetch(url)
-      if (!res.ok) throw new Error('Failed to get session')
-      const data = await res.json()
-      if (data.error) throw new Error(data.error)
-      setSession(data)
-      setFairness(data.fairness || null)
-      setDepositAddress(data.depositAddress || null)
-
-      if (data.id) {
-        localStorage.setItem('zcashino_session_id', data.id)
-
-        // Fetch video poker history
-        fetch(`/api/video-poker?sessionId=${data.id}`)
-          .then(res => res.json())
-          .then(historyData => {
-            if (historyData.games) {
-              setHandHistory(
-                historyData.games
-                  .filter((g: { status: string }) => g.status === 'completed')
-                  .slice(0, 10)
-                  .map((g: { id: string; variant?: string; handRank?: string; totalBet: number; payout?: number; createdAt: string }) => ({
-                    id: g.id,
-                    variant: (g.variant || 'jacks_or_better') as VideoPokerVariant,
-                    handRank: (g.handRank || null) as VideoPokerHandRank | null,
-                    totalBet: g.totalBet,
-                    payout: g.payout || 0,
-                    createdAt: g.createdAt,
-                  }))
-              )
-            }
-          })
-          .catch(() => {})
-      }
-    } catch (err) {
-      console.error('Session init failed:', err)
-      localStorage.removeItem('zcashino_session_id')
-      if (existingSessionId) return initSession()
-      setError('Failed to initialize session')
-    } finally {
-      setIsLoading(false)
-    }
-  }, [])
-
+  // Fetch video poker history when session loads
   useEffect(() => {
-    const existingSessionId = localStorage.getItem('zcashino_session_id')
-    if (existingSessionId) {
-      initSession(existingSessionId)
-    } else if (!hasSeenOnboarding) {
-      setShowOnboarding(true)
-      setIsLoading(false)
-    } else {
-      initSession()
-    }
-  }, [hasSeenOnboarding, initSession])
+    if (!session?.id) return
+    fetch(`/api/video-poker?sessionId=${session.id}`)
+      .then(res => res.json())
+      .then(historyData => {
+        if (historyData.games) {
+          setHandHistory(
+            historyData.games
+              .filter((g: { status: string }) => g.status === 'completed')
+              .slice(0, 10)
+              .map((g: { id: string; variant?: string; handRank?: string; totalBet: number; payout?: number; createdAt: string }) => ({
+                id: g.id,
+                variant: (g.variant || 'jacks_or_better') as VideoPokerVariant,
+                handRank: (g.handRank || null) as VideoPokerHandRank | null,
+                totalBet: g.totalBet,
+                payout: g.payout || 0,
+                createdAt: g.createdAt,
+              }))
+          )
+        }
+      })
+      .catch(() => {})
+  }, [session?.id])
 
   // Balance animation
   useEffect(() => {
@@ -289,6 +251,9 @@ export default function VideoPokerGame() {
 
       playSound('cardDeal')
 
+      // Track demo hand count
+      demoHandCount.current += 1
+
       // Show result animation
       if (data.gameState.handRank && data.gameState.handRank !== 'nothing') {
         setResultAnimation(data.gameState.handRank)
@@ -303,6 +268,16 @@ export default function VideoPokerGame() {
           payout: data.gameState.lastPayout,
           createdAt: new Date().toISOString(),
         }, ...prev].slice(0, 10))
+
+        // Demo win nudge (once per session)
+        const isDemoSession = session?.isDemo ?? session?.walletAddress?.startsWith('demo_') ?? false
+        if (isDemoSession && !demoWinNudgeShown.current && data.gameState.lastPayout > 0) {
+          demoWinNudgeShown.current = true
+          setTimeout(() => {
+            setWinNudgeAmount(data.gameState.lastPayout)
+            setShowWinNudge(true)
+          }, 2500)
+        }
       } else {
         setResultAnimation('nothing')
         playSound('lose')
@@ -359,75 +334,6 @@ export default function VideoPokerGame() {
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [gameState?.phase, isActing, isLoading, handleDeal, handleDraw, toggleHold])
-
-  const handleDemoSelect = useCallback(async () => {
-    try {
-      setIsLoading(true)
-      const res = await fetch('/api/session')
-      if (!res.ok) throw new Error('Failed to create demo session')
-      const data = await res.json()
-      setSession(data)
-      setFairness(data.fairness || null)
-      localStorage.setItem('zcashino_session_id', data.id)
-      localStorage.setItem('zcashino_onboarding_seen', 'true')
-      setHasSeenOnboarding(true)
-    } catch (err) {
-      setError('Failed to create demo session')
-      console.error(err)
-    } finally {
-      setIsLoading(false)
-    }
-  }, [])
-
-  const handleCreateRealSession = useCallback(async () => {
-    try {
-      const walletId = `real_${Date.now()}_${Math.random().toString(36).slice(2)}`
-      const res = await fetch(`/api/session?wallet=${walletId}`)
-      if (!res.ok) throw new Error('Failed to create session')
-      const data = await res.json()
-      setSession(data)
-      setFairness(data.fairness || null)
-      localStorage.setItem('zcashino_session_id', data.id)
-      return { sessionId: data.id, depositAddress: data.depositAddress || '' }
-    } catch (err) {
-      console.error('Failed to create real session:', err)
-      return null
-    }
-  }, [])
-
-  const handleSetWithdrawalAddress = useCallback(async (address: string) => {
-    if (!session) return false
-    try {
-      const res = await fetch('/api/session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'set-withdrawal-address',
-          sessionId: session.id,
-          withdrawalAddress: address,
-        }),
-      })
-      if (!res.ok) return false
-      const data = await res.json()
-      if (data.depositAddress) setDepositAddress(data.depositAddress)
-      setSession(prev => prev ? {
-        ...prev,
-        withdrawalAddress: data.withdrawalAddress ?? address,
-        depositAddress: data.depositAddress ?? prev.depositAddress,
-      } : prev)
-      return true
-    } catch (err) {
-      console.error('Failed to set withdrawal address:', err)
-      return false
-    }
-  }, [session])
-
-  const handleDepositComplete = useCallback((balance: number) => {
-    setSession(prev => prev ? { ...prev, balance, isAuthenticated: true } : null)
-    setShowOnboarding(false)
-    localStorage.setItem('zcashino_onboarding_seen', 'true')
-    setHasSeenOnboarding(true)
-  }, [])
 
   const refreshFairnessState = useCallback(async (sessionIdOverride?: string) => {
     const targetSessionId = sessionIdOverride || session?.id
@@ -531,7 +437,11 @@ export default function VideoPokerGame() {
   const resultDisplay = getResultDisplay()
 
   // Loading state — themed card shuffle
-  if (isLoading && !session) {
+  // Combine loading states and errors
+  const combinedError = sessionError || error
+  const isDemo = session?.isDemo ?? session?.walletAddress?.startsWith('demo_') ?? true
+
+  if (sessionLoading && !session) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6">
         <div className="flex gap-2">
@@ -551,22 +461,6 @@ export default function VideoPokerGame() {
         </div>
         <p className="text-venetian-gold/50 font-display text-sm tracking-wider">Shuffling the deck...</p>
       </div>
-    )
-  }
-
-  // Onboarding
-  if (showOnboarding) {
-    return (
-      <OnboardingModal
-        isOpen={showOnboarding}
-        onClose={() => setShowOnboarding(false)}
-        onDemoSelect={handleDemoSelect}
-        onDepositComplete={handleDepositComplete}
-        sessionId={session?.id || null}
-        depositAddress={depositAddress}
-        onCreateRealSession={handleCreateRealSession}
-        onSetWithdrawalAddress={handleSetWithdrawalAddress}
-      />
     )
   }
 
@@ -614,23 +508,39 @@ export default function VideoPokerGame() {
             <div className="hidden sm:block">
               <DepositWidget
                 balance={session?.balance ?? 0}
-                isDemo={session?.isDemo ?? session?.walletAddress?.startsWith('demo_') ?? true}
+                isDemo={isDemo}
                 isAuthenticated={session?.isAuthenticated ?? false}
-                onDepositClick={() => setShowOnboarding(true)}
+                onDepositClick={handleSwitchToReal}
                 onWithdrawClick={() => setShowWithdrawal(true)}
+                onSwitchToReal={isDemo ? handleSwitchToReal : undefined}
               />
             </div>
             <div className="block sm:hidden">
               <DepositWidgetCompact
                 balance={session?.balance ?? 0}
-                isDemo={session?.isDemo ?? session?.walletAddress?.startsWith('demo_') ?? true}
-                onDepositClick={() => setShowOnboarding(true)}
+                isDemo={isDemo}
+                onDepositClick={handleSwitchToReal}
                 onWithdrawClick={() => setShowWithdrawal(true)}
               />
             </div>
           </div>
         </div>
       </div>
+
+      {/* Demo Banner */}
+      {session && isDemo && (
+        <DemoBanner
+          balance={session.balance}
+          onDepositClick={handleSwitchToReal}
+        />
+      )}
+
+      {/* Error Display */}
+      {combinedError && (
+        <div className="bg-blood-ruby/30 border border-blood-ruby text-bone-white px-4 py-2 rounded-lg text-sm">
+          {combinedError}
+        </div>
+      )}
 
       {/* === GAME ZONE === */}
       <div className="bg-midnight-black/15 rounded-2xl cyber-panel p-3 sm:p-5 space-y-4">
@@ -711,6 +621,14 @@ export default function VideoPokerGame() {
           )}
         </div>
       </div>
+
+      {/* Demo Depleted Prompt */}
+      {!gameState && isDemo && session && session.balance < 0.01 && (
+        <DemoDepletedPrompt
+          onDeposit={handleSwitchToReal}
+          onResetDemo={handleResetDemoBalance}
+        />
+      )}
 
       {/* === ACTION ZONE === */}
       <div className="space-y-3">
@@ -928,11 +846,33 @@ export default function VideoPokerGame() {
         sessionId={session?.id || null}
         balance={session?.balance ?? 0}
         withdrawalAddress={session?.withdrawalAddress ?? null}
-        isDemo={session?.isDemo ?? session?.walletAddress?.startsWith('demo_') ?? true}
+        isDemo={isDemo}
         onBalanceUpdate={(newBalance) => {
           setSession(prev => prev ? { ...prev, balance: newBalance } : null)
         }}
       />
+
+      {/* Onboarding / Deposit Modal */}
+      <OnboardingModal
+        isOpen={showOnboarding}
+        onClose={() => setShowOnboarding(false)}
+        onDemoSelect={handleDemoSelect}
+        onDepositComplete={handleDepositComplete}
+        sessionId={session?.id || null}
+        depositAddress={depositAddress}
+        onCreateRealSession={handleCreateRealSession}
+        onSetWithdrawalAddress={handleSetWithdrawalAddress}
+        initialStep={onboardingMode === 'deposit' ? 'deposit' : 'welcome'}
+      />
+
+      {/* Demo Win Nudge Toast */}
+      {showWinNudge && (
+        <DemoWinNudge
+          amount={winNudgeAmount}
+          onDeposit={handleSwitchToReal}
+          onDismiss={() => setShowWinNudge(false)}
+        />
+      )}
 
       {/* Footer links */}
       <div className="flex justify-center gap-4 text-xs text-venetian-gold/30 pb-4">

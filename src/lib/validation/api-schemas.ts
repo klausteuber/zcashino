@@ -42,6 +42,11 @@ export const blackjackBodySchema = z.discriminatedUnion('action', [
     sessionId: nonEmptyString,
     gameId: nonEmptyString,
   }).strict(),
+  z.object({
+    action: z.literal('decline_insurance'),
+    sessionId: nonEmptyString,
+    gameId: nonEmptyString,
+  }).strict(),
 ])
 
 export const videoPokerBodySchema = z.discriminatedUnion('action', [
@@ -85,7 +90,7 @@ export const walletBodySchema = z.discriminatedUnion('action', [
 ])
 
 export const sessionBodySchema = z.object({
-  action: z.enum(['set-withdrawal-address', 'change-withdrawal-address', 'update-limits']).optional(),
+  action: z.enum(['set-withdrawal-address', 'change-withdrawal-address', 'update-limits', 'reset-demo-balance']).optional(),
   sessionId: nonEmptyString,
   withdrawalAddress: z.string().trim().optional(),
   depositLimit: finiteNumber.optional(),

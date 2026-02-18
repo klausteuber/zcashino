@@ -280,6 +280,9 @@ export async function POST(request: NextRequest) {
           excludeDuration
         })
 
+      case 'reset-demo-balance':
+        return handleResetDemoBalance(session)
+
       default:
         // Legacy behavior: update limits directly
         return handleUpdateLimits(session, {
@@ -465,5 +468,30 @@ async function handleUpdateLimits(
     lossLimit: updatedSession.lossLimit,
     sessionLimit: updatedSession.sessionLimit,
     excludedUntil: updatedSession.excludedUntil,
+  })
+}
+
+/**
+ * Reset demo session balance back to 10 ZEC
+ * Only works for demo sessions (wallet starts with 'demo_')
+ */
+async function handleResetDemoBalance(
+  session: { id: string; walletAddress: string }
+) {
+  if (!isDemoSession(session.walletAddress)) {
+    return NextResponse.json(
+      { error: 'Only demo sessions can be reset' },
+      { status: 400 }
+    )
+  }
+
+  const updatedSession = await prisma.session.update({
+    where: { id: session.id },
+    data: { balance: 10 }
+  })
+
+  return NextResponse.json({
+    id: updatedSession.id,
+    balance: roundZec(updatedSession.balance),
   })
 }

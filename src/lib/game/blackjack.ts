@@ -245,6 +245,40 @@ export function takeInsurance(
 }
 
 /**
+ * Player declines insurance — triggers dealer blackjack peek
+ */
+export function declineInsurance(state: BlackjackGameState): BlackjackGameState {
+  if (state.phase !== 'playerTurn') {
+    return { ...state, message: 'Cannot decline insurance now' }
+  }
+
+  if (state.dealerHand.cards[0]?.rank !== 'A' || state.dealerPeeked) {
+    return { ...state, message: 'No insurance to decline' }
+  }
+
+  // Peek for dealer blackjack
+  if (!state.dealerHand.isBlackjack) {
+    return {
+      ...state,
+      dealerPeeked: true,
+      message: 'No Blackjack. Your turn.'
+    }
+  }
+
+  // Dealer has blackjack — reveal and resolve
+  return resolveRound({
+    ...state,
+    dealerPeeked: true,
+    phase: 'payout',
+    dealerHand: {
+      ...state.dealerHand,
+      cards: state.dealerHand.cards.map(c => ({ ...c, faceUp: true }))
+    },
+    message: 'Dealer has Blackjack!'
+  })
+}
+
+/**
  * Execute player action
  */
 export function executeAction(

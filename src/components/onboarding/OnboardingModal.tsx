@@ -16,6 +16,8 @@ interface OnboardingModalProps {
   depositAddress: string | null
   onCreateRealSession: () => Promise<{ sessionId: string; depositAddress: string | null } | null>
   onSetWithdrawalAddress?: (address: string) => Promise<boolean>
+  /** Skip welcome screen and go directly to deposit flow */
+  initialStep?: 'welcome' | 'deposit'
 }
 
 export function OnboardingModal({
@@ -26,7 +28,8 @@ export function OnboardingModal({
   sessionId,
   depositAddress,
   onCreateRealSession,
-  onSetWithdrawalAddress
+  onSetWithdrawalAddress,
+  initialStep = 'welcome'
 }: OnboardingModalProps) {
   const brand = useBrand()
   const [step, setStep] = useState<OnboardingStep>('welcome')
@@ -62,19 +65,26 @@ export function OnboardingModal({
     setLocalSessionId(sessionId)
   }, [depositAddress, sessionId])
 
-  // Auto-advance to deposit step when modal opens with an existing deposit address
+  // Handle modal open/close and initialStep
   useEffect(() => {
-    if (isOpen && depositAddress && sessionId) {
-      setLocalDepositAddress(depositAddress)
-      setLocalSessionId(sessionId)
-      setStep('deposit')
+    if (isOpen) {
+      if (depositAddress && sessionId) {
+        // Already have a real session with deposit address — go straight to deposit
+        setLocalDepositAddress(depositAddress)
+        setLocalSessionId(sessionId)
+        setStep('deposit')
+      } else if (initialStep === 'deposit') {
+        // Caller wants direct-to-deposit — auto-create real session
+        handleRealSelect()
+      }
+      // else: show welcome screen (default)
     }
     if (!isOpen) {
       // Reset to welcome when modal closes so next open starts fresh
       setStep('welcome')
       setErrorMessage(null)
     }
-  }, [isOpen, depositAddress, sessionId])
+  }, [isOpen, depositAddress, sessionId, initialStep]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Handle demo mode selection
   const handleDemoSelect = useCallback(() => {

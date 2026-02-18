@@ -1177,3 +1177,45 @@ button, a, [role="button"] {
     scroll-behavior: auto !important;
   }
 }
+
+/* ========================================
+   DEMO MODE COMPONENTS
+   ======================================== */
+
+/* Demo Banner — 21z overrides */
+body[data-brand="21z"] .demo-banner {
+  background: rgba(0, 240, 255, 0.06);
+  border-color: rgba(0, 240, 255, 0.25);
+  clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px));
+  border-radius: 0;
+}
+
+body[data-brand="21z"] .demo-banner-badge {
+  background: rgba(0, 240, 255, 0.15);
+  border-color: rgba(0, 240, 255, 0.3);
+  color: #00F0FF;
+}
+
+body[data-brand="21z"] .demo-banner-cta {
+  background: linear-gradient(135deg, #00F0FF, #00C4CC);
+  color: #05050a;
+  clip-path: polygon(0 0, calc(100% - 4px) 0, 100% 4px, 100% 100%, 4px 100%, 0 calc(100% - 4px));
+  border-radius: 0;
+}
+
+body[data-brand="21z"] .demo-banner-cta:hover {
+  box-shadow: 0 0 12px rgba(0, 240, 255, 0.4);
+}
+
+/* Demo Nudge Toast — 21z overrides */
+body[data-brand="21z"] .demo-nudge-toast > div {
+  background: rgba(5, 5, 10, 0.97);
+  border-color: rgba(0, 240, 255, 0.3);
+  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
+  border-radius: 0;
+}
+
+/* Demo Depleted Prompt — 21z overrides */
+body[data-brand="21z"] .demo-depleted {
+  color: #00F0FF;
+}
