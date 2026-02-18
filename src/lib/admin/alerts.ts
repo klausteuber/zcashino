@@ -379,6 +379,61 @@ export async function checkPoolHealth(): Promise<number> {
 }
 
 /**
+ * Check if house balance is low relative to player liabilities.
+ * Alerts when coverage ratio drops below 1.5x (warning) or 1.0x (critical).
+ */
+export async function checkLowHouseBalance(): Promise<number> {
+  const houseAddress = process.env.ZCASH_NETWORK === 'mainnet' || !process.env.ZCASH_NETWORK
+    ? process.env.HOUSE_ZADDR_MAINNET
+    : process.env.HOUSE_ZADDR_TESTNET
+
+  if (!houseAddress) return 0
+
+  const { getAddressBalance } = await import('@/lib/wallet/rpc')
+  const network = (process.env.ZCASH_NETWORK || 'mainnet') as 'mainnet' | 'testnet'
+
+  let houseBalance: { confirmed: number }
+  try {
+    houseBalance = await getAddressBalance(houseAddress, network, 1)
+  } catch {
+    return 0 // Can't check if node is down — other alerts will fire for that
+  }
+
+  const liabilities = await prisma.session.aggregate({
+    _sum: { balance: true },
+    where: { balance: { gt: 0 } },
+  })
+
+  const totalLiabilities = liabilities._sum.balance ?? 0
+  if (totalLiabilities === 0) return 0
+
+  const coverage = houseBalance.confirmed / totalLiabilities
+
+  if (coverage >= 1.5) return 0
+
+  const severity: 'warning' | 'critical' = coverage < 1.0 ? 'critical' : 'warning'
+
+  const wasCreated = await createAlertIfNew({
+    type: 'low_house_balance',
+    severity,
+    title: coverage < 1.0
+      ? `House balance below liabilities: ${coverage.toFixed(2)}x`
+      : `House balance low: ${coverage.toFixed(2)}x coverage`,
+    description:
+      `House confirmed balance is ${houseBalance.confirmed.toFixed(4)} ZEC ` +
+      `against ${totalLiabilities.toFixed(4)} ZEC in player liabilities ` +
+      `(${coverage.toFixed(2)}x coverage).`,
+    metadata: {
+      houseBalance: houseBalance.confirmed,
+      liabilities: totalLiabilities,
+      coverageRatio: coverage,
+    },
+  })
+
+  return wasCreated ? 1 : 0
+}
+
+/**
  * Run all alert checks. Called by the background alert-generator service.
  */
 export async function generateAlerts(): Promise<{
@@ -390,12 +445,13 @@ export async function generateAlerts(): Promise<{
   pendingWithdrawals: number
   killSwitch: number
   poolHealth: number
+  lowHouseBalance: number
   total: number
 }> {
   const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000)
   const settings = await getAdminSettings()
 
-  const [largeWins, highRTP, rapidCycles, withdrawalVelocity, failedWithdrawals, pendingWithdrawals, killSwitch, poolHealth] =
+  const [largeWins, highRTP, rapidCycles, withdrawalVelocity, failedWithdrawals, pendingWithdrawals, killSwitch, poolHealth, lowHouseBalance] =
     await Promise.all([
       checkLargeWins(since24h, settings.alerts.largeWinThreshold),
       checkHighRTPPlayers(since24h, settings.alerts.highRtpThreshold),
@@ -405,15 +461,16 @@ export async function generateAlerts(): Promise<{
       checkPendingWithdrawalsStuck(),
       checkKillSwitchAlert(),
       checkPoolHealth(),
+      checkLowHouseBalance(),
     ])
 
-  const total = largeWins + highRTP + rapidCycles + withdrawalVelocity + failedWithdrawals + pendingWithdrawals + killSwitch + poolHealth
+  const total = largeWins + highRTP + rapidCycles + withdrawalVelocity + failedWithdrawals + pendingWithdrawals + killSwitch + poolHealth + lowHouseBalance
 
   if (total > 0) {
     console.log(
-      `[alert-generator] Generated ${total} new alerts: wins=${largeWins} rtp=${highRTP} cycles=${rapidCycles} velocity=${withdrawalVelocity} failedW=${failedWithdrawals} pendingW=${pendingWithdrawals} kill=${killSwitch} pool=${poolHealth}`
+      `[alert-generator] Generated ${total} new alerts: wins=${largeWins} rtp=${highRTP} cycles=${rapidCycles} velocity=${withdrawalVelocity} failedW=${failedWithdrawals} pendingW=${pendingWithdrawals} kill=${killSwitch} pool=${poolHealth} balance=${lowHouseBalance}`
     )
   }
 
-  return { largeWins, highRTP, rapidCycles, withdrawalVelocity, failedWithdrawals, pendingWithdrawals, killSwitch, poolHealth, total }
+  return { largeWins, highRTP, rapidCycles, withdrawalVelocity, failedWithdrawals, pendingWithdrawals, killSwitch, poolHealth, lowHouseBalance, total }
 }

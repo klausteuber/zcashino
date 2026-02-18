@@ -266,6 +266,34 @@ async function handleCreateWallet(session: { id: string; wallet: unknown }) {
  * Check for new deposits on the wallet addresses
  * Also handles authentication on first deposit
  */
+/**
+ * Check if accepting a deposit would exceed the session's deposit limit.
+ * Returns true if the deposit is allowed.
+ */
+async function isDepositWithinLimit(sessionId: string, depositAmount: number): Promise<boolean> {
+  const session = await prisma.session.findUnique({
+    where: { id: sessionId },
+    select: { depositLimit: true },
+  })
+
+  if (!session?.depositLimit) return true // No limit set
+
+  // Sum deposits confirmed in the last 24 hours
+  const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000)
+  const recent = await prisma.transaction.aggregate({
+    _sum: { amount: true },
+    where: {
+      sessionId,
+      type: 'deposit',
+      status: 'confirmed',
+      confirmedAt: { gte: since24h },
+    },
+  })
+
+  const deposited24h = recent._sum.amount ?? 0
+  return (deposited24h + depositAmount) <= session.depositLimit
+}
+
 async function handleCheckDeposits(session: {
   id: string
   balance: number
@@ -389,6 +417,17 @@ async function handleCheckDeposits(session: {
           })
 
           if (!isConfirmedOnChain || !eligibleAmount) return
+
+          // Enforce deposit limit (24h rolling)
+          const withinLimit = await isDepositWithinLimit(session.id, tx.amount)
+          if (!withinLimit) {
+            console.warn(
+              `[Deposit] Deposit limit exceeded for session ${session.id.slice(0, 8)}...: ` +
+              `${tx.amount} ZEC would breach 24h limit. Deposit recorded but not credited.`
+            )
+            return
+          }
+
           await creditFunds(dbTx, session.id, tx.amount, 'totalDeposited')
 
           // Authenticate on first confirmed deposit — withdrawal address not required
@@ -461,6 +500,16 @@ async function handleCheckDeposits(session: {
         },
       })
       if (promoted.count === 0 || !eligibleAmount) return
+
+      // Enforce deposit limit (24h rolling)
+      const withinLimit = await isDepositWithinLimit(session.id, existing.amount)
+      if (!withinLimit) {
+        console.warn(
+          `[Deposit] Deposit limit exceeded for session ${session.id.slice(0, 8)}...: ` +
+          `${existing.amount} ZEC would breach 24h limit. Deposit confirmed but not credited.`
+        )
+        return
+      }
 
       await creditFunds(dbTx, session.id, existing.amount, 'totalDeposited')
 

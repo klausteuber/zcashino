@@ -142,17 +142,24 @@ export default function AdminWithdrawalsPage() {
 
   const handleWithdrawalAction = async (transactionId: string, approve: boolean) => {
     const action = approve ? 'approve-withdrawal' : 'reject-withdrawal'
-    const msg = approve
-      ? 'Approve this withdrawal? This will send funds from the house wallet.'
-      : 'Reject this withdrawal? The user\'s balance will be refunded.'
-    if (!window.confirm(msg)) return
+
+    if (approve) {
+      if (!window.confirm('Approve this withdrawal? This will send funds from the house wallet.')) return
+    }
+
+    let rejectReason = ''
+    if (!approve) {
+      const input = window.prompt('Rejection reason (required):', '')
+      if (input === null) return // Cancelled
+      rejectReason = input.trim() || 'Rejected by admin'
+    }
 
     setActionLoadingId(transactionId)
     setActionMessage(null)
     try {
       const bodyData: Record<string, string> = { action, transactionId }
       if (!approve) {
-        bodyData.reason = 'Rejected by admin'
+        bodyData.reason = rejectReason
       }
       const res = await fetch('/api/admin/pool', {
         method: 'POST',
@@ -237,10 +244,17 @@ export default function AdminWithdrawalsPage() {
   const handleBulkAction = async (approve: boolean) => {
     const action = approve ? 'approve-withdrawal' : 'reject-withdrawal'
     const count = selectedIds.size
-    const msg = approve
-      ? `Approve ${count} withdrawal(s)? This will send funds from the house wallet for each.`
-      : `Reject ${count} withdrawal(s)? Each user\'s balance will be refunded.`
-    if (!window.confirm(msg)) return
+
+    if (approve) {
+      if (!window.confirm(`Approve ${count} withdrawal(s)? This will send funds from the house wallet for each.`)) return
+    }
+
+    let bulkRejectReason = ''
+    if (!approve) {
+      const input = window.prompt(`Rejection reason for ${count} withdrawal(s):`, '')
+      if (input === null) return // Cancelled
+      bulkRejectReason = input.trim() || 'Rejected by admin (bulk)'
+    }
 
     setBulkLoading(true)
     setActionMessage(null)
@@ -251,7 +265,7 @@ export default function AdminWithdrawalsPage() {
       try {
         const bodyData: Record<string, string> = { action, transactionId }
         if (!approve) {
-          bodyData.reason = 'Rejected by admin (bulk)'
+          bodyData.reason = bulkRejectReason
         }
         const res = await fetch('/api/admin/pool', {
           method: 'POST',

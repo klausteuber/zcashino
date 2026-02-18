@@ -82,6 +82,11 @@ interface AdminOverview {
     details: string | null
     createdAt: string
   }>
+  treasury?: {
+    houseBalance: { confirmed: number; pending: number; total: number } | null
+    liabilities: number
+    coverageRatio: number | null
+  }
   killSwitch?: { active: boolean; activatedAt?: string }
   houseEdge: {
     realizedGGR: {
@@ -402,16 +407,23 @@ export default function AdminPage() {
 
   const handleWithdrawalAction = async (transactionId: string, approve: boolean) => {
     const action = approve ? 'approve-withdrawal' : 'reject-withdrawal'
-    const msg = approve
-      ? 'Approve this withdrawal? This will send funds from the house wallet.'
-      : 'Reject this withdrawal? The user\'s balance will be refunded.'
-    if (!window.confirm(msg)) return
+
+    if (approve) {
+      if (!window.confirm('Approve this withdrawal? This will send funds from the house wallet.')) return
+    }
+
+    let rejectReason = ''
+    if (!approve) {
+      const input = window.prompt('Rejection reason (required):', '')
+      if (input === null) return // Cancelled
+      rejectReason = input.trim() || 'Rejected by admin'
+    }
 
     setWithdrawalActionLoading(transactionId)
     try {
       const bodyData: Record<string, string> = { action, transactionId }
       if (!approve) {
-        bodyData.reason = 'Rejected by admin'
+        bodyData.reason = rejectReason
       }
       const res = await fetch('/api/admin/pool', {
         method: 'POST',
@@ -602,31 +614,55 @@ export default function AdminPage() {
 
         {overview && (
           <>
-            {/* Critical Status Banner */}
-            {(overview.pool.available === 0 || !overview.nodeStatus.connected || overview.killSwitch?.active) && (
-              <div className="space-y-2">
-                {overview.pool.available === 0 && (
-                  <div className="bg-crimson-mask/20 border border-crimson-mask/60 rounded-lg p-3 flex items-center gap-2">
-                    <span className="text-crimson-mask font-bold text-lg">!</span>
-                    <span className="text-crimson-mask font-semibold">CRITICAL: Commitment pool empty — games cannot start. Refill immediately.</span>
-                  </div>
-                )}
-                {!overview.nodeStatus.connected && (
-                  <div className="bg-crimson-mask/20 border border-crimson-mask/60 rounded-lg p-3 flex items-center gap-2">
-                    <span className="text-crimson-mask font-bold text-lg">!</span>
-                    <span className="text-crimson-mask font-semibold">CRITICAL: Zcash node offline — deposits and withdrawals unavailable.</span>
-                  </div>
-                )}
-                {overview.killSwitch?.active && (
-                  <div className="bg-masque-gold/10 border border-masque-gold/40 rounded-lg p-3 flex items-center gap-2">
-                    <span className="text-masque-gold font-bold text-lg">!</span>
-                    <span className="text-masque-gold font-semibold">WARNING: Kill switch active — new games and withdrawals are blocked.</span>
-                  </div>
-                )}
-              </div>
-            )}
+            {/* Critical Status Banners */}
+            {(() => {
+              const lowReserve = overview.treasury?.houseBalance != null
+                && overview.treasury.liabilities > 0
+                && overview.treasury.coverageRatio != null
+                && overview.treasury.coverageRatio < 1.5
+              const showBanners = overview.pool.available === 0 || !overview.nodeStatus.connected || overview.killSwitch?.active || lowReserve
+              if (!showBanners) return null
+              return (
+                <div className="space-y-2">
+                  {overview.pool.available === 0 && (
+                    <div className="bg-crimson-mask/20 border border-crimson-mask/60 rounded-lg p-3 flex items-center gap-2">
+                      <span className="text-crimson-mask font-bold text-lg">!</span>
+                      <span className="text-crimson-mask font-semibold">CRITICAL: Commitment pool empty — games cannot start. Refill immediately.</span>
+                    </div>
+                  )}
+                  {!overview.nodeStatus.connected && (
+                    <div className="bg-crimson-mask/20 border border-crimson-mask/60 rounded-lg p-3 flex items-center gap-2">
+                      <span className="text-crimson-mask font-bold text-lg">!</span>
+                      <span className="text-crimson-mask font-semibold">CRITICAL: Zcash node offline — deposits and withdrawals unavailable.</span>
+                    </div>
+                  )}
+                  {overview.killSwitch?.active && (
+                    <div className="bg-masque-gold/10 border border-masque-gold/40 rounded-lg p-3 flex items-center gap-2">
+                      <span className="text-masque-gold font-bold text-lg">!</span>
+                      <span className="text-masque-gold font-semibold">WARNING: Kill switch active — new games and withdrawals are blocked.</span>
+                    </div>
+                  )}
+                  {lowReserve && (
+                    <div className={`${overview.treasury!.coverageRatio! < 1 ? 'bg-crimson-mask/20 border-crimson-mask/60' : 'bg-masque-gold/10 border-masque-gold/40'} border rounded-lg p-3 flex items-center gap-2`}>
+                      <span className={`${overview.treasury!.coverageRatio! < 1 ? 'text-crimson-mask' : 'text-masque-gold'} font-bold text-lg`}>!</span>
+                      <span className={`${overview.treasury!.coverageRatio! < 1 ? 'text-crimson-mask' : 'text-masque-gold'} font-semibold`}>
+                        {overview.treasury!.coverageRatio! < 1 ? 'CRITICAL' : 'WARNING'}: House reserve coverage at {overview.treasury!.coverageRatio!.toFixed(2)}x liabilities
+                        {' '}({formatZecWithUsd(overview.treasury!.houseBalance!.confirmed)} vs {formatZecWithUsd(overview.treasury!.liabilities)} liabilities)
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
 
-            <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
+            <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              <MetricCard
+                label="House Balance"
+                value={overview.treasury?.houseBalance ? formatZecWithUsd(overview.treasury.houseBalance.confirmed) : 'N/A'}
+                detail={overview.treasury?.coverageRatio != null && overview.treasury.coverageRatio !== Infinity
+                  ? `${overview.treasury.coverageRatio.toFixed(2)}x coverage ratio`
+                  : overview.treasury?.liabilities === 0 ? 'No liabilities' : 'Coverage unavailable'}
+              />
               <MetricCard
                 label="User Liabilities"
                 value={formatZecWithUsd(overview.platform.liabilities)}

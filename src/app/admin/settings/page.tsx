@@ -26,7 +26,7 @@ const SETTING_CATEGORIES: SettingCategory[] = [
   {
     title: 'Game Limits',
     description:
-      'Minimum and maximum bet amounts per game type. These values are stored for reference; enforcement is handled by game logic.',
+      'Minimum and maximum bet amounts per game type. Enforced in real-time by game logic on every wager.',
     fields: [
       { key: 'blackjack.minBet', label: 'Blackjack min bet', type: 'number', step: 0.0001, suffix: 'ZEC' },
       { key: 'blackjack.maxBet', label: 'Blackjack max bet', type: 'number', step: 0.0001, suffix: 'ZEC' },
@@ -242,11 +242,11 @@ export default function AdminSettingsPage() {
         {/* Info banner */}
         <div className="mb-6 p-4 bg-jester-purple/10 border border-jester-purple/30 rounded-xl">
           <p className="text-sm text-jester-purple font-medium">
-            ⚠ Settings are stored but not yet enforced by game/pool logic.
+            Settings are enforced in real-time by game and alert logic.
           </p>
           <p className="text-xs text-venetian-gold/50 mt-1">
-            Values saved here are persisted to the database and audit-logged.
-            Enforcement wiring is a follow-up.
+            Bet limits, responsible gambling limits, alert thresholds, and pool health parameters
+            are applied immediately. All changes are audit-logged.
           </p>
         </div>
 
