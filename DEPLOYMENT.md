@@ -466,6 +466,36 @@ crontab -e
 
 Detailed guarded-live cadence and cutover gates: `notes/mainnet-guarded-live-runbook.md`.
 
+### Telegram Admin Bot (Optional)
+
+This enables running admin ops from a **private Telegram chat** (recommended).
+
+1. Add these to `.env.mainnet` (and restart the app after changes):
+
+```bash
+# Telegram bot token (create via @BotFather)
+TELEGRAM_BOT_TOKEN=...
+
+# Webhook request authentication (required)
+TELEGRAM_WEBHOOK_SECRET=...
+
+# Allowlist of admin chat IDs (comma-separated). For private chat, it's one value.
+TELEGRAM_ADMIN_CHAT_IDS=...
+```
+
+2. Set the webhook (must be HTTPS, and should be the **cypher** domain):
+
+```bash
+node scripts/telegram-set-webhook.js --base-url https://cypherjester.com
+```
+
+3. In Telegram, message your bot:
+- `/whoami` (get your `chat_id`)
+- `/help`
+- `/status`
+
+**Safety**: all state-changing commands require `/confirm <token>` and expire quickly.
+
 ### External Monitoring
 
 - **Uptime**: Point UptimeRobot or similar at `https://yourdomain.com/api/health`
