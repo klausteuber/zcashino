@@ -5,7 +5,7 @@ import { QRCode, CopyButton } from '@/components/ui/QRCode'
 import { useDepositPolling, DepositStatus } from '@/hooks/useDepositPolling'
 import { useBrand } from '@/hooks/useBrand'
 
-type OnboardingStep = 'welcome' | 'setup' | 'deposit' | 'confirming' | 'ready'
+type OnboardingStep = 'welcome' | 'setup' | 'deposit' | 'confirming' | 'ready' | 'error'
 
 interface OnboardingModalProps {
   isOpen: boolean
@@ -14,7 +14,7 @@ interface OnboardingModalProps {
   onDepositComplete: (balance: number) => void
   sessionId: string | null
   depositAddress: string | null
-  onCreateRealSession: () => Promise<{ sessionId: string; depositAddress: string } | null>
+  onCreateRealSession: () => Promise<{ sessionId: string; depositAddress: string | null } | null>
   onSetWithdrawalAddress?: (address: string) => Promise<boolean>
 }
 
@@ -35,6 +35,7 @@ export function OnboardingModal({
   const [isLoading, setIsLoading] = useState(false)
   const [localDepositAddress, setLocalDepositAddress] = useState<string | null>(depositAddress)
   const [localSessionId, setLocalSessionId] = useState<string | null>(sessionId)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   // Deposit polling
   const depositStatus = useDepositPolling(
@@ -61,6 +62,20 @@ export function OnboardingModal({
     setLocalSessionId(sessionId)
   }, [depositAddress, sessionId])
 
+  // Auto-advance to deposit step when modal opens with an existing deposit address
+  useEffect(() => {
+    if (isOpen && depositAddress && sessionId) {
+      setLocalDepositAddress(depositAddress)
+      setLocalSessionId(sessionId)
+      setStep('deposit')
+    }
+    if (!isOpen) {
+      // Reset to welcome when modal closes so next open starts fresh
+      setStep('welcome')
+      setErrorMessage(null)
+    }
+  }, [isOpen, depositAddress, sessionId])
+
   // Handle demo mode selection
   const handleDemoSelect = useCallback(() => {
     onDemoSelect()
@@ -70,15 +85,26 @@ export function OnboardingModal({
   // Handle real ZEC selection — skip setup, go straight to deposit
   const handleRealSelect = useCallback(async () => {
     setIsLoading(true)
+    setErrorMessage(null)
     try {
       const result = await onCreateRealSession()
-      if (result) {
+      if (result && result.depositAddress) {
         setLocalSessionId(result.sessionId)
         setLocalDepositAddress(result.depositAddress)
         setStep('deposit')
+      } else if (result) {
+        // Session created but no deposit address — wallet creation likely failed
+        setLocalSessionId(result.sessionId)
+        setErrorMessage('Failed to generate deposit address. Please try again.')
+        setStep('error')
+      } else {
+        setErrorMessage('Failed to create session. Please try again.')
+        setStep('error')
       }
     } catch (err) {
       console.error('Failed to create session:', err)
+      setErrorMessage('Failed to create session. Please try again.')
+      setStep('error')
     } finally {
       setIsLoading(false)
     }
@@ -174,6 +200,35 @@ export function OnboardingModal({
         {/* Ready Step - Success! */}
         {step === 'ready' && (
           <ReadyScreen amount={depositStatus.amount || 0} />
+        )}
+
+        {/* Error Step */}
+        {step === 'error' && (
+          <div className="p-8 text-center">
+            <div className="text-5xl mb-4">⚠️</div>
+            <h2 className="text-xl font-display font-bold text-bone-white mb-2">Something Went Wrong</h2>
+            <p className="text-sm text-venetian-gold/50 mb-6">
+              {errorMessage || 'An unexpected error occurred.'}
+            </p>
+            <div className="flex gap-3 justify-center">
+              <button
+                onClick={() => {
+                  setErrorMessage(null)
+                  setStep('welcome')
+                }}
+                className="px-6 py-3 bg-midnight-black/60 hover:bg-midnight-black border border-masque-gold/30 hover:border-masque-gold/50 text-bone-white rounded-lg transition-all"
+              >
+                Go Back
+              </button>
+              <button
+                onClick={handleRealSelect}
+                disabled={isLoading}
+                className="px-6 py-3 btn-gold-shimmer text-midnight-black font-semibold rounded-lg transition-colors disabled:opacity-50"
+              >
+                {isLoading ? 'Retrying...' : 'Try Again'}
+              </button>
+            </div>
+          </div>
         )}
       </div>
     </div>

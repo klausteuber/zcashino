@@ -391,7 +391,7 @@ export default function BlackjackGame() {
       setSession(data)
       setFairness(data.fairness || null)
       localStorage.setItem('zcashino_session_id', data.id)
-      return { sessionId: data.id, depositAddress: data.depositAddress || '' }
+      return { sessionId: data.id, depositAddress: data.depositAddress || null }
     } catch (err) {
       console.error('Failed to create real session:', err)
       return null
