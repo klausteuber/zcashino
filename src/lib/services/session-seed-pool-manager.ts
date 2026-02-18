@@ -2,9 +2,8 @@ import prisma from '@/lib/db'
 import type { ZcashNetwork } from '@/types'
 import { DEFAULT_NETWORK } from '@/lib/wallet'
 import { createAnchoredFairnessSeed } from '@/lib/provably-fair/session-fairness'
+import { getAdminSettings } from '@/lib/admin/runtime-settings'
 
-const SESSION_SEED_POOL_MIN = parseInt(process.env.SESSION_SEED_POOL_MIN || '5', 10)
-const SESSION_SEED_POOL_TARGET = parseInt(process.env.SESSION_SEED_POOL_TARGET || '15', 10)
 const SESSION_SEED_POOL_CHECK_INTERVAL_MS = parseInt(process.env.SESSION_SEED_POOL_CHECK_INTERVAL_MS || '300000', 10)
 const SESSION_SEED_REFILL_MAX_PER_RUN = 1
 
@@ -37,7 +36,17 @@ let lastCheck: Date | null = null
 let cachedPoolStatus: SessionSeedPoolStatus | null = null
 let refillInFlight: Promise<void> | null = null
 
+async function getPoolTuning(): Promise<{ minHealthy: number; autoRefillThreshold: number; targetSize: number }> {
+  const settings = await getAdminSettings()
+  return {
+    minHealthy: settings.pool.minHealthy,
+    autoRefillThreshold: settings.pool.autoRefillThreshold,
+    targetSize: settings.pool.targetSize,
+  }
+}
+
 export async function getSessionSeedPoolStatus(): Promise<SessionSeedPoolStatus> {
+  const tuning = await getPoolTuning()
   const [available, assigned, revealed, expired, total] = await Promise.all([
     prisma.fairnessSeed.count({ where: { status: FAIRNESS_SEED_STATUS.AVAILABLE } }),
     prisma.fairnessSeed.count({ where: { status: FAIRNESS_SEED_STATUS.ASSIGNED } }),
@@ -52,7 +61,7 @@ export async function getSessionSeedPoolStatus(): Promise<SessionSeedPoolStatus>
     revealed,
     expired,
     total,
-    isHealthy: available >= SESSION_SEED_POOL_MIN,
+    isHealthy: available >= tuning.minHealthy,
   }
 }
 
@@ -64,14 +73,18 @@ export async function checkAndRefillSessionSeedPool(
   }
 
   refillInFlight = (async () => {
+    const tuning = await getPoolTuning()
     const status = await getSessionSeedPoolStatus()
     cachedPoolStatus = status
 
-    if (status.available >= SESSION_SEED_POOL_TARGET) {
+    // Only refill when the pool is at/below the configured threshold.
+    // This avoids constantly creating new commitments when the pool is only slightly below target.
+    if (status.available > tuning.autoRefillThreshold) {
       return
     }
 
-    const needed = Math.max(0, SESSION_SEED_POOL_TARGET - status.available)
+    const needed = Math.max(0, tuning.targetSize - status.available)
+    if (needed === 0) return
     const toCreate = Math.min(needed, SESSION_SEED_REFILL_MAX_PER_RUN)
 
     for (let i = 0; i < toCreate; i++) {
@@ -80,7 +93,7 @@ export async function checkAndRefillSessionSeedPool(
         console.warn('[SessionSeedPoolManager] Seed creation failed during refill run', {
           network,
           available: status.available,
-          target: SESSION_SEED_POOL_TARGET,
+          target: tuning.targetSize,
         })
         break
       }

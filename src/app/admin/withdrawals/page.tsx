@@ -179,6 +179,61 @@ export default function AdminWithdrawalsPage() {
     }
   }
 
+  const handlePollWithdrawal = async (transactionId: string) => {
+    if (!window.confirm('Poll this pending withdrawal now?')) return
+
+    setActionLoadingId(transactionId)
+    setActionMessage(null)
+    try {
+      const res = await fetch('/api/admin/pool', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'poll-withdrawal', transactionId }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'poll-withdrawal failed')
+
+      const txStatus = data.transaction?.status
+      const opStatus = data.operationStatus?.status
+      setActionMessage(`Polled withdrawal (${shortId(transactionId)}): ${txStatus || opStatus || 'ok'}`)
+      await fetchWithdrawals()
+    } catch (err) {
+      setActionMessage(err instanceof Error ? err.message : 'poll-withdrawal failed')
+    } finally {
+      setActionLoadingId(null)
+    }
+  }
+
+  const handleRequeueWithdrawal = async (transactionId: string) => {
+    const msg =
+      'Requeue this failed withdrawal? This creates a NEW pending-approval withdrawal (reserves funds again). You still need to approve the new withdrawal.'
+    if (!window.confirm(msg)) return
+
+    setActionLoadingId(transactionId)
+    setActionMessage(null)
+    try {
+      const res = await fetch('/api/admin/pool', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'requeue-withdrawal', transactionId }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'requeue-withdrawal failed')
+
+      const newId = typeof data.newTransactionId === 'string' ? data.newTransactionId : null
+      setActionMessage(
+        newId
+          ? `Requeued (${shortId(transactionId)}) → new pending approval (${shortId(newId)})`
+          : `Requeued withdrawal (${shortId(transactionId)})`
+      )
+      await fetchWithdrawals()
+    } catch (err) {
+      setActionMessage(err instanceof Error ? err.message : 'requeue-withdrawal failed')
+    } finally {
+      setActionLoadingId(null)
+    }
+  }
+
   const handleBulkAction = async (approve: boolean) => {
     const action = approve ? 'approve-withdrawal' : 'reject-withdrawal'
     const count = selectedIds.size
@@ -530,6 +585,23 @@ export default function AdminWithdrawalsPage() {
                               Reject
                             </button>
                           </div>
+                        ) : w.status === 'pending' ? (
+                          <button
+                            onClick={() => handlePollWithdrawal(w.id)}
+                            disabled={actionLoadingId === w.id || bulkLoading || !w.operationId}
+                            className="text-xs px-2.5 py-1 rounded bg-masque-gold/20 hover:bg-masque-gold/30 text-masque-gold disabled:opacity-60 transition-colors"
+                            title={w.operationId ? 'Poll operation status now' : 'Missing operationId'}
+                          >
+                            {actionLoadingId === w.id ? '...' : 'Poll'}
+                          </button>
+                        ) : w.status === 'failed' ? (
+                          <button
+                            onClick={() => handleRequeueWithdrawal(w.id)}
+                            disabled={actionLoadingId === w.id || bulkLoading}
+                            className="text-xs px-2.5 py-1 rounded bg-jester-purple/20 hover:bg-jester-purple/30 text-jester-purple disabled:opacity-60 transition-colors"
+                          >
+                            {actionLoadingId === w.id ? '...' : 'Requeue'}
+                          </button>
                         ) : (
                           <span className="text-xs text-venetian-gold/40">--</span>
                         )}

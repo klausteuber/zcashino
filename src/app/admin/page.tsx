@@ -11,6 +11,7 @@ type AdminAction = 'refill' | 'cleanup' | 'init' | 'process-withdrawals'
 interface AdminOverview {
   timestamp: string
   network: string
+  fairnessMode?: string
   admin: {
     username: string
   }
@@ -91,7 +92,9 @@ interface AdminOverview {
     }
     blackjack: {
       hands: number
+      wagered: number
       payout: number
+      rtp: number
     }
     videoPoker: {
       hands: number
@@ -102,6 +105,12 @@ interface AdminOverview {
     activeExposure: {
       activeGames: number
     }
+  }
+  services?: {
+    alertGenerator?: { isRunning: boolean; lastRun: string | null; lastAlertCount: number | null }
+    sweep?: { isRunning: boolean; lastSweep: string | null; lastStatusCheck: string | null; pendingSweeps: number }
+    commitmentPoolManager?: { isRunning: boolean; lastCheck: string | null; lastCleanup: string | null }
+    sessionSeedPoolManager?: { isRunning: boolean; lastCheck: string | null }
   }
   recentWithdrawals: Array<{
     id: string
@@ -673,6 +682,9 @@ export default function AdminPage() {
                     {overview.houseEdge.blackjack.hands} hands
                   </div>
                   <div className="text-xs text-venetian-gold/50 mt-1">
+                    Wagered: {formatZecWithUsd(overview.houseEdge.blackjack.wagered)} • RTP: {overview.houseEdge.blackjack.rtp.toFixed(2)}%
+                  </div>
+                  <div className="text-xs text-venetian-gold/50 mt-1">
                     Payout: {formatZecWithUsd(overview.houseEdge.blackjack.payout)}
                   </div>
                 </div>
@@ -727,6 +739,28 @@ export default function AdminPage() {
                     value={overview.pool.blockchainAvailable ? 'Available' : 'Unavailable'}
                     positive={overview.pool.blockchainAvailable}
                   />
+                  {overview.services?.alertGenerator && (
+                    <StatusRow
+                      label="Alert Generator"
+                      value={
+                        overview.services.alertGenerator.isRunning
+                          ? `Running${overview.services.alertGenerator.lastRun ? ` (last: ${new Date(overview.services.alertGenerator.lastRun).toLocaleString()})` : ''}`
+                          : 'Stopped'
+                      }
+                      positive={overview.services.alertGenerator.isRunning}
+                    />
+                  )}
+                  {overview.services?.sweep && (
+                    <StatusRow
+                      label="Deposit Sweep"
+                      value={
+                        overview.services.sweep.isRunning
+                          ? `Running${overview.services.sweep.lastSweep ? ` (last: ${new Date(overview.services.sweep.lastSweep).toLocaleString()})` : ''}`
+                          : 'Stopped'
+                      }
+                      positive={overview.services.sweep.isRunning}
+                    />
+                  )}
                   {overview.nodeStatus.error && (
                     <div className="text-blood-ruby text-xs mt-2">
                       Node error: {overview.nodeStatus.error}

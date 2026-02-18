@@ -1,4 +1,8 @@
 import prisma from '@/lib/db'
+import { getAdminSettings } from '@/lib/admin/runtime-settings'
+import { isKillSwitchActive, getKillSwitchStatus } from '@/lib/kill-switch'
+import { getProvablyFairMode, SESSION_NONCE_MODE } from '@/lib/provably-fair/mode'
+import { sendTelegramMessage } from '@/lib/notifications/telegram'
 
 /**
  * Alert generation functions for the admin dashboard.
@@ -37,7 +41,7 @@ async function createAlertIfNew(alert: AlertInput): Promise<boolean> {
 
   if (existing) return false
 
-  await prisma.adminAlert.create({
+  const created = await prisma.adminAlert.create({
     data: {
       type: alert.type,
       severity: alert.severity,
@@ -48,6 +52,16 @@ async function createAlertIfNew(alert: AlertInput): Promise<boolean> {
       metadata: alert.metadata ? JSON.stringify(alert.metadata) : null,
     },
   })
+
+  if (alert.severity === 'critical' || alert.severity === 'warning') {
+    const baseUrl = (process.env.NEXT_PUBLIC_URL || '').replace(/\/$/, '')
+    const link = baseUrl ? `${baseUrl}/admin/alerts` : '/admin/alerts'
+    const msg =
+      `[${alert.severity.toUpperCase()}] ${created.title}\n` +
+      `${created.description}\n` +
+      link
+    await sendTelegramMessage(msg)
+  }
 
   return true
 }
@@ -110,9 +124,9 @@ export async function checkLargeWins(since: Date, threshold = 1.0): Promise<numb
 }
 
 /**
- * Check for players with anomalously high RTP (> 150% over 20+ hands).
+ * Check for players with anomalously high RTP (threshold over 20+ hands).
  */
-export async function checkHighRTPPlayers(since: Date): Promise<number> {
+export async function checkHighRTPPlayers(since: Date, threshold = 1.5): Promise<number> {
   let created = 0
 
   const sessions = await prisma.session.findMany({
@@ -125,7 +139,7 @@ export async function checkHighRTPPlayers(since: Date): Promise<number> {
 
   for (const session of sessions) {
     const rtp = session.totalWon / session.totalWagered
-    if (rtp <= 1.5) continue
+    if (rtp <= threshold) continue
 
     // Check hand count
     const handCount = await prisma.blackjackGame.count({
@@ -139,11 +153,11 @@ export async function checkHighRTPPlayers(since: Date): Promise<number> {
 
     const wasCreated = await createAlertIfNew({
       type: 'high_rtp',
-      severity: rtp > 2.0 ? 'critical' : 'warning',
+      severity: rtp > threshold * 1.333 ? 'critical' : 'warning',
       title: `High RTP player: ${(rtp * 100).toFixed(1)}%`,
       description: `Session ${session.id.slice(0, 8)}... has ${(rtp * 100).toFixed(1)}% RTP over ${total} hands. Wagered ${session.totalWagered.toFixed(4)} ZEC, won ${session.totalWon.toFixed(4)} ZEC.`,
       sessionId: session.id,
-      metadata: { rtp: rtp * 100, hands: total, wagered: session.totalWagered, won: session.totalWon },
+      metadata: { rtp: rtp * 100, threshold, hands: total, wagered: session.totalWagered, won: session.totalWon },
     })
     if (wasCreated) created++
   }
@@ -235,14 +249,119 @@ export async function checkWithdrawalVelocity(since: Date): Promise<number> {
 }
 
 /**
+ * Check if the kill switch is active (platform maintenance mode).
+ */
+export async function checkKillSwitchAlert(): Promise<number> {
+  if (!isKillSwitchActive()) return 0
+
+  const status = getKillSwitchStatus()
+  const wasCreated = await createAlertIfNew({
+    type: 'kill_switch_active',
+    severity: 'critical',
+    title: 'Kill switch ACTIVE',
+    description: `Kill switch is active${status.activatedBy ? ` (by ${status.activatedBy})` : ''}. New games and withdrawals are paused.`,
+    metadata: {
+      activatedAt: status.activatedAt?.toISOString() ?? null,
+      activatedBy: status.activatedBy,
+    },
+  })
+
+  return wasCreated ? 1 : 0
+}
+
+/**
+ * Check for a backlog of failed withdrawals (potential liquidity or RPC issues).
+ */
+export async function checkFailedWithdrawalsBacklog(): Promise<number> {
+  // Use a longer window than 48h so we still alert on long-lived backlogs.
+  const since14d = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000)
+  const failed = await prisma.transaction.findMany({
+    where: { type: 'withdrawal', status: 'failed', createdAt: { gte: since14d } },
+    orderBy: { createdAt: 'asc' },
+    take: 50,
+    select: { id: true, createdAt: true, failReason: true },
+  })
+
+  if (failed.length === 0) return 0
+
+  const oldest = failed[0]?.createdAt ?? new Date()
+  const ageMs = Date.now() - oldest.getTime()
+  const ageHours = Math.round(ageMs / (60 * 60 * 1000))
+  const examples = failed
+    .map((t) => t.failReason)
+    .filter((r): r is string => !!r)
+    .slice(0, 2)
+    .join(' | ')
+
+  const severity: 'warning' | 'critical' =
+    failed.length >= 5 || ageMs >= 24 * 60 * 60 * 1000 ? 'critical' : 'warning'
+
+  const wasCreated = await createAlertIfNew({
+    type: 'withdrawals_failed_backlog',
+    severity,
+    title: `Failed withdrawals backlog: ${failed.length} in 14d`,
+    description:
+      `There are ${failed.length} failed withdrawals in the last 14d. ` +
+      `Oldest is ~${ageHours}h old.` +
+      (examples ? ` Examples: ${examples}` : ''),
+    metadata: { count: failed.length, oldestAt: oldest.toISOString(), examples },
+  })
+
+  return wasCreated ? 1 : 0
+}
+
+/**
+ * Check for pending withdrawals that have been stuck too long.
+ */
+export async function checkPendingWithdrawalsStuck(): Promise<number> {
+  const oldest = await prisma.transaction.findFirst({
+    where: { type: 'withdrawal', status: 'pending' },
+    orderBy: { createdAt: 'asc' },
+    select: { createdAt: true },
+  })
+
+  if (!oldest) return 0
+
+  const ageMs = Date.now() - oldest.createdAt.getTime()
+  const warningMs = 60 * 60 * 1000
+  const criticalMs = 24 * 60 * 60 * 1000
+
+  if (ageMs < warningMs) return 0
+
+  const count = await prisma.transaction.count({
+    where: { type: 'withdrawal', status: 'pending' },
+  })
+
+  const severity: 'warning' | 'critical' = ageMs >= criticalMs ? 'critical' : 'warning'
+  const ageHours = Math.round(ageMs / (60 * 60 * 1000))
+
+  const wasCreated = await createAlertIfNew({
+    type: 'withdrawals_pending_stuck',
+    severity,
+    title: `Pending withdrawals stuck: ${count}`,
+    description: `There are ${count} pending withdrawals. Oldest is ~${ageHours}h old.`,
+    metadata: { count, oldestAt: oldest.createdAt.toISOString(), ageHours },
+  })
+
+  return wasCreated ? 1 : 0
+}
+
+/**
  * Check commitment pool health.
  */
 export async function checkPoolHealth(): Promise<number> {
-  const available = await prisma.seedCommitment.count({
-    where: { status: 'available' },
-  })
+  const settings = await getAdminSettings()
+  const threshold = settings.pool.minHealthy
+  const fairnessMode = getProvablyFairMode()
+  const now = new Date()
 
-  if (available >= 5) return 0
+  const available = fairnessMode === SESSION_NONCE_MODE
+    ? await prisma.fairnessSeed.count({ where: { status: 'available' } })
+    : await prisma.seedCommitment.count({
+        where: { status: 'available', expiresAt: { gt: now } },
+      })
+
+  if (available >= threshold) return 0
 
   const wasCreated = await createAlertIfNew({
     type: 'pool_critical',
@@ -253,7 +372,7 @@ export async function checkPoolHealth(): Promise<number> {
     description: available === 0
       ? 'No commitments available — new games cannot start. Refill immediately.'
       : `Only ${available} commitments remaining. Consider refilling the pool.`,
-    metadata: { available },
+    metadata: { available, threshold, fairnessMode },
   })
 
   return wasCreated ? 1 : 0
@@ -267,27 +386,34 @@ export async function generateAlerts(): Promise<{
   highRTP: number
   rapidCycles: number
   withdrawalVelocity: number
+  failedWithdrawals: number
+  pendingWithdrawals: number
+  killSwitch: number
   poolHealth: number
   total: number
 }> {
   const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000)
+  const settings = await getAdminSettings()
 
-  const [largeWins, highRTP, rapidCycles, withdrawalVelocity, poolHealth] =
+  const [largeWins, highRTP, rapidCycles, withdrawalVelocity, failedWithdrawals, pendingWithdrawals, killSwitch, poolHealth] =
     await Promise.all([
-      checkLargeWins(since24h),
-      checkHighRTPPlayers(since24h),
+      checkLargeWins(since24h, settings.alerts.largeWinThreshold),
+      checkHighRTPPlayers(since24h, settings.alerts.highRtpThreshold),
       checkRapidCycles(since24h),
       checkWithdrawalVelocity(since24h),
+      checkFailedWithdrawalsBacklog(),
+      checkPendingWithdrawalsStuck(),
+      checkKillSwitchAlert(),
       checkPoolHealth(),
     ])
 
-  const total = largeWins + highRTP + rapidCycles + withdrawalVelocity + poolHealth
+  const total = largeWins + highRTP + rapidCycles + withdrawalVelocity + failedWithdrawals + pendingWithdrawals + killSwitch + poolHealth
 
   if (total > 0) {
     console.log(
-      `[alert-generator] Generated ${total} new alerts: wins=${largeWins} rtp=${highRTP} cycles=${rapidCycles} velocity=${withdrawalVelocity} pool=${poolHealth}`
+      `[alert-generator] Generated ${total} new alerts: wins=${largeWins} rtp=${highRTP} cycles=${rapidCycles} velocity=${withdrawalVelocity} failedW=${failedWithdrawals} pendingW=${pendingWithdrawals} kill=${killSwitch} pool=${poolHealth}`
     )
   }
 
-  return { largeWins, highRTP, rapidCycles, withdrawalVelocity, poolHealth, total }
+  return { largeWins, highRTP, rapidCycles, withdrawalVelocity, failedWithdrawals, pendingWithdrawals, killSwitch, poolHealth, total }
 }

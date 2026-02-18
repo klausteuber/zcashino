@@ -472,11 +472,15 @@ export function startRound(
   serverSeedHash: string,
   clientSeed: string,
   nonce: number,
-  fairnessVersion: FairnessVersion = LEGACY_FAIRNESS_VERSION
+  fairnessVersion: FairnessVersion = LEGACY_FAIRNESS_VERSION,
+  betLimits?: { minBet?: number; maxBet?: number }
 ): VideoPokerGameState {
+  const minBet = betLimits?.minBet ?? MIN_BET
+  const maxBet = betLimits?.maxBet ?? MAX_BET
+
   // Validate bet
-  if (baseBet < MIN_BET || baseBet > MAX_BET) {
-    return { ...state, message: `Bet must be between ${MIN_BET} and ${MAX_BET} ZEC` }
+  if (baseBet < minBet || baseBet > maxBet) {
+    return { ...state, message: `Bet must be between ${minBet} and ${maxBet} ZEC` }
   }
   if (betMultiplier < 1 || betMultiplier > MAX_MULTIPLIER) {
     return { ...state, message: `Coin multiplier must be between 1 and ${MAX_MULTIPLIER}` }

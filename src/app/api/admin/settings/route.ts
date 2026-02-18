@@ -7,6 +7,70 @@ import {
 } from '@/lib/admin/rate-limit'
 import { logAdminEvent } from '@/lib/admin/audit'
 import { guardCypherAdminRequest } from '@/lib/admin/host-guard'
+import { ADMIN_SETTINGS_KEYS, invalidateAdminSettingsCache } from '@/lib/admin/runtime-settings'
+
+type SettingKind = 'number' | 'integer' | 'nullable-number' | 'nullable-integer'
+type SettingSpec = {
+  kind: SettingKind
+  min?: number
+  max?: number
+}
+
+const SETTING_SPECS: Record<string, SettingSpec> = {
+  'blackjack.minBet': { kind: 'number', min: 0 },
+  'blackjack.maxBet': { kind: 'number', min: 0 },
+  'videoPoker.minBet': { kind: 'number', min: 0 },
+  'videoPoker.maxBet': { kind: 'number', min: 0 },
+  'alerts.largeWinThreshold': { kind: 'number', min: 0 },
+  'alerts.highRtpThreshold': { kind: 'number', min: 1 },
+  'alerts.consecutiveWins': { kind: 'integer', min: 1 },
+  'pool.autoRefillThreshold': { kind: 'integer', min: 0 },
+  'pool.targetSize': { kind: 'integer', min: 0 },
+  'pool.minHealthy': { kind: 'integer', min: 0 },
+  'rg.defaultDepositLimit': { kind: 'nullable-number', min: 0 },
+  'rg.defaultLossLimit': { kind: 'nullable-number', min: 0 },
+  'rg.defaultSessionLimit': { kind: 'nullable-integer', min: 0 },
+  'rg.selfExclusionMinDays': { kind: 'integer', min: 1 },
+}
+
+function validateSettingValue(key: string, value: unknown): { ok: true; normalized: number | null } | { ok: false; error: string } {
+  const spec = SETTING_SPECS[key]
+  if (!spec) {
+    return { ok: false, error: `Unknown setting key: ${key}` }
+  }
+
+  const nullable = spec.kind.startsWith('nullable')
+  const wantInteger = spec.kind.endsWith('integer')
+
+  if (value === null) {
+    if (!nullable) return { ok: false, error: `${key} cannot be null` }
+    return { ok: true, normalized: null }
+  }
+
+  const num = typeof value === 'number'
+    ? value
+    : typeof value === 'string' && value.trim().length > 0
+      ? Number(value)
+      : NaN
+
+  if (!Number.isFinite(num)) {
+    return { ok: false, error: `${key} must be a ${wantInteger ? 'whole number' : 'number'}` }
+  }
+
+  const normalized = wantInteger ? Math.trunc(num) : num
+  if (wantInteger && normalized !== num) {
+    return { ok: false, error: `${key} must be an integer` }
+  }
+
+  if (spec.min !== undefined && normalized < spec.min) {
+    return { ok: false, error: `${key} must be >= ${spec.min}` }
+  }
+  if (spec.max !== undefined && normalized > spec.max) {
+    return { ok: false, error: `${key} must be <= ${spec.max}` }
+  }
+
+  return { ok: true, normalized }
+}
 
 /**
  * GET /api/admin/settings
@@ -118,7 +182,19 @@ export async function PATCH(request: NextRequest) {
       )
     }
 
-    const serialized = typeof value === 'string' ? value : JSON.stringify(value)
+    if (!ADMIN_SETTINGS_KEYS.includes(key as (typeof ADMIN_SETTINGS_KEYS)[number])) {
+      return NextResponse.json(
+        { error: `Invalid setting key: ${key}` },
+        { status: 400 }
+      )
+    }
+
+    const validated = validateSettingValue(key, value)
+    if (!validated.ok) {
+      return NextResponse.json({ error: validated.error }, { status: 400 })
+    }
+
+    const serialized = JSON.stringify(validated.normalized)
 
     await prisma.adminConfig.upsert({
       where: { key },
@@ -133,16 +209,18 @@ export async function PATCH(request: NextRequest) {
       },
     })
 
+    invalidateAdminSettingsCache()
+
     await logAdminEvent({
       request,
       action: 'admin.settings.update',
       success: true,
       actor: adminCheck.session.username,
       details: `Setting updated: ${key}`,
-      metadata: { key, value },
+      metadata: { key, value: validated.normalized },
     })
 
-    return NextResponse.json({ success: true, key, value })
+    return NextResponse.json({ success: true, key, value: validated.normalized })
   } catch (error) {
     console.error('Admin settings update error:', error)
     await logAdminEvent({

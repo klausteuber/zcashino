@@ -5,8 +5,6 @@ import {
   startRound,
   holdAndDraw,
   sanitizeStateForClient,
-  MIN_BET,
-  MAX_BET,
   MAX_MULTIPLIER,
 } from '@/lib/game/video-poker'
 import { generateClientSeed } from '@/lib/provably-fair'
@@ -28,6 +26,7 @@ import { logPlayerCounterEvent, PLAYER_COUNTER_ACTIONS } from '@/lib/telemetry/p
 import { checkWagerAllowed } from '@/lib/services/responsible-gambling'
 import { HMAC_FAIRNESS_VERSION, getDefaultFairnessVersion, normalizeFairnessVersion } from '@/lib/game/shuffle'
 import { getProvablyFairMode, SESSION_NONCE_MODE } from '@/lib/provably-fair/mode'
+import { getAdminSettings } from '@/lib/admin/runtime-settings'
 import {
   allocateNonce,
   ClientSeedLockedError,
@@ -154,15 +153,21 @@ async function handleStartGame(
   betMultiplier: number,
   clientSeedInput?: string
 ) {
+  const settings = await getAdminSettings()
+  const betLimits = {
+    minBet: settings.videoPoker.minBet,
+    maxBet: settings.videoPoker.maxBet,
+  }
+
   // Validate variant
   if (!VALID_VARIANTS.includes(variant as VideoPokerVariant)) {
     return NextResponse.json({ error: 'Invalid variant. Use jacks_or_better or deuces_wild' }, { status: 400 })
   }
 
   // Validate bet
-  if (baseBet < MIN_BET || baseBet > MAX_BET) {
+  if (baseBet < betLimits.minBet || baseBet > betLimits.maxBet) {
     return NextResponse.json({
-      error: `Bet must be between ${MIN_BET} and ${MAX_BET} ZEC`,
+      error: `Bet must be between ${betLimits.minBet} and ${betLimits.maxBet} ZEC`,
     }, { status: 400 })
   }
 
@@ -190,6 +195,7 @@ async function handleStartGame(
       baseBet,
       betMultiplier,
       totalBet,
+      betLimits,
       clientSeedInput
     )
   }
@@ -225,7 +231,8 @@ async function handleStartGame(
     serverSeedHash,
     clientSeed,
     nonce,
-    fairnessVersion
+    fairnessVersion,
+    betLimits
   )
 
   let gameId = ''
@@ -342,6 +349,7 @@ async function handleStartGameSessionNonce(
   baseBet: number,
   betMultiplier: number,
   totalBet: number,
+  betLimits: { minBet: number; maxBet: number },
   clientSeedInput?: string
 ) {
   const requestedClientSeed = clientSeedInput?.trim()
@@ -389,7 +397,8 @@ async function handleStartGameSessionNonce(
         allocated.serverSeedHash,
         allocated.clientSeed,
         allocated.nonce,
-        HMAC_FAIRNESS_VERSION
+        HMAC_FAIRNESS_VERSION,
+        betLimits
       )
       gameState = startedGameState
 
@@ -539,7 +548,9 @@ async function handleDraw(
     game.serverSeedHash,
     game.clientSeed,
     game.nonce,
-    normalizeFairnessVersion(game.fairnessVersion)
+    normalizeFairnessVersion(game.fairnessVersion),
+    // Use a permissive range so admin bet-limit changes don't break in-flight games.
+    { minBet: 0, maxBet: Math.max(game.baseBet, 1) }
   )
 
   // Execute draw with held cards

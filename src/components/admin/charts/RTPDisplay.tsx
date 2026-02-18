@@ -3,7 +3,9 @@
 interface RTPDisplayProps {
   blackjack: {
     hands: number
+    wagered: number
     payout: number
+    rtp: number
   }
   videoPoker: {
     hands: number
@@ -86,7 +88,7 @@ export default function RTPDisplay({
       </div>
       <RTPBar
         label="Blackjack"
-        actual={totalWagered > 0 ? (blackjack.payout / totalWagered) * 100 : 0}
+        actual={blackjack.wagered > 0 ? (blackjack.payout / blackjack.wagered) * 100 : 0}
         theoretical={theoretical.blackjackRTP * 100}
         hands={blackjack.hands}
       />

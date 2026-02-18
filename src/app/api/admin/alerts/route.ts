@@ -7,6 +7,8 @@ import {
 } from '@/lib/admin/rate-limit'
 import { logAdminEvent } from '@/lib/admin/audit'
 import { guardCypherAdminRequest } from '@/lib/admin/host-guard'
+import { generateAlerts } from '@/lib/admin/alerts'
+import { getAlertServiceStatus } from '@/lib/services/alert-generator'
 
 /**
  * GET /api/admin/alerts
@@ -77,7 +79,7 @@ export async function GET(request: NextRequest) {
       details: `Fetched ${alerts.length} alerts (total: ${total}, active: ${activeCount})`,
     })
 
-    return NextResponse.json({ alerts, total, activeCount, limit, offset })
+    return NextResponse.json({ alerts, total, activeCount, limit, offset, serviceStatus: getAlertServiceStatus() })
   } catch (error) {
     console.error('Admin alerts GET error:', error)
     await logAdminEvent({
@@ -89,6 +91,66 @@ export async function GET(request: NextRequest) {
     })
     return NextResponse.json(
       { error: 'Failed to fetch alerts.' },
+      { status: 500 }
+    )
+  }
+}
+
+/**
+ * POST /api/admin/alerts
+ * Manually run alert checks now (useful for debugging and ops).
+ */
+export async function POST(request: NextRequest) {
+  const hostGuard = guardCypherAdminRequest(request)
+  if (hostGuard) return hostGuard
+
+  const actionLimit = checkAdminRateLimit(request, 'admin-action')
+  if (!actionLimit.allowed) {
+    await logAdminEvent({
+      request,
+      action: 'admin.alerts.generate',
+      success: false,
+      details: 'Rate limit exceeded',
+      metadata: { retryAfterSeconds: actionLimit.retryAfterSeconds },
+    })
+    return createRateLimitResponse(actionLimit)
+  }
+
+  const adminCheck = requireAdmin(request)
+  if (!adminCheck.ok) {
+    await logAdminEvent({
+      request,
+      action: 'admin.alerts.generate',
+      success: false,
+      details: 'Unauthorized access attempt',
+    })
+    return adminCheck.response
+  }
+
+  try {
+    const result = await generateAlerts()
+
+    await logAdminEvent({
+      request,
+      action: 'admin.alerts.generate',
+      success: true,
+      actor: adminCheck.session.username,
+      details: `Manual alert run created ${result.total} alert(s)`,
+      metadata: result,
+    })
+
+    return NextResponse.json({ success: true, result, serviceStatus: getAlertServiceStatus() })
+  } catch (error) {
+    console.error('Admin alerts POST error:', error)
+    await logAdminEvent({
+      request,
+      action: 'admin.alerts.generate',
+      success: false,
+      actor: adminCheck.session.username,
+      details: error instanceof Error ? error.message : 'Failed to run alerts',
+    })
+    return NextResponse.json(
+      { error: 'Failed to run alert checks.' },
       { status: 500 }
     )
   }

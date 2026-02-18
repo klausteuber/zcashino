@@ -8,6 +8,7 @@ import { requirePlayerSession, setPlayerSessionCookie } from '@/lib/auth/player-
 import { parseWithSchema, sessionBodySchema } from '@/lib/validation/api-schemas'
 import { getProvablyFairMode, LEGACY_PER_GAME_MODE } from '@/lib/provably-fair/mode'
 import { getPublicFairnessState } from '@/lib/provably-fair/session-fairness'
+import { getAdminSettings } from '@/lib/admin/runtime-settings'
 
 // Demo mode: Generate a fake wallet address for testing
 function generateDemoWallet(): string {
@@ -152,6 +153,7 @@ export async function GET(request: NextRequest) {
     const address = walletAddress || generateDemoWallet()
 
     if (!session) {
+      const settings = await getAdminSettings()
       // Create new session
       // Demo sessions get instant balance, real sessions need to deposit
       const isDemo = isDemoSession(address)
@@ -161,6 +163,10 @@ export async function GET(request: NextRequest) {
           balance: isDemo ? 10 : 0, // Demo gets 10 ZEC, real starts at 0
           totalDeposited: isDemo ? 10 : 0,
           isAuthenticated: isDemo, // Demo sessions are auto-authenticated
+          // Defaults can be tightened by the player; admin can override later.
+          depositLimit: isDemo ? null : settings.rg.defaultDepositLimit,
+          lossLimit: isDemo ? null : settings.rg.defaultLossLimit,
+          sessionLimit: isDemo ? null : settings.rg.defaultSessionLimit,
         },
         include: { wallet: true }
       })

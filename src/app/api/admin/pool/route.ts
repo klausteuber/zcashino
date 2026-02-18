@@ -28,6 +28,7 @@ import {
   triggerSessionSeedPoolCheck,
 } from '@/lib/services/session-seed-pool-manager'
 import { guardCypherAdminRequest } from '@/lib/admin/host-guard'
+import { reserveFunds } from '@/lib/services/ledger'
 
 /**
  * GET /api/admin/pool - Get pool status
@@ -263,6 +264,172 @@ export async function POST(request: NextRequest) {
           action: 'process-withdrawals',
           processed: results,
           total: pendingTxs.length,
+        })
+      }
+
+      case 'poll-withdrawal': {
+        const { transactionId } = body as { transactionId?: string }
+        if (!transactionId || typeof transactionId !== 'string') {
+          return NextResponse.json({ error: 'transactionId required' }, { status: 400 })
+        }
+
+        const txRow = await prisma.transaction.findFirst({
+          where: { id: transactionId, type: 'withdrawal', status: 'pending', operationId: { not: null } },
+        })
+
+        if (!txRow) {
+          return NextResponse.json(
+            { error: 'Withdrawal not found or not pending with an operationId' },
+            { status: 404 }
+          )
+        }
+
+        const network = DEFAULT_NETWORK
+        const opStatus = await getOperationStatus(txRow.operationId!, network)
+
+        if (opStatus.status === 'success' && opStatus.txid) {
+          const updated = await prisma.transaction.update({
+            where: { id: txRow.id },
+            data: {
+              status: 'confirmed',
+              txHash: opStatus.txid,
+              confirmedAt: new Date(),
+              failReason: null,
+            },
+          })
+          await logAdminEvent({
+            request,
+            action: 'admin.pool.action',
+            success: true,
+            actor: adminCheck.session.username,
+            details: 'Polled withdrawal: confirmed',
+            metadata: { adminAction: action, transactionId, operationId: txRow.operationId },
+          })
+          return NextResponse.json({ success: true, action: 'poll-withdrawal', transaction: updated, operationStatus: opStatus })
+        }
+
+        if (opStatus.status === 'failed') {
+          const refundTotal = roundZec(txRow.amount + txRow.fee)
+          await prisma.$transaction([
+            prisma.session.update({
+              where: { id: txRow.sessionId },
+              data: {
+                balance: { increment: refundTotal },
+                totalWithdrawn: { decrement: txRow.amount },
+              },
+            }),
+            prisma.transaction.update({
+              where: { id: txRow.id },
+              data: {
+                status: 'failed',
+                failReason: opStatus.error || 'Operation failed',
+              },
+            }),
+          ])
+
+          await logAdminEvent({
+            request,
+            action: 'admin.pool.action',
+            success: false,
+            actor: adminCheck.session.username,
+            details: 'Polled withdrawal: failed + refunded',
+            metadata: { adminAction: action, transactionId, operationId: txRow.operationId, error: opStatus.error },
+          })
+
+          const updated = await prisma.transaction.findUnique({ where: { id: txRow.id } })
+          return NextResponse.json({ success: true, action: 'poll-withdrawal', transaction: updated, operationStatus: opStatus })
+        }
+
+        await logAdminEvent({
+          request,
+          action: 'admin.pool.action',
+          success: true,
+          actor: adminCheck.session.username,
+          details: 'Polled withdrawal: still pending',
+          metadata: { adminAction: action, transactionId, operationId: txRow.operationId, status: opStatus.status },
+        })
+
+        return NextResponse.json({ success: true, action: 'poll-withdrawal', transaction: txRow, operationStatus: opStatus })
+      }
+
+      case 'requeue-withdrawal': {
+        const { transactionId } = body as { transactionId?: string }
+        if (!transactionId || typeof transactionId !== 'string') {
+          return NextResponse.json({ error: 'transactionId required' }, { status: 400 })
+        }
+
+        const failedTx = await prisma.transaction.findFirst({
+          where: { id: transactionId, type: 'withdrawal', status: 'failed' },
+          select: {
+            id: true,
+            sessionId: true,
+            amount: true,
+            fee: true,
+            address: true,
+            memo: true,
+            isShielded: true,
+          },
+        })
+
+        if (!failedTx) {
+          return NextResponse.json(
+            { error: 'Withdrawal not found or not failed' },
+            { status: 404 }
+          )
+        }
+
+        if (!failedTx.address) {
+          return NextResponse.json(
+            { error: 'Failed withdrawal has no destination address' },
+            { status: 400 }
+          )
+        }
+
+        const totalAmount = roundZec(failedTx.amount + failedTx.fee)
+        const idempotencyKey = `admin_requeue:${failedTx.id}:${Date.now()}`
+
+        const created = await prisma.$transaction(async (tx) => {
+          const reserved = await reserveFunds(tx, failedTx.sessionId, totalAmount, 'totalWithdrawn', failedTx.amount)
+          if (!reserved) {
+            throw new Error('INSUFFICIENT_BALANCE')
+          }
+
+          return tx.transaction.create({
+            data: {
+              sessionId: failedTx.sessionId,
+              type: 'withdrawal',
+              amount: failedTx.amount,
+              fee: failedTx.fee,
+              address: failedTx.address,
+              memo: failedTx.memo,
+              isShielded: failedTx.isShielded,
+              status: 'pending_approval',
+              idempotencyKey,
+            },
+          })
+        })
+
+        await logAdminEvent({
+          request,
+          action: 'admin.pool.action',
+          success: true,
+          actor: adminCheck.session.username,
+          details: 'Requeued failed withdrawal (new pending_approval transaction created)',
+          metadata: {
+            adminAction: action,
+            originalTransactionId: failedTx.id,
+            newTransactionId: created.id,
+            amount: failedTx.amount,
+            fee: failedTx.fee,
+          },
+        })
+
+        return NextResponse.json({
+          success: true,
+          action: 'requeue-withdrawal',
+          originalTransactionId: failedTx.id,
+          newTransactionId: created.id,
+          transaction: created,
         })
       }
 
@@ -516,7 +683,7 @@ export async function POST(request: NextRequest) {
           metadata: { adminAction: action },
         })
         return NextResponse.json(
-          { error: 'Invalid action. Use: refill, cleanup, init, process-withdrawals, toggle-kill-switch, sweep, or sweep-status' },
+          { error: 'Invalid action. Use: refill, cleanup, init, process-withdrawals, poll-withdrawal, requeue-withdrawal, toggle-kill-switch, approve-withdrawal, reject-withdrawal, sweep, or sweep-status' },
           { status: 400 }
         )
     }

@@ -72,8 +72,6 @@ export async function GET(request: NextRequest) {
     )
 
     const [
-      // Session totals (lifetime — no period granularity on session aggregates)
-      sessionTotals,
       // Blackjack stats (period-filtered)
       bjStats,
       // Video poker stats (period-filtered)
@@ -88,15 +86,9 @@ export async function GET(request: NextRequest) {
       activeBJGames,
       activeVPGames,
     ] = await Promise.all([
-      prisma.session.aggregate({
-        _sum: {
-          totalWagered: true,
-          totalWon: true,
-        },
-      }),
       prisma.blackjackGame.aggregate({
         where: { status: 'completed', completedAt: { gte: periodStart } },
-        _sum: { payout: true },
+        _sum: { mainBet: true, perfectPairsBet: true, insuranceBet: true, payout: true },
         _count: true,
       }),
       prisma.videoPokerGame.aggregate({
@@ -144,11 +136,12 @@ export async function GET(request: NextRequest) {
       prisma.$queryRaw`
         SELECT DATE(completedAt) as date,
           COUNT(*) as hands,
+          SUM(mainBet + perfectPairsBet + insuranceBet) as wagered,
           SUM(payout) as payout
         FROM BlackjackGame
         WHERE status = 'completed' AND completedAt >= ${periodStart}
         GROUP BY DATE(completedAt) ORDER BY date
-      ` as Promise<Array<{ date: string; hands: bigint; payout: number }>>,
+      ` as Promise<Array<{ date: string; hands: bigint; wagered: number; payout: number }>>,
 
       prisma.$queryRaw`
         SELECT DATE(completedAt) as date,
@@ -175,6 +168,7 @@ export async function GET(request: NextRequest) {
         deposits: number
         withdrawals: number
         netFlow: number
+        bjWagered: number
         bjPayout: number
         vpWagered: number
         vpPayout: number
@@ -189,6 +183,7 @@ export async function GET(request: NextRequest) {
           deposits: 0,
           withdrawals: 0,
           netFlow: 0,
+          bjWagered: 0,
           bjPayout: 0,
           vpWagered: 0,
           vpPayout: 0,
@@ -210,6 +205,7 @@ export async function GET(request: NextRequest) {
 
     for (const row of dailyBJ) {
       const entry = getOrCreate(row.date)
+      entry.bjWagered = row.wagered || 0
       entry.bjPayout = row.payout || 0
     }
 
@@ -233,16 +229,18 @@ export async function GET(request: NextRequest) {
       .sort((a, b) => a.date.localeCompare(b.date))
 
     // Compute summary values
-    const totalWagered = sessionTotals._sum.totalWagered || 0
-    const totalWon = sessionTotals._sum.totalWon || 0
-    const ggr = totalWagered - totalWon
-    const houseEdgePct = totalWagered > 0 ? (ggr / totalWagered) * 100 : 0
-
+    const bjWagered = (bjStats._sum.mainBet || 0) + (bjStats._sum.perfectPairsBet || 0) + (bjStats._sum.insuranceBet || 0)
     const bjPayout = bjStats._sum.payout || 0
     const bjHands = bjStats._count
+
     const vpWagered = vpStats._sum.totalBet || 0
     const vpPayout = vpStats._sum.payout || 0
     const vpHands = vpStats._count
+
+    const totalWagered = bjWagered + vpWagered
+    const totalPayout = bjPayout + vpPayout
+    const ggr = totalWagered - totalPayout
+    const houseEdgePct = totalWagered > 0 ? (ggr / totalWagered) * 100 : 0
 
     // Build hand rank breakdown (convert bigint counts)
     const handRankBreakdown: Record<string, number> = {}
@@ -265,7 +263,7 @@ export async function GET(request: NextRequest) {
       summary: {
         realizedGGR: {
           totalWagered,
-          totalPayout: totalWon,
+          totalPayout,
           ggr,
           houseEdgePct: Math.round(houseEdgePct * 100) / 100,
         },
@@ -276,7 +274,9 @@ export async function GET(request: NextRequest) {
       byGame: {
         blackjack: {
           hands: bjHands,
+          wagered: bjWagered,
           payout: bjPayout,
+          rtp: bjWagered > 0 ? Math.round((bjPayout / bjWagered) * 10000) / 100 : 0,
         },
         videoPoker: {
           hands: vpHands,

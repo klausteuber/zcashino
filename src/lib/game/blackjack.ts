@@ -70,13 +70,17 @@ export function startRound(
   serverSeedHash: string,
   clientSeed: string,
   nonce: number,
-  fairnessVersion: FairnessVersion = LEGACY_FAIRNESS_VERSION
+  fairnessVersion: FairnessVersion = LEGACY_FAIRNESS_VERSION,
+  betLimits?: { minBet?: number; maxBet?: number }
 ): BlackjackGameState {
+  const minBet = betLimits?.minBet ?? MIN_BET
+  const maxBet = betLimits?.maxBet ?? MAX_BET
+
   // Validate bets
-  if (mainBet < MIN_BET || mainBet > MAX_BET) {
+  if (mainBet < minBet || mainBet > maxBet) {
     return {
       ...state,
-      message: `Bet must be between ${MIN_BET} and ${MAX_BET} ZEC`
+      message: `Bet must be between ${minBet} and ${maxBet} ZEC`
     }
   }
 

@@ -6,8 +6,6 @@ import {
   executeAction,
   takeInsurance,
   getAvailableActions,
-  MIN_BET,
-  MAX_BET
 } from '@/lib/game/blackjack'
 import {
   generateClientSeed
@@ -35,6 +33,7 @@ import { logPlayerCounterEvent, PLAYER_COUNTER_ACTIONS } from '@/lib/telemetry/p
 import { HMAC_FAIRNESS_VERSION, getDefaultFairnessVersion, normalizeFairnessVersion } from '@/lib/game/shuffle'
 import { checkWagerAllowed } from '@/lib/services/responsible-gambling'
 import { getProvablyFairMode, SESSION_NONCE_MODE } from '@/lib/provably-fair/mode'
+import { getAdminSettings } from '@/lib/admin/runtime-settings'
 import {
   allocateNonce,
   ClientSeedLockedError,
@@ -179,13 +178,19 @@ async function handleStartGame(
   perfectPairsBet: number = 0,
   clientSeedInput?: string
 ) {
+  const settings = await getAdminSettings()
+  const betLimits = {
+    minBet: settings.blackjack.minBet,
+    maxBet: settings.blackjack.maxBet,
+  }
+
   const normalizedMainBet = roundZec(mainBet)
   const normalizedPerfectPairsBet = roundZec(perfectPairsBet)
 
   // Validate bet amounts
-  if (normalizedMainBet < MIN_BET || normalizedMainBet > MAX_BET) {
+  if (normalizedMainBet < betLimits.minBet || normalizedMainBet > betLimits.maxBet) {
     return NextResponse.json({
-      error: `Bet must be between ${MIN_BET} and ${MAX_BET} ZEC`
+      error: `Bet must be between ${betLimits.minBet} and ${betLimits.maxBet} ZEC`
     }, { status: 400 })
   }
 
@@ -213,6 +218,7 @@ async function handleStartGame(
       normalizedMainBet,
       normalizedPerfectPairsBet,
       totalBet,
+      betLimits,
       clientSeedInput
     )
   }
@@ -248,7 +254,8 @@ async function handleStartGame(
     serverSeedHash,
     clientSeed,
     nonce,
-    fairnessVersion
+    fairnessVersion,
+    betLimits
   )
 
   let gameId = ''
@@ -371,6 +378,7 @@ async function handleStartGameSessionNonce(
   normalizedMainBet: number,
   normalizedPerfectPairsBet: number,
   totalBet: number,
+  betLimits: { minBet: number; maxBet: number },
   clientSeedInput?: string
 ) {
   const requestedClientSeed = clientSeedInput?.trim()
@@ -418,7 +426,8 @@ async function handleStartGameSessionNonce(
         allocated.serverSeedHash,
         allocated.clientSeed,
         allocated.nonce,
-        HMAC_FAIRNESS_VERSION
+        HMAC_FAIRNESS_VERSION,
+        betLimits
       )
       gameState = startedGameState
 
@@ -580,7 +589,9 @@ async function handleGameAction(
     game.serverSeedHash,
     game.clientSeed,
     game.nonce,
-    normalizeFairnessVersion(game.fairnessVersion)
+    normalizeFairnessVersion(game.fairnessVersion),
+    // Use a permissive range so admin bet-limit changes don't break in-flight games.
+    { minBet: 0, maxBet: Math.max(game.mainBet, 1) }
   )
 
   // Restore insurance bet if it was taken (insurance is not in actionHistory)
@@ -734,7 +745,9 @@ async function handleInsuranceAction(
     game.serverSeedHash,
     game.clientSeed,
     game.nonce,
-    normalizeFairnessVersion(game.fairnessVersion)
+    normalizeFairnessVersion(game.fairnessVersion),
+    // Use a permissive range so admin bet-limit changes don't break in-flight games.
+    { minBet: 0, maxBet: Math.max(game.mainBet, 1) }
   )
 
   // Check if insurance can be taken (dealer showing Ace, no insurance yet)

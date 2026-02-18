@@ -15,6 +15,7 @@ interface DailyTrend {
   deposits: number
   withdrawals: number
   netFlow: number
+  bjWagered: number
   bjPayout: number
   vpWagered: number
   vpPayout: number
@@ -36,7 +37,7 @@ interface AnalyticsData {
     }
   }
   byGame: {
-    blackjack: { hands: number; payout: number }
+    blackjack: { hands: number; wagered: number; payout: number; rtp: number }
     videoPoker: {
       hands: number
       wagered: number
@@ -115,7 +116,7 @@ export default function AnalyticsPage() {
 
   const ggrChartData = (data?.trends.daily ?? []).map((d) => ({
     date: d.date,
-    ggr: d.vpWagered - d.vpPayout - d.bjPayout,
+    ggr: (d.vpWagered + d.bjWagered) - (d.vpPayout + d.bjPayout),
   }))
 
   const depositWithdrawalData = (data?.trends.daily ?? []).map((d) => ({
@@ -127,6 +128,7 @@ export default function AnalyticsPage() {
   const wagerTrendData = (data?.trends.daily ?? []).map((d) => ({
     date: d.date,
     vpWagered: d.vpWagered,
+    bjWagered: d.bjWagered,
     bjPayout: d.bjPayout,
     vpPayout: d.vpPayout,
   }))
@@ -203,6 +205,12 @@ export default function AnalyticsPage() {
 
         {data && (
           <>
+            {/* Variance warning for tiny sample sizes */}
+            {data.byGame.blackjack.hands + data.byGame.videoPoker.hands < 500 && (
+              <div className="bg-masque-gold/10 border border-masque-gold/30 rounded-lg p-3 text-sm text-venetian-gold/80">
+                Low sample size ({data.byGame.blackjack.hands + data.byGame.videoPoker.hands} total hands). Short-term variance can dominate realized house edge.
+              </div>
+            )}
             {/* Summary GGR Cards */}
             <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
               <div className="bg-midnight-black/50 border border-masque-gold/20 rounded-xl p-4">
@@ -346,9 +354,27 @@ export default function AnalyticsPage() {
                       </span>
                     </div>
                     <div className="flex justify-between">
+                      <span className="text-venetian-gold/60">Total Wagered</span>
+                      <span className="text-bone-white font-mono">
+                        {formatZec(data.byGame.blackjack.wagered)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
                       <span className="text-venetian-gold/60">Total Payout</span>
                       <span className="text-bone-white font-mono">
                         {formatZec(data.byGame.blackjack.payout)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-venetian-gold/60">RTP</span>
+                      <span
+                        className={`font-mono font-medium ${
+                          data.byGame.blackjack.rtp > 100
+                            ? 'text-blood-ruby'
+                            : 'text-jester-purple'
+                        }`}
+                      >
+                        {data.byGame.blackjack.rtp.toFixed(2)}%
                       </span>
                     </div>
                   </div>

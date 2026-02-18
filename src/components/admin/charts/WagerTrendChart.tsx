@@ -14,6 +14,7 @@ import {
 interface DailyData {
   date: string
   vpWagered: number
+  bjWagered: number
   bjPayout: number
   vpPayout: number
 }
@@ -56,6 +57,7 @@ export default function WagerTrendChart({ data }: WagerTrendChartProps) {
             formatter={(value: number | undefined, name: string | undefined) => {
               const labels: Record<string, string> = {
                 vpWagered: 'VP Wagered',
+                bjWagered: 'BJ Wagered',
                 bjPayout: 'BJ Payout',
                 vpPayout: 'VP Payout',
               }
@@ -69,6 +71,7 @@ export default function WagerTrendChart({ data }: WagerTrendChartProps) {
             formatter={(value: string) => {
               const labels: Record<string, string> = {
                 vpWagered: 'VP Wagered',
+                bjWagered: 'BJ Wagered',
                 bjPayout: 'BJ Payout',
                 vpPayout: 'VP Payout',
               }
@@ -79,6 +82,13 @@ export default function WagerTrendChart({ data }: WagerTrendChartProps) {
             type="monotone"
             dataKey="vpWagered"
             stroke="#d4af37"
+            strokeWidth={2}
+            dot={false}
+          />
+          <Line
+            type="monotone"
+            dataKey="bjWagered"
+            stroke="#06b6d4"
             strokeWidth={2}
             dot={false}
           />

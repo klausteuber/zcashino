@@ -41,7 +41,16 @@ interface AdminAlert {
 }
 
 type FilterTab = 'all' | 'active' | 'dismissed'
-type AlertType = '' | 'large_win' | 'high_rtp' | 'rapid_cycle' | 'withdrawal_velocity' | 'pool_critical'
+type AlertType =
+  | ''
+  | 'large_win'
+  | 'high_rtp'
+  | 'rapid_cycle'
+  | 'withdrawal_velocity'
+  | 'withdrawals_failed_backlog'
+  | 'withdrawals_pending_stuck'
+  | 'kill_switch_active'
+  | 'pool_critical'
 type AlertSeverity = '' | 'critical' | 'warning' | 'info'
 
 const TYPE_LABELS: Record<string, string> = {
@@ -49,6 +58,9 @@ const TYPE_LABELS: Record<string, string> = {
   high_rtp: 'High RTP',
   rapid_cycle: 'Rapid Cycle',
   withdrawal_velocity: 'Withdrawal Velocity',
+  withdrawals_failed_backlog: 'Failed Withdrawals',
+  withdrawals_pending_stuck: 'Pending Withdrawals Stuck',
+  kill_switch_active: 'Kill Switch Active',
   pool_critical: 'Pool Critical',
 }
 
@@ -66,6 +78,12 @@ export default function AdminAlertsPage() {
   const [activeCount, setActiveCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [serviceStatus, setServiceStatus] = useState<{
+    isRunning: boolean
+    lastRun: string | null
+    lastAlertCount: number | null
+  } | null>(null)
+  const [runningNow, setRunningNow] = useState(false)
 
   const [filterTab, setFilterTab] = useState<FilterTab>('active')
   const [typeFilter, setTypeFilter] = useState<AlertType>('')
@@ -104,6 +122,7 @@ export default function AdminAlertsPage() {
       setAlerts(data.alerts)
       setTotal(data.total)
       setActiveCount(data.activeCount)
+      setServiceStatus(data.serviceStatus ?? null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch alerts')
     } finally {
@@ -149,6 +168,21 @@ export default function AdminAlertsPage() {
     }
   }
 
+  async function runAlertChecksNow() {
+    setRunningNow(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/admin/alerts', { method: 'POST' })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`)
+      await fetchAlerts()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to run alert checks')
+    } finally {
+      setRunningNow(false)
+    }
+  }
+
   // ---------- Pagination ----------
 
   const totalPages = Math.ceil(total / limit)
@@ -162,21 +196,38 @@ export default function AdminAlertsPage() {
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-masque-gold font-[family-name:var(--font-cinzel)]">
-              Alerts
-            </h1>
+            <div>
+              <h1 className="text-2xl font-bold text-masque-gold font-[family-name:var(--font-cinzel)]">
+                Alerts
+              </h1>
+              <p className="text-[11px] text-bone-white/40 mt-0.5">
+                Generator: {serviceStatus
+                  ? `${serviceStatus.isRunning ? 'running' : 'stopped'}${serviceStatus.lastRun ? `, last run ${timeAgo(serviceStatus.lastRun)}` : ''}`
+                  : 'unknown'}
+              </p>
+            </div>
             {activeCount > 0 && (
               <span className="inline-flex items-center justify-center min-w-[24px] h-6 px-2 text-xs font-bold rounded-full bg-blood-ruby text-bone-white">
                 {activeCount}
               </span>
             )}
           </div>
-          <Link
-            href="/admin"
-            className="text-sm text-venetian-gold hover:text-masque-gold transition-colors"
-          >
-            Back to Dashboard
-          </Link>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={runAlertChecksNow}
+              disabled={runningNow}
+              className="text-sm px-3 py-1.5 rounded border border-masque-gold/30 text-masque-gold hover:border-masque-gold hover:bg-masque-gold/10 transition-colors disabled:opacity-50"
+              title="Runs alert checks immediately and persists any new alerts."
+            >
+              {runningNow ? 'Running...' : 'Run Checks Now'}
+            </button>
+            <Link
+              href="/admin"
+              className="text-sm text-venetian-gold hover:text-masque-gold transition-colors"
+            >
+              Back to Dashboard
+            </Link>
+          </div>
         </div>
 
         {/* Filter Tabs */}
@@ -215,6 +266,9 @@ export default function AdminAlertsPage() {
             <option value="high_rtp">High RTP</option>
             <option value="rapid_cycle">Rapid Cycle</option>
             <option value="withdrawal_velocity">Withdrawal Velocity</option>
+            <option value="withdrawals_failed_backlog">Failed Withdrawals</option>
+            <option value="withdrawals_pending_stuck">Pending Withdrawals Stuck</option>
+            <option value="kill_switch_active">Kill Switch Active</option>
             <option value="pool_critical">Pool Critical</option>
           </select>
 

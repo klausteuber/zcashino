@@ -12,6 +12,11 @@ import { logAdminEvent } from '@/lib/admin/audit'
 import { getKillSwitchStatus } from '@/lib/kill-switch'
 import { PLAYER_COUNTER_ACTIONS } from '@/lib/telemetry/player-events'
 import { guardCypherAdminRequest } from '@/lib/admin/host-guard'
+import { getAlertServiceStatus } from '@/lib/services/alert-generator'
+import { getSweepServiceStatus } from '@/lib/services/deposit-sweep'
+import { getManagerStatus } from '@/lib/services/commitment-pool-manager'
+import { getSessionSeedPoolManagerStatus, getSessionSeedPoolStatus } from '@/lib/services/session-seed-pool-manager'
+import { getProvablyFairMode, SESSION_NONCE_MODE } from '@/lib/provably-fair/mode'
 
 /**
  * GET /api/admin/overview
@@ -46,6 +51,8 @@ export async function GET(request: NextRequest) {
 
   try {
     const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000)
+    const fairnessMode = getProvablyFairMode()
+    const isSessionMode = fairnessMode === SESSION_NONCE_MODE
     const raceRejectionActions = [
       PLAYER_COUNTER_ACTIONS.WITHDRAW_RESERVE_REJECTED,
       PLAYER_COUNTER_ACTIONS.BLACKJACK_RESERVE_REJECTED,
@@ -139,7 +146,20 @@ export async function GET(request: NextRequest) {
           },
         },
       }),
-      getPoolStatus(),
+      (async () => {
+        if (isSessionMode) {
+          const status = await getSessionSeedPoolStatus()
+          return {
+            available: status.available,
+            used: status.assigned + status.revealed,
+            expired: status.expired,
+            total: status.total,
+            isHealthy: status.isHealthy,
+            blockchainAvailable: false,
+          }
+        }
+        return getPoolStatus()
+      })(),
       checkNodeStatus(DEFAULT_NETWORK),
       prisma.adminAuditLog.count({
         where: {
@@ -201,7 +221,7 @@ export async function GET(request: NextRequest) {
       // GGR: completed blackjack game stats
       prisma.blackjackGame.aggregate({
         where: { status: 'completed' },
-        _sum: { payout: true },
+        _sum: { mainBet: true, perfectPairsBet: true, insuranceBet: true, payout: true },
         _count: true,
       }),
       // GGR: completed video poker game stats
@@ -271,10 +291,14 @@ export async function GET(request: NextRequest) {
     const houseEdgePct = totalWagered > 0 ? (ggr / totalWagered) * 100 : 0
 
     const bjPayout = bjStats._sum.payout || 0
+    const bjWagered = (bjStats._sum.mainBet || 0) + (bjStats._sum.perfectPairsBet || 0) + (bjStats._sum.insuranceBet || 0)
     const bjHands = bjStats._count
     const vpWagered = vpStats._sum.totalBet || 0
     const vpPayout = vpStats._sum.payout || 0
     const vpHands = vpStats._count
+    const normalizedPoolStatus = isSessionMode
+      ? { ...poolStatus, blockchainAvailable: nodeStatus.connected && nodeStatus.synced }
+      : poolStatus
 
     await logAdminEvent({
       request,
@@ -287,6 +311,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       timestamp: new Date().toISOString(),
       network: DEFAULT_NETWORK,
+      fairnessMode,
       admin: {
         username: adminCheck.session.username,
       },
@@ -310,7 +335,9 @@ export async function GET(request: NextRequest) {
         },
         blackjack: {
           hands: bjHands,
+          wagered: bjWagered,
           payout: bjPayout,
+          rtp: bjWagered > 0 ? Math.round((bjPayout / bjWagered) * 10000) / 100 : 0,
         },
         videoPoker: {
           hands: vpHands,
@@ -364,13 +391,19 @@ export async function GET(request: NextRequest) {
         sessionBalance: tx.session.balance,
         withdrawalAddress: tx.session.withdrawalAddress,
       })),
-      pool: poolStatus,
+      pool: normalizedPoolStatus,
       nodeStatus: {
         connected: nodeStatus.connected,
         synced: nodeStatus.synced,
         blockHeight: nodeStatus.blockHeight,
         rpcLatencyMs: (nodeStatus as { rpcLatencyMs?: number }).rpcLatencyMs ?? null,
         error: nodeStatus.error,
+      },
+      services: {
+        alertGenerator: getAlertServiceStatus(),
+        sweep: getSweepServiceStatus(),
+        commitmentPoolManager: getManagerStatus(),
+        sessionSeedPoolManager: getSessionSeedPoolManagerStatus(),
       },
       treasury: {
         houseBalance: houseBalance ? {

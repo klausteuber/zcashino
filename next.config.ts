@@ -8,6 +8,11 @@ const nextConfig: NextConfig = {
   // Output standalone build for Docker deployment
   output: 'standalone',
 
+  // Avoid Turbopack choosing the wrong monorepo root when multiple lockfiles exist.
+  turbopack: {
+    root: process.cwd(),
+  },
+
   // Skip type-checking during build — already validated in CI/local dev.
   // Prevents false positives from devDependency-only files (e.g. playwright.config.ts).
   typescript: {

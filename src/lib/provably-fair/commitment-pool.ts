@@ -19,10 +19,9 @@ import { commitServerSeedHash, isBlockchainAvailable } from './blockchain'
 import type { ZcashNetwork } from '@/types'
 import { DEFAULT_NETWORK } from '@/lib/wallet'
 import type { Prisma } from '@prisma/client'
+import { getAdminSettings } from '@/lib/admin/runtime-settings'
 
 // Configuration
-const POOL_MIN_SIZE = 5 // Minimum available commitments before refill
-const POOL_TARGET_SIZE = 15 // Target number of available commitments
 const COMMITMENT_EXPIRY_HOURS = 24 // Commitments expire after 24 hours
 const REFILL_BATCH_SIZE = 5 // Number of commitments to generate per batch
 const CLAIM_STALE_TIMEOUT_MINUTES = 5 // Reclaim claimed commitments stuck past this age
@@ -268,6 +267,8 @@ export async function refillPool(
 export async function getPoolStatus(): Promise<PoolStatus> {
   try {
     const now = new Date()
+    const settings = await getAdminSettings()
+    const minHealthy = settings.pool.minHealthy
 
     const [available, used, expired, total] = await Promise.all([
       prisma.seedCommitment.count({
@@ -294,7 +295,7 @@ export async function getPoolStatus(): Promise<PoolStatus> {
       used,
       expired,
       total,
-      isHealthy: available >= POOL_MIN_SIZE,
+      isHealthy: available >= minHealthy,
       blockchainAvailable
     }
   } catch (error) {
@@ -327,15 +328,20 @@ export async function checkAndRefillPool(
   }
 
   refillInFlight = (async () => {
+    const settings = await getAdminSettings()
+    const autoRefillThreshold = settings.pool.autoRefillThreshold
+    const targetSize = settings.pool.targetSize
+
     await reclaimStaleClaimedCommitments().catch((error) => {
       console.error('[CommitmentPool] Failed to reclaim stale claimed commitments:', error)
     })
 
     const status = await getPoolStatus()
 
-    if (status.available <= POOL_MIN_SIZE) {
-      const needed = POOL_TARGET_SIZE - status.available
-      console.log(`[CommitmentPool] Pool low (${status.available}/${POOL_MIN_SIZE}), refilling ${needed} commitments`)
+    if (status.available <= autoRefillThreshold) {
+      const needed = targetSize - status.available
+      if (needed <= 0) return
+      console.log(`[CommitmentPool] Pool low (${status.available}/${autoRefillThreshold}), refilling ${needed} commitments`)
       await refillPool(needed, network)
     }
   })()
@@ -390,6 +396,9 @@ export async function initializePool(
 
   console.log('[CommitmentPool] Initializing commitment pool...')
 
+  const settings = await getAdminSettings()
+  const targetSize = settings.pool.targetSize
+
   // Clean up any expired commitments first
   await cleanupExpiredCommitments()
 
@@ -398,8 +407,8 @@ export async function initializePool(
   console.log(`[CommitmentPool] Current status: ${status.available} available, ${status.used} used, ${status.expired} expired`)
 
   // Refill if needed
-  if (status.available < POOL_TARGET_SIZE) {
-    const needed = POOL_TARGET_SIZE - status.available
+  if (status.available < targetSize) {
+    const needed = targetSize - status.available
     console.log(`[CommitmentPool] Generating ${needed} initial commitments...`)
     await refillPool(needed, network)
   } else {

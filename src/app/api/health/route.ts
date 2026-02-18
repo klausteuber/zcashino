@@ -55,8 +55,9 @@ export async function GET() {
         checks.sessionSeedPoolWarning = 'Session seed pool is low, rotations may experience delays'
       }
     } else {
+      const now = new Date()
       const available = await prisma.seedCommitment.count({
-        where: { status: 'available' },
+        where: { status: 'available', expiresAt: { gt: now } },
       })
       checks.commitmentPool = { available }
       if (available === 0) {
