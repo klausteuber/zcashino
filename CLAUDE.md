@@ -104,6 +104,25 @@ setInterval(() => {
 **Root Cause:** CSS changes were committed locally but not pushed/pulled to VPS before rebuild. The fix commit only included `.dockerignore` and `Dockerfile` changes.
 **Fix:** Always verify that ALL pending changes are pushed and pulled before rebuilding: `git pull origin main` on VPS, then rebuild. Check deployed CSS bundle hash changes after rebuild.
 
+### [2026-02-18] Push Incorrectly Shown as Win
+**Problem:** A push (tie) was shown as "WIN" with win animation and "You won X ZEC!" message.
+**Root Cause:** Both the message builder (`blackjack.ts`) and the result animation (`BlackjackGame.tsx`) checked `payout > 0` before checking `onlyPushes`/`message.includes('push')`. A push returns the original bet (payout > 0), so push was caught by the win branch first.
+
+```typescript
+// BAD - push has payout > 0 so it falls into 'win' before 'push' is ever checked
+: totalPayout > 0 ? `You won ${totalPayout.toFixed(4)} ZEC!`
+: onlyPushes ? 'Push - bet returned'
+
+// GOOD - check push before payout in ALL three places:
+// 1. blackjack.ts resolveRound() message
+// 2. BlackjackGame.tsx resultAnimation setter
+// 3. BlackjackGame.tsx hand history outcome
+: onlyPushes ? 'Push - bet returned'
+: totalPayout > 0 ? `You won ${totalPayout.toFixed(4)} ZEC!`
+```
+
+**Rule:** Whenever branching on `payout > 0` vs. push, always check push first. Push returns the stake so payout is never zero.
+
 ## Code Patterns
 
 ### Auto-bet Feature Pattern

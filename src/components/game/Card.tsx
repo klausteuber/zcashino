@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react'
 import type { Card as CardType, Suit } from '@/types'
-import { JesterBell } from '@/components/ui/JesterLogo'
 
 interface CardProps {
   card: CardType
@@ -119,16 +118,13 @@ export default function Card({ card, size = 'md', className = '', dealDelay = 0,
   // Render face-down card back
   const renderCardBack = () => (
     <div className="card-back-inner w-3/4 h-3/4 border border-masque-gold/30 rounded-md bg-jester-purple-dark/60 flex items-center justify-center relative overflow-hidden">
-      {/* Diamond tufted pattern overlay (CypherJester brand) */}
-      <div
-        className="absolute inset-0 opacity-20 brand-cardback-cypher"
-        style={{
-          backgroundImage: `url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 20 L20 0 L40 20 L20 40 Z' fill='none' stroke='%23C9A227' stroke-width='0.5' stroke-opacity='0.5'/%3E%3C/svg%3E")`,
-          backgroundSize: '20px 20px'
-        }}
+      {/* CypherJester: jester mask logo */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="/images/jester-mask.png"
+        alt=""
+        className="brand-cardback-cypher w-full h-full object-contain p-1 opacity-80"
       />
-      {/* CypherJester: jester bell icon */}
-      <JesterBell className="w-6 h-6 text-masque-gold/60 brand-cardback-cypher" />
       {/* 21z: logo SVG (transparent bg, scales cleanly) */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img

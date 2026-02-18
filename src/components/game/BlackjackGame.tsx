@@ -313,13 +313,13 @@ export default function BlackjackGame() {
         setResultAnimation('loss')
         setTimeout(() => playSound('lose'), 300)
         setTimeout(() => setResultAnimation(null), 3000)
-      } else if (payout > 0) {
-        setResultAnimation('win')
-        setTimeout(() => playSound('win'), 300)
-        setTimeout(() => setResultAnimation(null), 3000)
       } else if (message.includes('push')) {
         setResultAnimation('push')
         setTimeout(() => playSound('push'), 300)
+        setTimeout(() => setResultAnimation(null), 3000)
+      } else if (payout > 0) {
+        setResultAnimation('win')
+        setTimeout(() => playSound('win'), 300)
         setTimeout(() => setResultAnimation(null), 3000)
       } else {
         setResultAnimation('loss')
@@ -333,8 +333,8 @@ export default function BlackjackGame() {
         let outcome: HandHistoryEntry['outcome'] = 'lose'
         if (message.includes('blackjack')) outcome = 'blackjack'
         else if (allSurrendered || message.includes('surrender')) outcome = 'surrender'
-        else if (payout > 0) outcome = 'win'
         else if (message.includes('push')) outcome = 'push'
+        else if (payout > 0) outcome = 'win'
 
         setHandHistory(prev => [{
           id: currentGameId,
