@@ -24,6 +24,28 @@ if [[ -f "$ENV_MAINNET_FILE" ]]; then
 fi
 
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.yml}"
+COMPOSE_ENV_FILE="${COMPOSE_ENV_FILE:-}"
+COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-}"
+
+# Production uses a dedicated env file + project name.
+if [[ "$COMPOSE_FILE" == "docker-compose.mainnet.yml" ]]; then
+  COMPOSE_ENV_FILE="${COMPOSE_ENV_FILE:-.env.mainnet}"
+  COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-mainnet}"
+fi
+
+compose() {
+  # Build args without relying on exported env vars.
+  local args=()
+  if [[ -n "$COMPOSE_ENV_FILE" ]]; then
+    args+=(--env-file "$COMPOSE_ENV_FILE")
+  fi
+  if [[ -n "$COMPOSE_PROJECT_NAME" ]]; then
+    args+=(-p "$COMPOSE_PROJECT_NAME")
+  fi
+  args+=(-f "$COMPOSE_FILE")
+  docker compose "${args[@]}" "$@"
+}
+
 # Max block age in seconds before alerting (default: 600 = 10 minutes)
 MAX_BLOCK_AGE="${MAX_BLOCK_AGE:-600}"
 
@@ -42,14 +64,14 @@ if [[ -z "$RPC_PASSWORD" ]]; then
 fi
 
 zcash_cli() {
-  docker compose -f "$COMPOSE_FILE" exec -T zcashd zcash-cli \
+  compose exec -T zcashd zcash-cli \
     -rpcuser="$RPC_USER" \
     -rpcpassword="$RPC_PASSWORD" \
     "$@"
 }
 
 # Check if zcashd container is running
-if ! docker compose -f "$COMPOSE_FILE" ps zcashd --status running -q 2>/dev/null | grep -q .; then
+if ! compose ps zcashd --status running -q 2>/dev/null | grep -q .; then
   alert "NODE DOWN: zcashd container is not running"
   exit 1
 fi
