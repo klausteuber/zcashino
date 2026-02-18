@@ -121,14 +121,14 @@ export default function Card({ card, size = 'md', className = '', dealDelay = 0,
       {/* CypherJester: jester mask logo */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src="/images/jester-mask.png"
+        src="/images/jester-logo.png"
         alt=""
         className="brand-cardback-cypher w-full h-full object-contain p-1 opacity-80"
       />
       {/* 21z: logo SVG (transparent bg, scales cleanly) */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src="/images/21z-logo.svg"
+        src="/images/21z-logo.png"
         alt=""
         className="brand-cardback-21z w-full h-full object-contain p-1 opacity-80"
       />
