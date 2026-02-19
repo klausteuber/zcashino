@@ -336,6 +336,37 @@ export async function getPublicFairnessState(
   return mapPublicState(active)
 }
 
+/**
+ * Read-only: returns existing fairness state without claiming a seed from the pool.
+ * Use this for session reads where we don't want to eagerly consume seeds.
+ * Returns null if the session has no fairness state yet (seed assigned on first game start).
+ */
+export async function getPublicFairnessStateIfExists(
+  sessionId: string
+): Promise<SessionFairnessPublicState | null> {
+  const existing = await prisma.sessionFairnessState.findUnique({
+    where: { sessionId },
+    include: {
+      seed: {
+        select: {
+          id: true,
+          seed: true,
+          seedHash: true,
+          txHash: true,
+          blockHeight: true,
+          blockTimestamp: true,
+          status: true,
+          assignedAt: true,
+          revealedAt: true,
+          createdAt: true,
+        },
+      },
+    },
+  })
+  if (!existing) return null
+  return mapPublicState(mapState(existing as SessionFairnessStateWithSeed))
+}
+
 export async function allocateNonce(
   sessionId: string,
   tx?: TransactionClient,

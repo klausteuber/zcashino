@@ -52,7 +52,7 @@ const DEFAULT_SETTINGS: AdminSettings = {
     paytableJacksOrBetter: '9/6',
     paytableDeucesWild: 'full_pay',
   },
-  pool: { autoRefillThreshold: 5, targetSize: 15, minHealthy: 5 },
+  pool: { autoRefillThreshold: 5, targetSize: 1000, minHealthy: 5 },
   alerts: { largeWinThreshold: 1.0, highRtpThreshold: 1.5, consecutiveWins: 10 },
   rg: {
     defaultDepositLimit: null,

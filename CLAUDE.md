@@ -136,6 +136,32 @@ setInterval(() => {
 
 **Rule:** Whenever branching on `payout > 0` vs. push, always check push first. Push returns the stake so payout is never zero.
 
+### [2026-02-18] Session Creation Fails Silently When Zcash Node is Down
+**Problem:** User clicks "Deposit Real ZEC", sees "Something Went Wrong / Failed to create session" with no indication of root cause. Error was transient — gone when tested later.
+**Root Cause:** `createDepositWalletForSession()` calls `checkNodeStatus()` → single RPC check with 5s timeout. If node is briefly unreachable (network hiccup, restart), wallet creation fails. The API catch block returned generic `{ error: 'Failed to get session' }` — no error code, no retry, no health check.
+**Fix (5 changes):**
+1. RPC retry with 2s backoff in `session-wallet.ts` before giving up
+2. Specific error codes (`node_unavailable`, `rate_limited`, `wallet_conflict`) from API
+3. Pre-flight `/api/health` check in OnboardingModal catches node downtime before session creation
+4. `$transaction` around address index to prevent race condition on concurrent creates
+5. Rate limit bumped 10 → 20/min (10 too tight for demo scenarios)
+
+**Rule:** Any user-facing operation that depends on external services (RPC, DB) must: (a) retry at least once on transient failure, (b) return a specific error code, (c) show the user what actually went wrong. Generic "something went wrong" errors are debugging nightmares.
+
+**Files:** `session-wallet.ts`, `api/session/route.ts`, `OnboardingModal.tsx`, `useGameSession.ts`, `rate-limit.ts`
+
+### [2026-02-18] Never Assume Production Config from .env.example
+**Problem:** Wrongly told user production was running `legacy_per_game_v1` mode and built an entire deployment plan around switching it — but production had ALREADY been running `session_nonce_v1` for days.
+**Root Cause:** Grepped `.env.example` and `.env.mainnet.example` (both show legacy default), concluded that was production config. The real `.env.mainnet` lives only on the VPS (`/opt/zcashino/.env.mainnet`, chmod 600, gitignored) and had `PROVABLY_FAIR_MODE=session_nonce_v1` already set.
+**Rule:** When answering questions about production state:
+1. **Never infer production config from example files or defaults** — always SSH and check the actual `.env.mainnet`
+2. **Trust the user's memory over code exploration** — if user says "I thought we changed X", verify on VPS before contradicting
+3. **Check `docker exec <container> printenv <VAR>`** to see what the running container actually has
+4. **Check the health endpoint first** (`curl http://localhost:3000/api/health`) — it reports `fairnessMode` directly
+
+### [2026-02-18] Deposit Addresses Are Unified (u...), Not Transparent (t...)
+**Correction:** Users see the unified address (`u1...`) for deposits, NOT transparent. The system generates both via `z_getaddressforaccount` + `z_listunifiedreceivers`, stores both in `DepositWallet`, but displays the unified address in UI. The transparent companion is used internally by deposit sweep only.
+
 ## Code Patterns
 
 ### Auto-bet Feature Pattern
@@ -166,13 +192,30 @@ const selectedBetRef = useRef<number>(0.1)
 useEffect(() => { sessionRef.current = session }, [session])
 ```
 
-### Commitment Pool Pattern
-- `src/lib/provably-fair/commitment-pool.ts` — pool management
-- `src/lib/provably-fair/blockchain.ts` — on-chain commitment creation
-- `src/lib/services/commitment-pool-manager.ts` — background 5-min interval
-- Creates 1 commitment per cycle (Sapling witness constraint)
-- Pool target: 15, minimum healthy: 5
-- Falls back to on-demand creation if pool empty
+### Provably Fair: Session Nonce Mode (PRODUCTION)
+**Production runs `PROVABLY_FAIR_MODE=session_nonce_v1`** — set in `.env.mainnet` on VPS (not in repo).
+
+- **1 seed per SESSION**, nonce increments per hand (NOT 1 commitment per hand)
+- Pool manager: `src/lib/services/session-seed-pool-manager.ts` (NOT `commitment-pool-manager.ts`)
+- Seed table: `FairnessSeed` (status: available → assigned → revealed)
+- Session state: `SessionFairnessState` (links session to seed, tracks `nextNonce`)
+- Session fairness logic: `src/lib/provably-fair/session-fairness.ts`
+- Game route branches at `src/app/api/game/route.ts:234` → `handleStartGameSessionNonce()`
+- `ensureActiveFairnessState()` lazily creates state on first game start
+- `allocateNonce()` atomically increments `nextNonce` per hand
+- `SESSION_SEED_ON_DEMAND_CREATE=true` — games work even if pool is empty
+- Pool target: 15, min healthy: 5, refill: 1 seed per 5-min cycle
+- Stale reclaim: seeds assigned to sessions inactive 24h+ with nextNonce=0
+- Server seed hidden until player rotates seed (NOT revealed per-game like legacy)
+
+**Legacy mode (`legacy_per_game_v1`) still exists but is NOT used in production.**
+- Legacy pool: `src/lib/provably-fair/commitment-pool.ts` + `commitment-pool-manager.ts`
+- Legacy burns 1 blockchain commitment per hand (expensive, slow to refill)
+
+### Admin Pool Status
+- `/api/admin/pool` and `/api/health` auto-detect mode
+- Session mode shows: available, assigned, revealed, expired
+- Legacy mode shows: available, used, expired
 
 ### Deployment Pattern
 ```bash
@@ -196,8 +239,10 @@ docker exec mainnet-zcashd-1 zcash-cli -rpcuser=$RPC_USER -rpcpassword=$RPC_PASS
 # Per-pool breakdown (important — z_gettotalbalance hides pool distribution):
 docker exec mainnet-zcashd-1 zcash-cli -rpcuser=$RPC_USER -rpcpassword=$RPC_PASS z_getbalanceforaccount 0 1
 
-# Check DB from host:
-sqlite3 /var/lib/docker/volumes/mainnet_app-data/_data/zcashino.db "SELECT status, count(*) FROM SeedCommitment GROUP BY status;"
+# Check DB from host (session_nonce_v1 mode):
+sqlite3 /var/lib/docker/volumes/mainnet_app-data/_data/zcashino.db "SELECT status, count(*) FROM FairnessSeed GROUP BY status;"
+# Legacy mode (not used in production):
+# sqlite3 /var/lib/docker/volumes/mainnet_app-data/_data/zcashino.db "SELECT status, count(*) FROM SeedCommitment GROUP BY status;"
 ```
 
 **CRITICAL: Never rsync source files directly to VPS.** Always commit → push → git pull on VPS → rebuild. Direct rsync can overwrite deployment-specific patches and introduce stale files into the Docker build context.

@@ -7,7 +7,7 @@ import { isKillSwitchActive } from '@/lib/kill-switch'
 import { requirePlayerSession, setPlayerSessionCookie } from '@/lib/auth/player-session'
 import { parseWithSchema, sessionBodySchema } from '@/lib/validation/api-schemas'
 import { getProvablyFairMode, LEGACY_PER_GAME_MODE } from '@/lib/provably-fair/mode'
-import { getPublicFairnessState } from '@/lib/provably-fair/session-fairness'
+import { getPublicFairnessStateIfExists } from '@/lib/provably-fair/session-fairness'
 import { getAdminSettings } from '@/lib/admin/runtime-settings'
 
 // Demo mode: Generate a fake wallet address for testing
@@ -77,7 +77,23 @@ async function createSessionResponse(session: {
 
   if (fairnessMode === 'session_nonce_v1') {
     try {
-      fairness = await getPublicFairnessState(session.id)
+      // Read-only: return existing state without claiming a seed from the pool.
+      // Seeds are claimed lazily on first game start, not on session read.
+      const existing = await getPublicFairnessStateIfExists(session.id)
+      if (existing) {
+        fairness = existing
+      } else {
+        fairness = {
+          mode: fairnessMode,
+          serverSeedHash: null,
+          commitmentTxHash: null,
+          commitmentBlock: null,
+          commitmentTimestamp: null,
+          clientSeed: null,
+          nextNonce: null,
+          canEditClientSeed: false,
+        }
+      }
     } catch (error) {
       console.error('[SessionAPI] Failed to load session fairness state:', error)
       fairness = {

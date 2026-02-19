@@ -551,6 +551,62 @@ Safe because: a seed with nonce 0 has never been used to derive a game outcome, 
 
 ---
 
+### Session creation fails with generic error when zcashd is briefly unreachable (2026-02-18)
+
+**Symptom:** User clicks "Deposit Real ZEC", modal transitions to error step showing "Something Went Wrong / Failed to create session. Please try again." Error is transient — resolves on its own after zcashd recovers.
+
+**Root Cause (5 compounding issues):**
+
+1. **No RPC retry:** `createDepositWalletForSession()` made a single `checkNodeStatus()` call with 5s timeout. One timeout = immediate failure.
+
+2. **Generic error masking:** API catch block returned `{ error: 'Failed to get session' }` for ALL failures — node down, DB error, rate limit, race condition. Frontend couldn't distinguish or show helpful message.
+
+3. **No pre-flight check:** OnboardingModal called `onCreateRealSession()` directly. The 5s+ timeout on wallet creation left the user staring at a spinner before getting an unhelpful error.
+
+4. **Address index race condition:** `findFirst({ orderBy: addressIndex: 'desc' })` + increment was not atomic. Two concurrent session creates could collide on the same index.
+
+5. **Rate limit too tight:** `session-create` bucket was 10 req/60s — easy to hit during demos or rapid testing.
+
+**Fix:**
+
+```typescript
+// 1. Retry with 2s backoff (session-wallet.ts)
+let nodeStatus = await checkNodeStatus(network)
+if (!nodeStatus.connected) {
+  await new Promise(resolve => setTimeout(resolve, 2000))
+  nodeStatus = await checkNodeStatus(network)
+}
+
+// 2. Specific error codes (api/session/route.ts)
+return NextResponse.json({
+  walletError: 'node_unavailable',
+  walletErrorMessage: 'The Zcash node is temporarily unavailable...',
+})
+
+// 3. Pre-flight health check (OnboardingModal.tsx)
+const healthRes = await fetch('/api/health', { signal: AbortSignal.timeout(4000) })
+if (health.zcashNode && !health.zcashNode.connected) {
+  setErrorMessage('The Zcash node is temporarily offline...')
+  return
+}
+
+// 4. Atomic address index (session-wallet.ts)
+const wallet = await prisma.$transaction(async (tx) => {
+  const lastWallet = await tx.depositWallet.findFirst({ orderBy: { addressIndex: 'desc' } })
+  const addressIndex = (lastWallet?.addressIndex ?? -1) + 1
+  return tx.depositWallet.create({ data: { sessionId, addressIndex, ... } })
+})
+
+// 5. Rate limit bump (rate-limit.ts)
+'session-create': { maxRequests: 20, windowMs: 60 * 1000 }
+```
+
+**Lesson:** Every user-facing operation that depends on external services (RPC, DB) needs three things: retry on transient failure, specific error codes, and a user message that explains what happened. "Something went wrong" during a live demo is unacceptable.
+
+**Files:** `session-wallet.ts`, `api/session/route.ts`, `OnboardingModal.tsx`, `useGameSession.ts`, `rate-limit.ts`
+
+---
+
 ### Deposit modal renders empty — black screen (2026-02-18)
 
 **Symptom:** Clicking "Deposit" → "Real ZEC" shows a dark backdrop with no modal content. The modal container is only 2px tall with zero children. Affects both brands (21z and CypherJester).
@@ -625,3 +681,25 @@ The `handleRealSelect` callback called `setStep('deposit')` unconditionally, but
 **Rule:** Game logic = server-side. UI state = client-side. Never blur this boundary. When adding any new game feature, ask: "does this client-side state change affect what hands/outcomes are possible?" If yes, it must round-trip through the server.
 
 **Files:** `src/lib/game/blackjack.ts`, `src/app/api/game/route.ts`, `src/components/game/BlackjackGame.tsx`, `src/lib/validation/api-schemas.ts`
+
+---
+
+## Investigation Process — Gotchas (2026-02-18)
+
+### Never infer production config from .env.example files
+
+**Symptom:** Incorrectly told user production was running `legacy_per_game_v1` fairness mode and planned an unnecessary deployment to "switch" it — when production had already been running `session_nonce_v1` for days.
+
+**Root Cause:** Grepped `.env.example` and `.env.mainnet.example` in the repo (both showed `legacy_per_game_v1` as default). Concluded this was production config. The actual `.env.mainnet` lives only on the VPS at `/opt/zcashino/.env.mainnet` (chmod 600, gitignored) — it already had `PROVABLY_FAIR_MODE=session_nonce_v1`.
+
+Also ignored the user's own statement ("I thought we changed the architecture") which was correct — compounding the error by second-guessing the user.
+
+**Fix — Investigation Protocol for Production Questions:**
+1. **Check the running container first:** `ssh root@93.95.226.186 "docker exec mainnet-app-1 printenv <VAR>"`
+2. **Check the health endpoint:** `curl http://localhost:3000/api/health` — it reports `fairnessMode` directly
+3. **Check the actual env file:** `ssh root@93.95.226.186 "grep <VAR> /opt/zcashino/.env.mainnet"`
+4. **Never trust `.env.example`** — these are templates for initial setup, not production truth
+5. **Never trust code defaults** — `mode.ts` defaults to `legacy_per_game_v1` when env is unset, but that doesn't mean the env IS unset
+6. **Trust the user's memory** — if they say "we changed X", verify on VPS before contradicting
+
+**Lesson:** Production state = what's running on the VPS. Repo state = what code supports. These are different things. Always verify the former when answering questions about "what is production doing."

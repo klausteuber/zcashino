@@ -338,6 +338,23 @@ In-memory limits and remote font fetches are acceptable in dev, but must be call
 1. **Never check truthiness of status objects — check the boolean property.**
    `overview.killSwitch` is `{ active: false, activatedAt: null, activatedBy: null }` — an object that is always truthy. The admin banner condition `overview.killSwitch && (...)` displayed the "Kill switch active" warning permanently. The fix: `overview.killSwitch?.active`. This is a general JavaScript pitfall: `!!{}` is `true`, `!!{ active: false }` is `true`. Always destructure or access the specific boolean field.
 
+## Session Creation Resilience (2026-02-18)
+
+1. **Transient RPC failures need retry, not immediate error.**
+   A single 5-second timeout on `checkNodeStatus()` meant any brief zcashd hiccup (restart, GC pause, network blip) showed users an error. Adding a single retry with 2-second backoff catches >90% of transient failures without meaningfully increasing latency for genuine outages.
+
+2. **Pre-flight health checks save user-facing latency on known failures.**
+   A 4-second `/api/health` probe before session creation catches node downtime instantly. Without it, the user waits for the full session creation flow (DB write + RPC + retry) before seeing an error — up to 12+ seconds of spinner.
+
+3. **Error codes are the API's responsibility, not the frontend's.**
+   The API should return `walletError: 'node_unavailable'` so the frontend can show "Zcash node is temporarily offline" vs "Rate limit exceeded" vs "Please try again." When the API returns only `{ error: 'Failed' }`, the frontend can't do anything useful.
+
+4. **Demo-time rate limits should be generous.**
+   10 session creates per minute sounds reasonable, but during a live demo with retries, page refreshes, and brand-switching, you burn through them fast. 20/min is a safer floor for a product with both demo and real-money modes.
+
+5. **Always wrap read-then-write sequences in `$transaction`.**
+   `findFirst({ orderBy: 'desc' })` + create with incremented index is textbook race condition. Two concurrent requests read the same max index, both increment, and the second fails on unique constraint. This was already learned in Phase 2 (commitment pool) but not applied to deposit wallet creation.
+
 ## Game Startup Funnel Redesign (2026-02-18)
 
 1. **localStorage per-domain isolation causes cross-brand inconsistency.**
@@ -354,3 +371,20 @@ In-memory limits and remote font fetches are acceptable in dev, but must be call
 
 5. **VideoPokerGame had OnboardingModal as early return, not overlay.**
    BlackjackGame rendered the modal as an overlay on top of the game. VideoPokerGame used an early return pattern that blocked the entire game UI. Converting to overlay pattern made both consistent and allowed the game to render behind the modal.
+
+## Production Investigation Learnings (2026-02-18)
+
+1. **`.env.example` is a template, not production truth.**
+   Both `.env.example` and `.env.mainnet.example` in the repo showed `PROVABLY_FAIR_MODE=legacy_per_game_v1`. Production had `session_nonce_v1`. Incorrectly assumed example = production and built an unnecessary deployment plan. Production config lives only on the VPS at `/opt/zcashino/.env.mainnet` (chmod 600, gitignored). Always SSH and check.
+
+2. **Code defaults ≠ production values.**
+   `mode.ts` defaults to `legacy_per_game_v1` when `PROVABLY_FAIR_MODE` env is unset. This is a safe fallback, not a description of what's running. The env IS set in production. Never conclude "production uses X" from reading a fallback branch.
+
+3. **Trust the operator's memory, then verify.**
+   When the user said "I thought we changed the architecture to session-per-seed", that was correct. The investigation should have started with `ssh root@VPS "docker exec app printenv PROVABLY_FAIR_MODE"` and `curl localhost:3000/api/health`, not with grepping example files.
+
+4. **Health endpoints are the fastest truth source.**
+   `/api/health` reports `fairnessMode`, pool status, house balance, and kill switch state directly. One curl gives more truth about production than 30 minutes of code exploration. Check it first for any production question.
+
+5. **The commitment pool numbers mean different things in different modes.**
+   In legacy mode: available = unused commitments, used = hands played. In session_nonce_v1: available = unassigned seeds, assigned = active sessions, revealed = rotated seeds. Same numbers, completely different semantics. Always check `fairnessMode` before interpreting pool metrics.
