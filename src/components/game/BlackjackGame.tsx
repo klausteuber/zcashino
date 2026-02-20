@@ -963,7 +963,10 @@ export default function BlackjackGame() {
               <div className="text-7xl sm:text-9xl font-display font-bold blackjack-shimmer-text drop-shadow-lg">
                 BLACKJACK!
               </div>
-              <div className="text-4xl sm:text-5xl mt-3 text-masque-gold star-burst star-burst-delay-2">
+              <div className="text-lg sm:text-xl mt-2 text-masque-gold/80 font-mono tracking-widest uppercase">
+                Pays 3:2
+              </div>
+              <div className="text-4xl sm:text-5xl mt-2 text-masque-gold star-burst star-burst-delay-2">
                 {'\u2605'} 21 {'\u2605'}
               </div>
             </div>
@@ -1339,6 +1342,18 @@ export default function BlackjackGame() {
                   className="bg-crimson-mask/50 text-bone-white px-8 py-3 rounded-lg font-bold hover:bg-crimson-mask/70 hover:scale-105 active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:hover:scale-100 shadow-lg"
                 >
                   SPLIT
+                </button>
+              )}
+              {availableActions.includes('surrender') && (
+                <button
+                  onClick={() => {
+                    playSound('buttonClick')
+                    handleAction('surrender')
+                  }}
+                  disabled={isLoading}
+                  className="bg-transparent border border-venetian-gold/40 text-venetian-gold/80 px-6 py-3 rounded-lg font-bold hover:bg-venetian-gold/10 hover:scale-105 active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:hover:scale-100"
+                >
+                  SURRENDER
                 </button>
               )}
             </div>

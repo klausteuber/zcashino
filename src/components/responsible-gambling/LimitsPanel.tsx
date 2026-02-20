@@ -94,7 +94,7 @@ export default function LimitsPanel({
             className="w-full px-4 py-2 bg-midnight-black/50 border border-masque-gold/30 rounded-lg text-bone-white placeholder-venetian-gold/40 focus:border-masque-gold focus:outline-none text-sm"
           />
           <p className="text-venetian-gold/50 text-xs mt-1">
-            Maximum ZEC you can deposit per day. Planned — not yet enforced on deposits.
+            Maximum ZEC you can deposit in a rolling 24-hour window. Enforced on all confirmed deposits.
           </p>
         </div>
 

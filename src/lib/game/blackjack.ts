@@ -506,7 +506,8 @@ function executeSplit(state: BlackjackGameState): BlackjackGameState {
 }
 
 /**
- * Legacy-only surrender handler kept for historical action replay compatibility.
+ * Late surrender: returns 50% of bet. Only available on initial two cards,
+ * unsplit hand, not doubled. Gated by gameRules.allowSurrender in getAvailableActions().
  */
 function executeSurrender(state: BlackjackGameState): BlackjackGameState {
   const currentHand = state.playerHands[state.currentHandIndex]

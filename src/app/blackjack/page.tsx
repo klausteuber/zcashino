@@ -63,6 +63,10 @@ export default async function BlackjackPage() {
                   Split a pair into two separate hands
                 </li>
                 <li>
+                  <strong className="text-bone-white">Surrender</strong> &mdash;
+                  Forfeit your hand and recover half your bet (first two cards only)
+                </li>
+                <li>
                   <strong className="text-bone-white">Insurance</strong> &mdash;
                   Side bet when dealer shows an Ace (pays 2:1)
                 </li>
@@ -155,6 +159,12 @@ export default async function BlackjackPage() {
                   P
                 </kbd>{' '}
                 Split
+              </span>
+              <span>
+                <kbd className="px-2 py-1 bg-midnight-black/60 rounded text-masque-gold font-mono text-xs">
+                  R
+                </kbd>{' '}
+                Surrender
               </span>
               <span>
                 <kbd className="px-2 py-1 bg-midnight-black/60 rounded text-masque-gold font-mono text-xs">

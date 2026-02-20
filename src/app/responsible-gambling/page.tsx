@@ -84,7 +84,7 @@ export default function ResponsibleGamblingPage() {
             <div className="space-y-4">
               <div className="border-b border-masque-gold/10 pb-4">
                 <h3 className="text-lg font-semibold text-bone-white mb-1">Deposit Limits</h3>
-                <p className="text-venetian-gold/70">Planned feature. Deposit-limit enforcement is not active yet.</p>
+                <p className="text-venetian-gold/70">Enforced now. When set, deposits that would exceed your rolling 24-hour limit are not credited to your balance.</p>
               </div>
               <div className="border-b border-masque-gold/10 pb-4">
                 <h3 className="text-lg font-semibold text-bone-white mb-1">Loss Limits</h3>

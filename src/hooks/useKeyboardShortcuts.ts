@@ -21,6 +21,7 @@ const ACTION_KEYS: Record<string, BlackjackAction> = {
   s: 'stand',
   d: 'double',
   p: 'split',
+  r: 'surrender',
 }
 
 export function useKeyboardShortcuts({

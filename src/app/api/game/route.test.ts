@@ -413,16 +413,18 @@ describe('/api/game POST race/idempotency', () => {
     expect(reserveFundsMock).not.toHaveBeenCalled()
   })
 
-  it('rejects surrender action payload', async () => {
+  it('routes surrender action to game handler', async () => {
     const response = await POST(makeRequest({
       action: 'surrender',
       sessionId: 'session-1',
       gameId: 'game-1',
     }))
 
-    expect(response.status).toBe(400)
+    // Surrender is a valid action — passes Zod validation and routes through
+    // to handleGameAction, which hits session lookup first (404, not 400).
+    expect(response.status).toBe(404)
     await expect(response.json()).resolves.toMatchObject({
-      error: 'Invalid request payload',
+      error: 'Session not found',
     })
   })
 
