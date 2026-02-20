@@ -1,6 +1,7 @@
 import Image from 'next/image'
 import { BrandWordmark } from '@/components/brand/BrandWordmark'
 import { BreadcrumbJsonLd } from '@/components/seo/JsonLd'
+import VerifiedHandsFeed from '@/components/feed/VerifiedHandsFeed'
 import JesterLogo from '@/components/ui/JesterLogo'
 import { getBrandUrlForPath } from '@/lib/brand/config'
 import { getServerBrand } from '@/lib/brand/server'
@@ -29,6 +30,9 @@ export default async function Home() {
               </a>
               <a href="/video-poker" className="hover:text-masque-gold transition-colors">
                 Video Poker
+              </a>
+              <a href="/feed" className="hover:text-masque-gold transition-colors">
+                Verified Hands
               </a>
               <a href="/provably-fair" className="hover:text-masque-gold transition-colors">
                 Provably Fair
@@ -184,6 +188,23 @@ export default async function Home() {
           </div>
         </section>
 
+        <section className="container mx-auto px-4 py-16">
+          <div className="bg-midnight-black/40 backdrop-blur-sm rounded-xl p-8 border border-masque-gold/20">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-display font-semibold text-bone-white">
+                Recent Verified Hands
+              </h2>
+              <a
+                href="/feed"
+                className="text-sm text-masque-gold hover:underline transition-colors"
+              >
+                View all &rarr;
+              </a>
+            </div>
+            <VerifiedHandsFeed limit={5} compact />
+          </div>
+        </section>
+
         <footer className="border-t border-masque-gold/20 bg-midnight-black/40 mt-16">
           <div className="container mx-auto px-4 py-8">
             <div className="grid md:grid-cols-4 gap-8">
@@ -207,6 +228,7 @@ export default async function Home() {
                 <h4 className="font-semibold mb-4 text-bone-white">Resources</h4>
                 <ul className="space-y-2 text-venetian-gold/60 text-sm">
                   <li><a href="/provably-fair" className="hover:text-masque-gold transition-colors">Provably Fair</a></li>
+                  <li><a href="/feed" className="hover:text-masque-gold transition-colors">Verified Hands</a></li>
                   <li><a href="/responsible-gambling" className="hover:text-masque-gold transition-colors">Responsible Gambling</a></li>
                   <li><a href="/terms" className="hover:text-masque-gold transition-colors">Terms of Service</a></li>
                   <li><a href="/privacy" className="hover:text-masque-gold transition-colors">Privacy Policy</a></li>

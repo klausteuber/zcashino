@@ -80,6 +80,7 @@ export default async function ProvablyFairPage() {
           </Link>
           <nav className="flex items-center gap-6 text-sm">
             <Link href="/blackjack" className="text-venetian-gold/70 hover:text-masque-gold transition-colors">Blackjack</Link>
+            <Link href="/feed" className="text-venetian-gold/70 hover:text-masque-gold transition-colors">Verified Hands</Link>
             <Link href="/verify" className="text-venetian-gold/70 hover:text-masque-gold transition-colors">Verify a Game</Link>
             <Link href="/reserves" className="text-venetian-gold/70 hover:text-masque-gold transition-colors">Reserves</Link>
           </nav>
