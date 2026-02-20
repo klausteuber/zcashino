@@ -126,9 +126,8 @@ export async function checkAndRefillSessionSeedPool(
     const status = await getSessionSeedPoolStatus()
     cachedPoolStatus = status
 
-    // Only refill when the pool is at/below the configured threshold.
-    // This avoids constantly creating new commitments when the pool is only slightly below target.
-    if (status.available > tuning.autoRefillThreshold) {
+    // Stop refilling once we've reached the target pool size.
+    if (status.available >= tuning.targetSize) {
       return
     }
 
