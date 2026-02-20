@@ -214,7 +214,12 @@ export function useGameSession(): UseGameSessionReturn {
 
   // Handle deposit completion
   const handleDepositComplete = useCallback((balance: number) => {
-    setSession(prev => (prev ? { ...prev, balance, isAuthenticated: true } : null))
+    setSession(prev => {
+      if (!prev) return null
+      // Don't overwrite existing balance with 0 (defensive: 0 means no new deposit detected)
+      const newBalance = balance > 0 ? balance : prev.balance
+      return { ...prev, balance: newBalance, isAuthenticated: true }
+    })
     setShowOnboarding(false)
     setOnboardingMode(null)
     localStorage.setItem('zcashino_onboarding_seen', 'true')

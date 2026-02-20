@@ -111,24 +111,16 @@ export function useDepositPolling(
         }
       }
 
-      // Check if deposit is now confirmed (balance increased)
-      if (data.newDeposit || data.authenticated) {
+      // Check if a genuinely new deposit landed
+      // Note: data.authenticated is true for ANY already-authenticated session,
+      // so it must NOT be used as a trigger — only data.newDeposit is reliable.
+      if (data.newDeposit) {
         setStatus(prev => ({
           ...prev,
           status: 'confirmed',
           confirmations: REQUIRED_CONFIRMATIONS
         }))
         onConfirmed?.(data.depositAmount || status.amount || 0)
-      }
-
-      // Also check session authentication status
-      if (data.session?.isAuthenticated && status.status === 'waiting') {
-        setStatus(prev => ({
-          ...prev,
-          status: 'confirmed',
-          confirmations: REQUIRED_CONFIRMATIONS
-        }))
-        onConfirmed?.(data.session.balance || 0)
       }
 
     } catch (err) {
