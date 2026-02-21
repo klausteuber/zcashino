@@ -1,6 +1,15 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useSyncExternalStore } from 'react'
+
+// Read brand from DOM without triggering extra renders
+const noopSubscribe = () => () => {}
+const getIs21zClient = () => document.body.dataset.brand === '21z'
+const getIs21zServer = () => false
+
+function useIs21z(): boolean {
+  return useSyncExternalStore(noopSubscribe, getIs21zClient, getIs21zServer)
+}
 
 // ─── CypherJester confetti shapes (ornate: diamond, star, spade, streamer, chip, crown, strip, heart) ───
 
@@ -120,7 +129,7 @@ const Z21_CHIPS = [
 
 // ─── Build 24 particles by cycling through 8 shapes × 3 repeats ───
 
-function buildParticles(shapes: JSX.Element[]): number[] {
+function buildParticles(shapes: React.JSX.Element[]): number[] {
   return Array.from({ length: 24 }, (_, i) => i)
 }
 
@@ -129,11 +138,7 @@ const PARTICLE_INDICES = buildParticles([])
 // ─── Components ───
 
 export function ConfettiBurst() {
-  const [is21z, setIs21z] = useState(false)
-
-  useEffect(() => {
-    setIs21z(document.body.dataset.brand === '21z')
-  }, [])
+  const is21z = useIs21z()
 
   const shapes = is21z ? Z21_SHAPES : CYPHER_SHAPES
 
@@ -149,11 +154,7 @@ export function ConfettiBurst() {
 }
 
 export function ChipSlide() {
-  const [is21z, setIs21z] = useState(false)
-
-  useEffect(() => {
-    setIs21z(document.body.dataset.brand === '21z')
-  }, [])
+  const is21z = useIs21z()
 
   const chips = is21z ? Z21_CHIPS : CYPHER_CHIPS
 

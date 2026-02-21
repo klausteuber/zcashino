@@ -155,6 +155,13 @@ body[data-brand="21z"] .card-suit-black {
   color: var(--text-primary);
 }
 
+/* Card face SVG sizing — scales within center area */
+.card-face-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
 .playing-card.red {
   color: var(--card-red);
 }
