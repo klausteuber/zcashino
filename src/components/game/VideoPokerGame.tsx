@@ -13,6 +13,7 @@ import VideoPokerHand from '@/components/game/VideoPokerHand'
 import PaytableDisplay from '@/components/game/PaytableDisplay'
 import { ChipStack } from '@/components/game/Chip'
 import { useGameSession } from '@/hooks/useGameSession'
+import { ConfettiBurst, ChipSlide } from '@/components/game/WinCelebration'
 import { OnboardingModal } from '@/components/onboarding/OnboardingModal'
 import { DemoBanner } from '@/components/onboarding/DemoBanner'
 import { DemoWinNudge } from '@/components/onboarding/DemoWinNudge'
@@ -543,7 +544,12 @@ export default function VideoPokerGame() {
       )}
 
       {/* === GAME ZONE === */}
-      <div className="bg-midnight-black/15 rounded-2xl cyber-panel p-3 sm:p-5 space-y-4">
+      <div className={`bg-midnight-black/15 rounded-2xl cyber-panel p-3 sm:p-5 space-y-4 ${
+        resultAnimation === 'royal_flush' || resultAnimation === 'natural_royal_flush'
+          ? 'table-flash-blackjack'
+          : resultAnimation === 'straight_flush' || resultAnimation === 'four_of_a_kind' || resultAnimation === 'four_deuces'
+            ? 'table-flash-win' : ''
+      }`}>
         {/* Variant selector */}
         <div className="flex justify-center gap-2">
           <button
@@ -582,6 +588,13 @@ export default function VideoPokerGame() {
           {/* Result overlay */}
           {resultDisplay && (
             <div className="absolute inset-0 flex items-center justify-center z-30 pointer-events-none">
+              {(resultAnimation === 'royal_flush' || resultAnimation === 'natural_royal_flush' ||
+                resultAnimation === 'straight_flush' || resultAnimation === 'four_of_a_kind' || resultAnimation === 'four_deuces') && (
+                <>
+                  <ConfettiBurst />
+                  <ChipSlide />
+                </>
+              )}
               <div className={`text-3xl sm:text-4xl lg:text-5xl font-display font-bold ${resultDisplay.className} ${resultDisplay.animClass}`}>
                 {resultDisplay.text}
                 {gameState && gameState.lastPayout > 0 && (

@@ -18,6 +18,7 @@ import JesterLogo from '@/components/ui/JesterLogo'
 import { useGameSounds } from '@/hooks/useGameSounds'
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 import { useGameSession } from '@/hooks/useGameSession'
+import { ConfettiBurst, ChipSlide } from '@/components/game/WinCelebration'
 import type { SessionData } from '@/hooks/useGameSession'
 import { OnboardingModal } from '@/components/onboarding/OnboardingModal'
 
@@ -950,10 +951,15 @@ export default function BlackjackGame() {
       )}
 
       {/* Game Area */}
-      <div className="container mx-auto px-4 py-8 relative">
+      <div className={`container mx-auto px-4 py-8 relative ${
+        resultAnimation === 'blackjack' ? 'table-flash-blackjack' :
+        resultAnimation === 'win' ? 'table-flash-win' : ''
+      }`}>
         {/* Hand Outcome Overlay — Blackjack celebration */}
         {resultAnimation === 'blackjack' && (
           <div className="absolute inset-0 flex items-center justify-center z-30 pointer-events-none">
+            <ConfettiBurst />
+            <ChipSlide />
             <div className="outcome-overlay-blackjack text-center">
               <div className="relative">
                 <span className="star-burst star-burst-delay-1 absolute -top-8 -left-12 text-3xl text-masque-gold opacity-0">{'\u2605'}</span>
@@ -975,6 +981,12 @@ export default function BlackjackGame() {
         {/* Hand Outcome Overlay — Win/Loss/Push */}
         {resultAnimation && resultAnimation !== 'blackjack' && (
           <div className="absolute inset-0 flex items-center justify-center z-30 pointer-events-none">
+            {resultAnimation === 'win' && (
+              <>
+                <ConfettiBurst />
+                <ChipSlide />
+              </>
+            )}
             <div className={`outcome-overlay text-center ${
               resultAnimation === 'win' ? 'text-green-400' :
               resultAnimation === 'loss' ? 'text-blood-ruby' :

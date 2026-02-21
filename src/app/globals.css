@@ -704,6 +704,188 @@ body[data-brand="21z"] .brand-cardback-21z {
 .star-burst-delay-2 { animation-delay: 0.25s; }
 .star-burst-delay-3 { animation-delay: 0.4s; }
 
+/* ================================
+   WIN CELEBRATION: CONFETTI BURST
+   ================================ */
+
+@keyframes confettiBurst1 {
+  0%   { opacity: 1; transform: translate(0, 0) rotate(0deg) scale(1); }
+  100% { opacity: 0; transform: translate(-120px, -180px) rotate(720deg) scale(0.3); }
+}
+@keyframes confettiBurst2 {
+  0%   { opacity: 1; transform: translate(0, 0) rotate(0deg) scale(1); }
+  100% { opacity: 0; transform: translate(150px, -160px) rotate(-540deg) scale(0.4); }
+}
+@keyframes confettiBurst3 {
+  0%   { opacity: 1; transform: translate(0, 0) rotate(0deg) scale(1); }
+  100% { opacity: 0; transform: translate(-80px, -220px) rotate(480deg) scale(0.2); }
+}
+@keyframes confettiBurst4 {
+  0%   { opacity: 1; transform: translate(0, 0) rotate(0deg) scale(1); }
+  100% { opacity: 0; transform: translate(100px, -140px) rotate(-360deg) scale(0.5); }
+}
+@keyframes confettiBurst5 {
+  0%   { opacity: 1; transform: translate(0, 0) rotate(0deg) scale(1); }
+  100% { opacity: 0; transform: translate(-160px, -100px) rotate(600deg) scale(0.3); }
+}
+@keyframes confettiBurst6 {
+  0%   { opacity: 1; transform: translate(0, 0) rotate(0deg) scale(1); }
+  100% { opacity: 0; transform: translate(130px, -200px) rotate(-480deg) scale(0.2); }
+}
+
+.confetti-container {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 31;
+  overflow: hidden;
+}
+
+.confetti-particle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 12px;
+  height: 12px;
+  opacity: 0;
+}
+.confetti-particle svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* Trajectory assignment — 6 paths across 24 particles */
+.confetti-particle:nth-child(6n+1) { animation: confettiBurst1 1.4s ease-out forwards; }
+.confetti-particle:nth-child(6n+2) { animation: confettiBurst2 1.3s ease-out forwards; }
+.confetti-particle:nth-child(6n+3) { animation: confettiBurst3 1.5s ease-out forwards; }
+.confetti-particle:nth-child(6n+4) { animation: confettiBurst4 1.2s ease-out forwards; }
+.confetti-particle:nth-child(6n+5) { animation: confettiBurst5 1.6s ease-out forwards; }
+.confetti-particle:nth-child(6n+6) { animation: confettiBurst6 1.35s ease-out forwards; }
+
+/* Staggered delays */
+.confetti-particle:nth-child(1)  { animation-delay: 0ms; }
+.confetti-particle:nth-child(2)  { animation-delay: 50ms; }
+.confetti-particle:nth-child(3)  { animation-delay: 80ms; }
+.confetti-particle:nth-child(4)  { animation-delay: 120ms; }
+.confetti-particle:nth-child(5)  { animation-delay: 40ms; }
+.confetti-particle:nth-child(6)  { animation-delay: 100ms; }
+.confetti-particle:nth-child(7)  { animation-delay: 150ms; }
+.confetti-particle:nth-child(8)  { animation-delay: 60ms; }
+.confetti-particle:nth-child(9)  { animation-delay: 180ms; }
+.confetti-particle:nth-child(10) { animation-delay: 30ms; }
+.confetti-particle:nth-child(11) { animation-delay: 200ms; }
+.confetti-particle:nth-child(12) { animation-delay: 70ms; }
+.confetti-particle:nth-child(13) { animation-delay: 130ms; }
+.confetti-particle:nth-child(14) { animation-delay: 90ms; }
+.confetti-particle:nth-child(15) { animation-delay: 220ms; }
+.confetti-particle:nth-child(16) { animation-delay: 110ms; }
+.confetti-particle:nth-child(17) { animation-delay: 160ms; }
+.confetti-particle:nth-child(18) { animation-delay: 45ms; }
+.confetti-particle:nth-child(19) { animation-delay: 190ms; }
+.confetti-particle:nth-child(20) { animation-delay: 75ms; }
+.confetti-particle:nth-child(21) { animation-delay: 140ms; }
+.confetti-particle:nth-child(22) { animation-delay: 210ms; }
+.confetti-particle:nth-child(23) { animation-delay: 170ms; }
+.confetti-particle:nth-child(24) { animation-delay: 55ms; }
+
+/* Positional offsets — scatter starting positions */
+.confetti-particle:nth-child(4n+1) { margin-left: -10px; margin-top: -5px; }
+.confetti-particle:nth-child(4n+2) { margin-left: 10px; margin-top: 5px; }
+.confetti-particle:nth-child(4n+3) { margin-left: -5px; margin-top: 10px; }
+.confetti-particle:nth-child(4n)   { margin-left: 5px; margin-top: -10px; }
+
+/* ================================
+   WIN CELEBRATION: CHIP SLIDE
+   ================================ */
+
+@keyframes chipSlideIn {
+  0%   { opacity: 0; transform: translateX(200px) rotate(0deg); }
+  30%  { opacity: 1; }
+  70%  { transform: translateX(-10px) rotate(-720deg); }
+  85%  { transform: translateX(5px) rotate(-700deg); }
+  100% { opacity: 0; transform: translateX(0) rotate(-720deg); }
+}
+
+.chip-slide-container {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  z-index: 29;
+}
+
+.chip-slide {
+  width: 36px;
+  height: 36px;
+  opacity: 0;
+  display: block;
+  margin-bottom: 4px;
+}
+.chip-slide svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.chip-slide:nth-child(1) { animation: chipSlideIn 1.2s ease-out 0.1s forwards; }
+.chip-slide:nth-child(2) { animation: chipSlideIn 1.2s ease-out 0.25s forwards; }
+.chip-slide:nth-child(3) { animation: chipSlideIn 1.2s ease-out 0.4s forwards; }
+.chip-slide:nth-child(4) { animation: chipSlideIn 1.2s ease-out 0.55s forwards; }
+
+/* ================================
+   WIN CELEBRATION: TABLE FLASH
+   ================================ */
+
+@keyframes tableFlash {
+  0%   { box-shadow: inset 0 0 0 0 rgba(201, 162, 39, 0); }
+  15%  { box-shadow: inset 0 0 60px 20px rgba(201, 162, 39, 0.15); }
+  100% { box-shadow: inset 0 0 0 0 rgba(201, 162, 39, 0); }
+}
+
+.table-flash-win {
+  animation: tableFlash 1s ease-out;
+}
+.table-flash-blackjack {
+  animation: tableFlash 1.2s ease-out;
+}
+
+/* 21z table flash: cyan */
+@keyframes tableFlash21z {
+  0%   { box-shadow: inset 0 0 0 0 rgba(0, 240, 255, 0); }
+  15%  { box-shadow: inset 0 0 80px 30px rgba(0, 240, 255, 0.1); }
+  100% { box-shadow: inset 0 0 0 0 rgba(0, 240, 255, 0); }
+}
+
+body[data-brand="21z"] .table-flash-win {
+  animation: tableFlash21z 1s ease-out;
+}
+body[data-brand="21z"] .table-flash-blackjack {
+  animation: tableFlash21z 1.2s ease-out;
+}
+
+/* ================================
+   WIN CELEBRATION: MOBILE REDUCTION
+   ================================ */
+
+@media (max-width: 640px) {
+  .confetti-particle:nth-child(n+13) {
+    display: none;
+  }
+  .confetti-particle {
+    width: 10px;
+    height: 10px;
+  }
+  .chip-slide {
+    width: 28px;
+    height: 28px;
+  }
+  .chip-slide:nth-child(n+3) {
+    display: none;
+  }
+}
+
 /* Tooltip styles */
 .tooltip {
   position: relative;
