@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react'
 import type { Card as CardType, Suit } from '@/types'
-import { FaceCardCenter, AceCenterpiece } from './CardFaces'
 
 interface CardProps {
   card: CardType
@@ -150,13 +149,7 @@ export default function Card({ card, size = 'md', className = '', dealDelay = 0,
 
       {/* Center */}
       <div className={`flex items-center justify-center ${suitClass}`}>
-        {card.rank === 'J' || card.rank === 'Q' || card.rank === 'K' ? (
-          <FaceCardCenter rank={card.rank} size={size} />
-        ) : card.rank === 'A' ? (
-          <AceCenterpiece suit={card.suit} size={size} />
-        ) : (
-          <span className={cSuit}>{symbol}</span>
-        )}
+        <span className={cSuit}>{symbol}</span>
       </div>
 
       {/* Bottom right (rotated) */}
