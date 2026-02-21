@@ -16,90 +16,66 @@ function useIs21z(): boolean {
   return useSyncExternalStore(noopSubscribe, getIs21zClient, getIs21zServer)
 }
 
-// ─── CypherJester Face Cards (baroque, masked figures with curves) ───
+// ─── CypherJester Face Cards (bold iconic silhouettes, curves allowed) ───
 
 function CypherJack({ accent }: { accent: string }) {
+  // Jester hat: 3-pointed cap with round bells at tips
   return (
     <svg viewBox="0 0 60 80" fill="none" xmlns="http://www.w3.org/2000/svg" className="card-face-svg">
-      <path d="M10 80 C 10 65, 50 65, 50 80 Z" fill="currentColor" />
-      <path d="M15 65 L10 50 L25 55 L35 45 L45 55 Z" fill="currentColor" stroke={accent} strokeWidth="2" strokeLinejoin="round"/>
-      <path d="M20 55 C 10 50, 15 30, 30 25 C 45 25, 45 45, 35 55 Z" fill="currentColor" />
-      <path d="M15 35 C 15 45, 35 48, 42 35 C 42 30, 35 30, 30 35 C 25 30, 15 28, 15 35 Z" fill="currentColor" stroke={accent} strokeWidth="2" strokeLinejoin="round"/>
-      <path d="M18 37 Q 22 35 25 37" fill="none" stroke={accent} strokeWidth="2" strokeLinecap="round"/>
-      <path d="M31 38 Q 35 36 38 38" fill="none" stroke={accent} strokeWidth="2" strokeLinecap="round"/>
-      <path d="M20 28 C 10 15, 5 25, 12 35" fill="none" stroke={accent} strokeWidth="2.5" strokeLinecap="round"/>
-      <path d="M35 26 C 45 15, 55 20, 48 35" fill="none" stroke={accent} strokeWidth="2.5" strokeLinecap="round"/>
-      <path d="M28 25 C 25 10, 35 10, 32 25" fill="none" stroke={accent} strokeWidth="2.5" strokeLinecap="round"/>
+      <path d="M10 70 C10 55 14 50 18 42 L10 14 L22 28 L30 10 L38 28 L50 14 L42 42 C46 50 50 55 50 70 Z" fill="currentColor" />
+      <path d="M7 14 a3 3 0 1 1 6 0 a3 3 0 1 1 -6 0 M27 10 a3 3 0 1 1 6 0 a3 3 0 1 1 -6 0 M47 14 a3 3 0 1 1 6 0 a3 3 0 1 1 -6 0" fill={accent} />
     </svg>
   )
 }
 
 function CypherQueen({ accent }: { accent: string }) {
+  // Elegant crown: 5 rounded arches + ornamental veil curve below
   return (
     <svg viewBox="0 0 60 80" fill="none" xmlns="http://www.w3.org/2000/svg" className="card-face-svg">
-      <path d="M12 80 C 15 65, 45 65, 48 80 Z" fill="currentColor" />
-      <path d="M22 65 C 30 70, 35 70, 42 62" fill="none" stroke={accent} strokeWidth="2" />
-      <path d="M22 60 C 25 50, 35 50, 40 60 Z" fill="currentColor" />
-      <path d="M18 55 C 10 45, 15 25, 30 25 C 45 25, 45 45, 35 55 Z" fill="currentColor" stroke={accent} strokeWidth="2" strokeLinejoin="round"/>
-      <path d="M18 45 C 25 45, 30 40, 25 35" fill="none" stroke={accent} strokeWidth="2" />
-      <path d="M25 25 L 22 15 L 28 20 L 32 12 L 36 20 L 40 16 L 38 25 Z" fill="currentColor" stroke={accent} strokeWidth="1.5" strokeLinejoin="round"/>
-      <path d="M38 35 C 50 25, 55 40, 45 50 C 50 45, 55 35, 40 38" fill="none" stroke={accent} strokeWidth="1.5" />
+      <path d="M10 55 L10 35 Q17 45 22 30 Q26 42 30 25 Q34 42 38 30 Q43 45 50 35 L50 55 Z" fill="currentColor" />
+      <path d="M15 60 Q30 75 45 60" fill="none" stroke={accent} strokeWidth="3" strokeLinecap="round" />
     </svg>
   )
 }
 
 function CypherKing({ accent }: { accent: string }) {
+  // Imperial crown: tall sharp points + cross on top
   return (
     <svg viewBox="0 0 60 80" fill="none" xmlns="http://www.w3.org/2000/svg" className="card-face-svg">
-      <path d="M5 80 L 10 60 L 50 60 L 55 80 Z" fill="currentColor" stroke={accent} strokeWidth="1.5" strokeLinejoin="round"/>
-      <path d="M15 60 L 15 45 M 45 60 L 45 45" fill="none" stroke={accent} strokeWidth="2" />
-      <path d="M20 55 L 25 65 L 35 60" fill="none" stroke={accent} strokeWidth="2" strokeLinejoin="round"/>
-      <path d="M15 45 L 22 55 L 40 50 L 42 30 L 30 25 L 18 30 Z" fill="currentColor" stroke={accent} strokeWidth="2" strokeLinejoin="round"/>
-      <path d="M18 38 L 26 36 L 28 38" fill="none" stroke={accent} strokeWidth="2" strokeLinejoin="round"/>
-      <path d="M16 28 L 12 10 L 25 20 L 32 8 L 38 22 L 48 15 L 42 30 Z" fill="currentColor" stroke={accent} strokeWidth="2" strokeLinejoin="round"/>
+      <path d="M8 70 L8 40 L16 50 L24 30 L30 42 L36 30 L44 50 L52 40 L52 70 Z" fill="currentColor" />
+      <path d="M28 30 L28 14 L32 14 L32 30 Z M24 20 L36 20 L36 24 L24 24 Z" fill={accent} />
     </svg>
   )
 }
 
-// ─── 21z Face Cards (angular geometric, zero curves) ───
+// ─── 21z Face Cards (bold iconic silhouettes, zero curves) ───
 
 function Z21Jack({ accent }: { accent: string }) {
+  // Hexagonal visor/shield with horizontal slit
   return (
     <svg viewBox="0 0 60 80" fill="none" xmlns="http://www.w3.org/2000/svg" className="card-face-svg">
-      <path d="M5 80 L 10 65 L 25 60 L 35 65 L 55 80 Z" fill="currentColor" />
-      <path d="M5 80 L 10 65 Z" fill="none" stroke={accent} strokeWidth="2" />
-      <path d="M35 65 L 50 55 L 55 80 Z" fill="currentColor" stroke={accent} strokeWidth="1.5" strokeLinejoin="miter"/>
-      <path d="M20 62 L 15 50 L 25 55 L 35 50 L 40 62 Z" fill="currentColor" stroke={accent} strokeWidth="1.5" strokeLinejoin="miter"/>
-      <path d="M15 45 L 25 55 L 40 50 L 45 25 L 30 15 L 18 25 Z" fill="currentColor" stroke={accent} strokeWidth="1.5" strokeLinejoin="miter"/>
-      <path d="M15 35 L 35 32 L 35 38 L 18 40 Z" fill={accent} />
-      <path d="M30 40 L 30 50 L 35 55" fill="none" stroke={accent} strokeWidth="1.5" strokeLinejoin="miter"/>
+      <path d="M10 20 L30 10 L50 20 L50 50 L30 65 L10 50 Z" fill="currentColor" />
+      <path d="M14 32 L46 32 L46 38 L14 38 Z" fill={accent} />
     </svg>
   )
 }
 
 function Z21Queen({ accent }: { accent: string }) {
+  // Angular 3-spike crown + diamond accent below
   return (
     <svg viewBox="0 0 60 80" fill="none" xmlns="http://www.w3.org/2000/svg" className="card-face-svg">
-      <path d="M8 80 L 12 65 L 25 70 L 35 70 L 48 65 L 52 80 Z" fill="currentColor" stroke={accent} strokeWidth="1.5" strokeLinejoin="miter"/>
-      <path d="M20 55 L 28 65 L 38 60 L 42 35 L 30 25 L 15 35 Z" fill="currentColor" />
-      <path d="M15 35 L 30 45 L 42 35 L 38 55 L 20 50 Z" fill="none" stroke={accent} strokeWidth="1.5" strokeLinejoin="miter"/>
-      <path d="M20 38 L 24 35 L 28 38 L 24 41 Z" fill={accent} />
-      <path d="M15 25 L 25 10 L 35 25 L 30 15 L 20 15 Z" fill="currentColor" stroke={accent} strokeWidth="1.5" strokeLinejoin="miter"/>
-      <path d="M25 18 L 30 5 L 38 15 L 32 20 Z" fill="currentColor" stroke={accent} strokeWidth="1.5" strokeLinejoin="miter"/>
-      <path d="M45 40 L 55 30 M 42 45 L 52 35 M 48 55 L 58 45" fill="none" stroke={accent} strokeWidth="1.5" />
+      <path d="M10 60 L10 40 L20 50 L30 20 L40 50 L50 40 L50 60 Z" fill="currentColor" />
+      <path d="M30 62 L24 68 L30 74 L36 68 Z" fill={accent} />
     </svg>
   )
 }
 
 function Z21King({ accent }: { accent: string }) {
+  // Heavy 5-spike crown + bold band at base
   return (
     <svg viewBox="0 0 60 80" fill="none" xmlns="http://www.w3.org/2000/svg" className="card-face-svg">
-      <path d="M5 80 L 5 65 L 20 55 L 40 55 L 55 65 L 55 80 Z" fill="currentColor" />
-      <path d="M5 65 L 15 70 L 25 60 M 55 65 L 45 70 L 35 60" fill="none" stroke={accent} strokeWidth="1.5" strokeLinejoin="miter"/>
-      <path d="M25 70 L 30 65 L 35 70 L 35 76 L 30 80 L 25 76 Z" fill="none" stroke={accent} strokeWidth="1.5" strokeLinejoin="miter"/>
-      <path d="M15 50 L 25 58 L 40 55 L 45 30 L 28 25 L 12 30 Z" fill="currentColor" stroke={accent} strokeWidth="1.5" strokeLinejoin="miter"/>
-      <path d="M12 38 L 35 34 L 35 42 L 15 44 Z" fill={accent} />
-      <path d="M12 28 L 8 10 L 22 22 L 30 5 L 38 20 L 50 12 L 42 28 Z" fill="currentColor" stroke={accent} strokeWidth="1.5" strokeLinejoin="miter"/>
+      <path d="M6 65 L6 35 L16 45 L24 20 L30 32 L36 20 L44 45 L54 35 L54 65 Z" fill="currentColor" />
+      <path d="M8 55 L52 55 L52 62 L8 62 Z" fill={accent} />
     </svg>
   )
 }
