@@ -217,11 +217,28 @@ function Z21AceSpades({ accent }: { accent: string }) {
 
 // ─── SVG size classes per card size ───
 
-const svgSizeClasses: Record<string, string> = {
+// For ace centerpieces (full center area)
+const aceSvgSizeClasses: Record<string, string> = {
   sm: 'w-8 h-auto',
   md: 'w-10 h-auto',
   lg: 'w-14 h-auto',
   xl: 'w-18 h-auto',
+}
+
+// For face card SVGs (smaller, below the rank letter)
+const faceSvgSizeClasses: Record<string, string> = {
+  sm: 'w-5 h-auto',
+  md: 'w-7 h-auto',
+  lg: 'w-9 h-auto',
+  xl: 'w-12 h-auto',
+}
+
+// Rank letter sizing per card size
+const faceRankClasses: Record<string, string> = {
+  sm: 'text-sm font-bold leading-none',
+  md: 'text-base font-bold leading-none',
+  lg: 'text-lg font-bold leading-none',
+  xl: 'text-xl font-bold leading-none',
 }
 
 // ─── Exported Components ───
@@ -261,8 +278,13 @@ export function FaceCardCenter({ rank, size = 'md' }: { rank: 'J' | 'Q' | 'K'; s
   if (!FaceComponent) return null
 
   return (
-    <div className={`flex items-center justify-center ${svgSizeClasses[size] || svgSizeClasses.md}`} aria-hidden="true">
-      <FaceComponent accent={accent} />
+    <div className="flex flex-col items-center gap-0" aria-hidden="true">
+      {/* Prominent rank letter — inherits suit color from parent */}
+      <span className={faceRankClasses[size] || faceRankClasses.md}>{rank}</span>
+      {/* Smaller SVG illustration below */}
+      <div className={faceSvgSizeClasses[size] || faceSvgSizeClasses.md}>
+        <FaceComponent accent={accent} />
+      </div>
     </div>
   )
 }
@@ -276,7 +298,7 @@ export function AceCenterpiece({ suit, size = 'md' }: { suit: Suit; size?: strin
   if (!AceComponent) return null
 
   return (
-    <div className={`flex items-center justify-center ${svgSizeClasses[size] || svgSizeClasses.md}`} aria-hidden="true">
+    <div className={`flex items-center justify-center ${aceSvgSizeClasses[size] || aceSvgSizeClasses.md}`} aria-hidden="true">
       <AceComponent accent={accent} />
     </div>
   )
