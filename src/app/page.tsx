@@ -5,6 +5,7 @@ import VerifiedHandsFeed from '@/components/feed/VerifiedHandsFeed'
 import JesterLogo from '@/components/ui/JesterLogo'
 import { getBrandUrlForPath } from '@/lib/brand/config'
 import { getServerBrand } from '@/lib/brand/server'
+import SiteHeader from '@/components/layout/SiteHeader'
 
 export default async function Home() {
   const brand = await getServerBrand()
@@ -18,31 +19,7 @@ export default async function Home() {
       />
 
       <main className="min-h-screen felt-texture">
-        <header className="border-b border-masque-gold/20 bg-midnight-black/30 backdrop-blur-sm">
-          <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-            <div className="flex items-center gap-3">
-              <JesterLogo size="md" className="text-jester-purple-light" />
-              <BrandWordmark />
-            </div>
-            <nav className="flex items-center gap-6">
-              <a href="/blackjack" className="hover:text-masque-gold transition-colors">
-                Blackjack
-              </a>
-              <a href="/video-poker" className="hover:text-masque-gold transition-colors">
-                Video Poker
-              </a>
-              <a href="/feed" className="hover:text-masque-gold transition-colors">
-                Verified Hands
-              </a>
-              <a href="/provably-fair" className="hover:text-masque-gold transition-colors">
-                Provably Fair
-              </a>
-              <a href="/responsible-gambling" className="hover:text-masque-gold transition-colors">
-                Responsible Gambling
-              </a>
-            </nav>
-          </div>
-        </header>
+        <SiteHeader />
 
         <section className="container mx-auto px-4 py-12 md:py-20">
           <div className="flex flex-col md:flex-row items-center gap-8 md:gap-12">

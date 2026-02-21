@@ -5,6 +5,7 @@ import JesterLogo from '@/components/ui/JesterLogo'
 import { FAQJsonLd, BreadcrumbJsonLd } from '@/components/seo/JsonLd'
 import { getBrandUrlForPath, getCanonicalUrlForPath } from '@/lib/brand/config'
 import { getServerBrand } from '@/lib/brand/server'
+import SiteHeader from '@/components/layout/SiteHeader'
 
 export async function generateMetadata(): Promise<Metadata> {
   const brand = await getServerBrand()
@@ -72,20 +73,7 @@ export default async function ProvablyFairPage() {
       />
     <main className="min-h-screen felt-texture">
       {/* Header */}
-      <header className="border-b border-masque-gold/20 bg-midnight-black/30 backdrop-blur-sm">
-        <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-          <Link href="/" className="flex items-center gap-3">
-            <JesterLogo size="md" className="text-jester-purple-light" />
-            <BrandWordmark />
-          </Link>
-          <nav className="flex items-center gap-6 text-sm">
-            <Link href="/blackjack" className="text-venetian-gold/70 hover:text-masque-gold transition-colors">Blackjack</Link>
-            <Link href="/feed" className="text-venetian-gold/70 hover:text-masque-gold transition-colors">Verified Hands</Link>
-            <Link href="/verify" className="text-venetian-gold/70 hover:text-masque-gold transition-colors">Verify a Game</Link>
-            <Link href="/reserves" className="text-venetian-gold/70 hover:text-masque-gold transition-colors">Reserves</Link>
-          </nav>
-        </div>
-      </header>
+      <SiteHeader />
 
       <div className="container mx-auto px-4 py-12 max-w-3xl">
         {/* Title */}

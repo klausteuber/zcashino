@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 80">
+  <path d="M30 10 L 50 40 L 30 70 L 10 40 Z" fill="#ff2e63" stroke="#00f0ff" stroke-width="2" stroke-linejoin="miter"/>
+  <path d="M30 20 L 42 40 L 30 60 L 18 40 Z" fill="none" stroke="#00f0ff" stroke-width="1.5" stroke-linejoin="miter"/>
+  <path d="M28 38 L 32 38 L 32 42 L 28 42 Z" fill="#00f0ff" />
+  <path d="M30 5 L 30 10 M 30 75 L 30 70" fill="none" stroke="#00f0ff" stroke-width="2" />
+  <path d="M5 40 L 10 40 M 55 40 L 50 40" fill="none" stroke="#00f0ff" stroke-width="2" />
+  <path d="M15 25 L 20 30 M 45 25 L 40 30 M 15 55 L 20 50 M 45 55 L 40 50" fill="none" stroke="#00f0ff" stroke-width="1.5" />
+</svg>

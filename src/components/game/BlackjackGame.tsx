@@ -197,7 +197,7 @@ export default function BlackjackGame() {
           )
         }
       })
-      .catch(() => {}) // History is non-critical
+      .catch(() => { }) // History is non-critical
   }, [session?.id])
 
   // Balance animation effect
@@ -422,14 +422,14 @@ export default function BlackjackGame() {
       const res = await fetch('/api/game', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'start',
-            sessionId: session.id,
-            bet: selectedBet,
-            perfectPairsBet,
-            clientSeed: canEditSessionClientSeed ? (clientSeedInput.trim() || undefined) : undefined,
-          })
+        body: JSON.stringify({
+          action: 'start',
+          sessionId: session.id,
+          bet: selectedBet,
+          perfectPairsBet,
+          clientSeed: canEditSessionClientSeed ? (clientSeedInput.trim() || undefined) : undefined,
         })
+      })
 
       if (!res.ok) {
         const data = await res.json()
@@ -711,14 +711,14 @@ export default function BlackjackGame() {
           const res = await fetch('/api/game', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                action: 'start',
-                sessionId: capturedSession.id,
-                bet: capturedBet,
-                perfectPairsBet: capturedPerfectPairs,
-                clientSeed: canEditSessionClientSeed ? (capturedClientSeed || undefined) : undefined,
-              })
+            body: JSON.stringify({
+              action: 'start',
+              sessionId: capturedSession.id,
+              bet: capturedBet,
+              perfectPairsBet: capturedPerfectPairs,
+              clientSeed: canEditSessionClientSeed ? (capturedClientSeed || undefined) : undefined,
             })
+          })
           const data = await res.json()
           if (res.ok) {
             setGameId(data.gameId)
@@ -897,11 +897,10 @@ export default function BlackjackGame() {
             {/* Auto-bet toggle */}
             <button
               onClick={toggleAutoBet}
-              className={`transition-colors p-1.5 sm:p-2 ${
-                isAutoBetEnabled
+              className={`transition-colors p-1.5 sm:p-2 ${isAutoBetEnabled
                   ? 'text-masque-gold'
                   : 'text-venetian-gold/60 hover:text-masque-gold'
-              }`}
+                }`}
               title={isAutoBetEnabled ? 'Auto-bet enabled (click to disable)' : 'Auto-bet disabled (click to enable)'}
             >
               <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -951,10 +950,9 @@ export default function BlackjackGame() {
       )}
 
       {/* Game Area */}
-      <div className={`container mx-auto px-4 py-8 relative ${
-        resultAnimation === 'blackjack' ? 'table-flash-blackjack' :
-        resultAnimation === 'win' ? 'table-flash-win' : ''
-      }`}>
+      <div className={`container mx-auto px-4 py-8 relative ${resultAnimation === 'blackjack' ? 'table-flash-blackjack' :
+          resultAnimation === 'win' ? 'table-flash-win' : ''
+        }`}>
         {/* Hand Outcome Overlay — Blackjack celebration */}
         {resultAnimation === 'blackjack' && (
           <div className="absolute inset-0 flex items-center justify-center z-30 pointer-events-none">
@@ -987,11 +985,10 @@ export default function BlackjackGame() {
                 <ChipSlide />
               </>
             )}
-            <div className={`outcome-overlay text-center ${
-              resultAnimation === 'win' ? 'text-green-400' :
-              resultAnimation === 'loss' ? 'text-blood-ruby' :
-              'text-venetian-gold'
-            }`}>
+            <div className={`outcome-overlay text-center ${resultAnimation === 'win' ? 'text-green-400' :
+                resultAnimation === 'loss' ? 'text-blood-ruby' :
+                  'text-venetian-gold'
+              }`}>
               <div className="text-6xl sm:text-8xl font-display font-bold drop-shadow-lg">
                 {resultAnimation === 'win' && 'WIN'}
                 {resultAnimation === 'loss' && 'LOSS'}
@@ -1034,20 +1031,18 @@ export default function BlackjackGame() {
 
         {/* Game Message */}
         <div className="text-center mb-4">
-          <div className={`bg-midnight-black/40 inline-block px-6 py-3 rounded-lg border transition-all duration-300 ${
-            resultAnimation === 'blackjack' ? 'border-masque-gold blackjack-glow result-pop' :
-            resultAnimation === 'win' ? 'border-green-500 win-glow result-pop' :
-            resultAnimation === 'loss' ? 'border-blood-ruby loss-shake' :
-            resultAnimation === 'push' ? 'border-venetian-gold/50 result-pop' :
-            'border-masque-gold/20'
-          }`}>
-            <span className={`text-lg font-semibold ${
-              resultAnimation === 'blackjack' ? 'text-masque-gold' :
-              resultAnimation === 'win' ? 'text-green-400' :
-              resultAnimation === 'loss' ? 'text-blood-ruby' :
-              resultAnimation === 'push' ? 'text-venetian-gold' :
-              'text-bone-white'
+          <div className={`bg-midnight-black/40 inline-block px-6 py-3 rounded-lg border transition-all duration-300 ${resultAnimation === 'blackjack' ? 'border-masque-gold blackjack-glow result-pop' :
+              resultAnimation === 'win' ? 'border-green-500 win-glow result-pop' :
+                resultAnimation === 'loss' ? 'border-blood-ruby loss-shake' :
+                  resultAnimation === 'push' ? 'border-venetian-gold/50 result-pop' :
+                    'border-masque-gold/20'
             }`}>
+            <span className={`text-lg font-semibold ${resultAnimation === 'blackjack' ? 'text-masque-gold' :
+                resultAnimation === 'win' ? 'text-green-400' :
+                  resultAnimation === 'loss' ? 'text-blood-ruby' :
+                    resultAnimation === 'push' ? 'text-venetian-gold' :
+                      'text-bone-white'
+              }`}>
               {resultAnimation === 'blackjack' && '🎰 '}
               {gameState?.message || 'Place your bet to begin'}
               {resultAnimation === 'blackjack' && ' 🎰'}
@@ -1058,15 +1053,14 @@ export default function BlackjackGame() {
         {/* Perfect Pairs Result */}
         {gameState && (gameState.perfectPairsBet ?? 0) > 0 && gameState.perfectPairsResult && (
           <div className="text-center mb-4">
-            <div className={`inline-block px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 ${
-              gameState.perfectPairsResult.outcome === 'perfect'
+            <div className={`inline-block px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 ${gameState.perfectPairsResult.outcome === 'perfect'
                 ? 'bg-masque-gold/20 border border-masque-gold text-masque-gold animate-pulse'
                 : gameState.perfectPairsResult.outcome === 'colored'
-                ? 'bg-crimson-mask/20 border border-crimson-mask text-crimson-mask'
-                : gameState.perfectPairsResult.outcome === 'mixed'
-                ? 'bg-jester-purple/20 border border-jester-purple text-jester-purple'
-                : 'bg-blood-ruby/10 border border-blood-ruby/30 text-venetian-gold/60'
-            }`}>
+                  ? 'bg-crimson-mask/20 border border-crimson-mask text-crimson-mask'
+                  : gameState.perfectPairsResult.outcome === 'mixed'
+                    ? 'bg-jester-purple/20 border border-jester-purple text-jester-purple'
+                    : 'bg-blood-ruby/10 border border-blood-ruby/30 text-venetian-gold/60'
+              }`}>
               {gameState.perfectPairsResult.outcome === 'perfect' && (
                 <span>✨ Perfect Pair! +{gameState.perfectPairsResult.payout.toFixed(2)} ZEC (25:1) ✨</span>
               )}
@@ -1125,7 +1119,7 @@ export default function BlackjackGame() {
         </div>
 
         {/* Actions / Betting */}
-        <div className="flex flex-col items-center gap-4">
+        <div className="flex flex-col items-center gap-3 sm:gap-4">
           {/* Demo Depleted Prompt — replaces bet area when demo balance is below minimum */}
           {!gameState && isDemo && session && session.balance < MIN_BET && (
             <DemoDepletedPrompt
@@ -1225,7 +1219,7 @@ export default function BlackjackGame() {
               <button
                 onClick={handlePlaceBet}
                 disabled={isLoading || !session || selectedBet > session.balance || session?.maintenanceMode}
-                className="btn-gold-shimmer text-midnight-black px-8 py-3 rounded-lg font-bold text-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                className="btn-gold-shimmer text-midnight-black px-6 sm:px-8 py-2.5 sm:py-3 rounded-lg font-bold text-base sm:text-lg disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto min-w-[160px]"
               >
                 {isLoading ? 'Dealing...' : session?.maintenanceMode ? 'MAINTENANCE' : 'DEAL'}
               </button>
@@ -1307,7 +1301,7 @@ export default function BlackjackGame() {
           )}
 
           {gameState?.phase === 'playerTurn' && !showInsuranceOffer && (
-            <div className="flex gap-4 flex-wrap justify-center">
+            <div className="flex gap-2 sm:gap-4 flex-wrap justify-center w-full px-2">
               {availableActions.includes('hit') && (
                 <button
                   onClick={() => {
@@ -1315,7 +1309,7 @@ export default function BlackjackGame() {
                     handleAction('hit')
                   }}
                   disabled={isLoading}
-                  className="btn-gold-shimmer text-midnight-black px-8 py-3 rounded-lg font-bold hover:scale-105 active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:hover:scale-100 shadow-lg"
+                  className="btn-gold-shimmer text-midnight-black px-6 sm:px-8 py-2.5 sm:py-3 flex-1 sm:flex-none min-w-[120px] rounded-lg font-bold hover:scale-105 active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:hover:scale-100 shadow-lg text-sm sm:text-base"
                 >
                   HIT
                 </button>
@@ -1327,7 +1321,7 @@ export default function BlackjackGame() {
                     handleAction('stand')
                   }}
                   disabled={isLoading}
-                  className="bg-jester-purple text-bone-white px-8 py-3 rounded-lg font-bold hover:bg-jester-purple-light hover:scale-105 active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:hover:scale-100 shadow-lg hover:shadow-jester-purple/30"
+                  className="bg-jester-purple text-bone-white px-6 sm:px-8 py-2.5 sm:py-3 flex-1 sm:flex-none min-w-[120px] rounded-lg font-bold hover:bg-jester-purple-light hover:scale-105 active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:hover:scale-100 shadow-lg hover:shadow-jester-purple/30 text-sm sm:text-base"
                 >
                   STAND
                 </button>
@@ -1339,7 +1333,7 @@ export default function BlackjackGame() {
                     handleAction('double')
                   }}
                   disabled={isLoading}
-                  className="bg-transparent border-2 border-masque-gold text-masque-gold px-8 py-3 rounded-lg font-bold hover:bg-masque-gold/10 hover:scale-105 active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:hover:scale-100"
+                  className="bg-transparent border-2 border-masque-gold text-masque-gold px-4 sm:px-8 py-2.5 sm:py-3 flex-[0_1_calc(50%-0.25rem)] sm:flex-none min-w-[100px] rounded-lg font-bold hover:bg-masque-gold/10 hover:scale-105 active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:hover:scale-100 text-sm sm:text-base"
                 >
                   DOUBLE
                 </button>
@@ -1351,7 +1345,7 @@ export default function BlackjackGame() {
                     handleAction('split')
                   }}
                   disabled={isLoading}
-                  className="bg-crimson-mask/50 text-bone-white px-8 py-3 rounded-lg font-bold hover:bg-crimson-mask/70 hover:scale-105 active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:hover:scale-100 shadow-lg"
+                  className="bg-crimson-mask/50 text-bone-white px-4 sm:px-8 py-2.5 sm:py-3 flex-[0_1_calc(50%-0.25rem)] sm:flex-none min-w-[100px] rounded-lg font-bold hover:bg-crimson-mask/70 hover:scale-105 active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:hover:scale-100 shadow-lg text-sm sm:text-base"
                 >
                   SPLIT
                 </button>
@@ -1363,7 +1357,7 @@ export default function BlackjackGame() {
                     handleAction('surrender')
                   }}
                   disabled={isLoading}
-                  className="bg-transparent border border-venetian-gold/40 text-venetian-gold/80 px-6 py-3 rounded-lg font-bold hover:bg-venetian-gold/10 hover:scale-105 active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:hover:scale-100"
+                  className="bg-transparent border border-venetian-gold/40 text-venetian-gold/80 px-4 sm:px-6 py-2.5 sm:py-3 w-full sm:w-auto rounded-lg font-bold hover:bg-venetian-gold/10 hover:scale-105 active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:hover:scale-100 text-sm sm:text-base"
                 >
                   SURRENDER
                 </button>
@@ -1385,11 +1379,10 @@ export default function BlackjackGame() {
                         if (perfectPairsBet > 0) setPerfectPairsBet(value * 0.1)
                         playSound('chipPlace')
                       }}
-                      className={`w-7 h-7 rounded-full text-[10px] font-bold transition-all border ${
-                        selectedBet === value
+                      className={`w-7 h-7 rounded-full text-[10px] font-bold transition-all border ${selectedBet === value
                           ? 'border-masque-gold bg-masque-gold/30 text-masque-gold'
                           : 'border-venetian-gold/20 text-venetian-gold/50 hover:border-masque-gold/40'
-                      }`}
+                        }`}
                     >
                       {value}
                     </button>
@@ -1407,11 +1400,10 @@ export default function BlackjackGame() {
                   </label>
                   <button
                     onClick={toggleAutoBet}
-                    className={`flex items-center gap-1 text-[10px] whitespace-nowrap transition-colors ${
-                      isAutoBetEnabled
+                    className={`flex items-center gap-1 text-[10px] whitespace-nowrap transition-colors ${isAutoBetEnabled
                         ? 'text-masque-gold hover:text-blood-ruby'
                         : 'text-venetian-gold/40 hover:text-masque-gold'
-                    }`}
+                      }`}
                     title={isAutoBetEnabled ? 'Auto-deal is ON — click to stop after this hand' : 'Auto-deal is OFF — click to enable'}
                   >
                     <svg className={`w-3 h-3 ${isAutoBetEnabled ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" style={isAutoBetEnabled ? { animationDuration: '3s' } : undefined}>
@@ -1446,9 +1438,8 @@ export default function BlackjackGame() {
                   )
                 } else if (netResult > 0) {
                   return (
-                    <div className={`text-2xl font-bold px-6 py-3 rounded-lg result-pop ${
-                      resultAnimation === 'blackjack' ? 'blackjack-glow bg-masque-gold/20 text-masque-gold' : 'win-glow bg-green-500/20 text-green-400'
-                    }`}>
+                    <div className={`text-2xl font-bold px-6 py-3 rounded-lg result-pop ${resultAnimation === 'blackjack' ? 'blackjack-glow bg-masque-gold/20 text-masque-gold' : 'win-glow bg-green-500/20 text-green-400'
+                      }`}>
                       +{payout.toFixed(4)} ZEC
                       {netResult > 0 && (
                         <span className="text-sm ml-2 opacity-70">(+{netResult.toFixed(4)} profit)</span>

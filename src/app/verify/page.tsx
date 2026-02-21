@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation'
 import { BrandWordmark } from '@/components/brand/BrandWordmark'
 import JesterLogo from '@/components/ui/JesterLogo'
 import type { FullVerificationResult, GameVerificationData, FairnessVersion } from '@/types'
+import SiteHeader from '@/components/layout/SiteHeader'
 
 type VerificationMode = 'gameId' | 'manual'
 type GameType = 'blackjack' | 'video_poker'
@@ -125,20 +126,7 @@ function VerifyPageContent() {
   return (
     <main className="min-h-screen felt-texture">
       {/* Header */}
-      <header className="border-b border-masque-gold/20 bg-midnight-black/30 backdrop-blur-sm">
-        <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-          <Link href="/" className="flex items-center gap-3">
-            <JesterLogo size="md" className="text-jester-purple-light" />
-            <BrandWordmark />
-          </Link>
-          <Link
-            href="/blackjack"
-            className="text-venetian-gold/60 hover:text-masque-gold transition-colors"
-          >
-            Back to Game
-          </Link>
-        </div>
-      </header>
+      <SiteHeader />
 
       <div className="container mx-auto px-4 py-8 max-w-4xl">
         <h1 className="text-3xl font-display font-bold text-bone-white mb-2">

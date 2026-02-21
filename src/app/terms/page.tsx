@@ -4,6 +4,7 @@ import { BrandWordmark } from '@/components/brand/BrandWordmark'
 import JesterLogo from '@/components/ui/JesterLogo'
 import { getBrandUrlForPath, getCanonicalUrlForPath } from '@/lib/brand/config'
 import { getServerBrand } from '@/lib/brand/server'
+import SiteHeader from '@/components/layout/SiteHeader'
 
 export async function generateMetadata(): Promise<Metadata> {
   const brand = await getServerBrand()
@@ -30,17 +31,7 @@ export default async function TermsPage() {
 
   return (
     <main className="min-h-screen felt-texture">
-      <header className="border-b border-masque-gold/20 bg-midnight-black/30 backdrop-blur-sm">
-        <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-          <Link href="/" className="flex items-center gap-3">
-            <JesterLogo size="md" className="text-jester-purple-light" />
-            <BrandWordmark />
-          </Link>
-          <Link href="/blackjack" className="btn-gold-shimmer text-midnight-black px-4 py-2 rounded-lg font-semibold">
-            Play Now
-          </Link>
-        </div>
-      </header>
+      <SiteHeader />
 
       <div className="container mx-auto px-4 py-12 max-w-3xl">
         <h1 className="text-4xl font-display font-bold mb-8 text-bone-white">Terms of Service</h1>

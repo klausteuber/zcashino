@@ -3,10 +3,12 @@
 ## Philosophy
 
 "Remove everything that can be removed without losing meaning." - Steve Jobs & Jony Ive
+"Every screen must feel inevitable at every size." 
 
 - Every element must earn its place
-- Hierarchy guides attention
-- Consistency builds trust
+- Hierarchy guides attention (Start with the user's eyes)
+- Consistency builds trust (Every pixel references the system)
+- Details matter, even the unseen ones. (Design is how it works, not decoration)
 
 ---
 

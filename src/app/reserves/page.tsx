@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { BrandWordmark } from '@/components/brand/BrandWordmark'
 import JesterLogo from '@/components/ui/JesterLogo'
+import SiteHeader from '@/components/layout/SiteHeader'
 
 interface ReservesData {
   reserves: {
@@ -72,28 +73,7 @@ export default function ReservesPage() {
   return (
     <main className="min-h-screen felt-texture">
       {/* Header */}
-      <header className="border-b border-masque-gold/20 bg-midnight-black/30 backdrop-blur-sm">
-        <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-          <Link href="/" className="flex items-center gap-3">
-            <JesterLogo size="md" className="text-jester-purple-light" />
-            <BrandWordmark />
-          </Link>
-          <div className="flex items-center gap-4">
-            <Link
-              href="/verify"
-              className="text-venetian-gold/60 hover:text-masque-gold transition-colors"
-            >
-              Verify Game
-            </Link>
-            <Link
-              href="/blackjack"
-              className="text-venetian-gold/60 hover:text-masque-gold transition-colors"
-            >
-              Play
-            </Link>
-          </div>
-        </div>
-      </header>
+      <SiteHeader />
 
       <div className="container mx-auto px-4 py-8 max-w-6xl">
         <div className="flex items-center justify-between mb-2">

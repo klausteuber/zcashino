@@ -388,3 +388,61 @@ In-memory limits and remote font fetches are acceptable in dev, but must be call
 
 5. **The commitment pool numbers mean different things in different modes.**
    In legacy mode: available = unused commitments, used = hands played. In session_nonce_v1: available = unassigned seeds, assigned = active sessions, revealed = rotated seeds. Same numbers, completely different semantics. Always check `fairnessMode` before interpreting pool metrics.
+
+## External Review Response Learnings (2026-02-20)
+
+1. **Verify reviewer claims against the actual codebase before acting.**
+   An iGaming executive flagged 6 "missing" features — 4 were actually implemented (card animations, insurance prompt, VP demo mode, auto-deal confirmation gate). Had we built a plan around all 6, half the work would have been wasted. Always read the code first, then prioritize only genuine gaps.
+
+2. **"Feature exists but is gated" is different from "feature is missing."**
+   Surrender was fully coded (`executeSurrender()`, `getAvailableActions()` gate, type in `BlackjackAction`) but missing from the Zod schema and API route switch. This is a 3-line fix, not a feature build. Check all layers of the stack before estimating effort: types → schema validation → route dispatch → game logic → UI.
+
+3. **Tests that assert rejection of valid actions break when you enable those actions.**
+   The `rejects surrender action payload` test asserted 400 (Zod rejection). After adding surrender to the schema, the action passes validation and hits game lookup instead (404). Always search tests for the feature name before wiring it in — you'll find tests to update.
+
+4. **Admin toggle + default-off is the safest rollout pattern for gameplay changes.**
+   Surrender was wired through all layers but left disabled via `allowSurrender: false` default in `runtime-settings.ts`. This means the code ships, tests pass, and production is unaffected until an admin explicitly flips the toggle. Instant rollback without redeploy.
+
+5. **UI text can lag behind enforcement reality.**
+   Deposit limits were fully enforced in production (`isDepositWithinLimit()` at `wallet/route.ts:273-294`) but 3 UI surfaces still said "Planned — not yet enforced." This creates a credibility gap with external reviewers. Always update user-facing text when enforcement ships, not later.
+
+6. **Privacy-preserving public feeds require more than anonymization.**
+   For the verified hands feed: timestamp precision, bet amount granularity, and low-traffic windows all create linkability risks. The plan requires minute-bucketed timestamps, bet range buckets (not exact amounts), and a minimum-volume floor before displaying entries.
+
+## Feed API Testing Learnings (2026-02-20)
+
+1. **Module-level in-memory caches in route handlers persist across Vitest test runs.**
+   The feed route's `cachedResponse` variable caused 8/12 tests to fail on first attempt — after the volume-floor test cached an empty response, all subsequent tests got stale data instead of hitting mocked DB calls. Fix: `vi.resetModules()` + `const { GET } = await import('./route')` per test gives a fresh module with empty cache. This is different from `vi.clearAllMocks()` which only resets mock call history, not module state.
+
+2. **When testing rate-limited endpoints, mock the rate limiter to avoid test coupling.**
+   Import the module and mock the specific function (`checkPublicRateLimit`) rather than testing rate limiting behavior through the route. This keeps tests focused on route logic, not infrastructure.
+
+## AI-Assisted SVG Asset Generation Learnings (2026-02-20)
+
+1. **Detailed prompts with exact specs produce usable SVGs from Gemini 3.1 Pro with zero manual cleanup.**
+   Including hex color codes, viewBox size constraints, and explicit style guidance (no gradients vs. gradients, stroke widths, shape vocabulary) gives clean, copy-paste-ready output. Vague prompts produce SVGs that need significant rework.
+
+2. **For dual-brand systems, generate all brand variants in separate prompts.**
+   Each prompt should include the full design context for its brand only. Cross-contamination happens when both brands are in one prompt — the model blends visual languages instead of keeping them distinct.
+
+3. **Inline SVGs in JSX are fine for small counts (~30 total SVG elements per page).**
+   For larger sets (52 playing cards), consider SVG sprites or lazy loading to avoid bundle bloat. The 24 confetti particles + 4 chips = 28 inline SVGs had negligible impact on bundle size.
+
+## Client-Side Brand Detection Learnings (2026-02-20)
+
+1. **`document.body.dataset.brand` via `useEffect` is the correct pattern for brand-specific client components.**
+   The server-side `getBrandFromHost()` sets the `data-brand` attribute on `<body>`, and client components read it after hydration. This avoids prop drilling brand through every component tree. Works well for selecting brand-specific SVG asset sets, color overrides, etc.
+
+2. **The `useState(false)` + `useEffect` pattern causes one render with the default brand before switching.**
+   For purely decorative elements like confetti, this flash is invisible (particles don't render until the overlay mounts). For prominent brand-switching elements, use server components or pass brand as a prop to avoid the flash.
+
+## UI/UX & Mobile Design Learnings (2026-02-21)
+
+1. **Static UI components vs. Responsive Containers.**
+   Duplicating `<header>` blocks across static pages creates maintenance overhead and leads to layout bugs. Extracting a unified `<SiteHeader>` component with specific mobile responsive considerations (`overflow-x-auto no-scrollbar` for links) ensures a consistent layout and single source of truth without overlapping links.
+
+2. **Mobile interaction spacing needs intentional "fat-finger" protection.**
+   Simply using Flexbox gaps (`gap-4`) on action buttons doesn't scale linearly down to mobile. Buttons on mobile require a reduction in `gap` accompanied by tailored horizontal padding (`px-4 sm:px-8`) to prevent mis-taps while preserving touch target height (`py-2.5 sm:py-3`).
+
+3. **Empty states must communicate system status visually, not just through text.**
+   A text string "No recent verified hands" fails to engage players and doesn't communicate the system's "always active" heartbeat. An empty state visualization (e.g., a pulsing "Live Seed Active" ring) transforms a blank feed into a manifestation of the platform's provably fair operations.

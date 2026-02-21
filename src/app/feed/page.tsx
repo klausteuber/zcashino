@@ -5,6 +5,7 @@ import JesterLogo from '@/components/ui/JesterLogo'
 import { getBrandUrlForPath, getCanonicalUrlForPath } from '@/lib/brand/config'
 import { getServerBrand } from '@/lib/brand/server'
 import VerifiedHandsFeed from '@/components/feed/VerifiedHandsFeed'
+import SiteHeader from '@/components/layout/SiteHeader'
 
 export async function generateMetadata(): Promise<Metadata> {
   const brand = await getServerBrand()
@@ -29,25 +30,7 @@ export async function generateMetadata(): Promise<Metadata> {
 export default function FeedPage() {
   return (
     <main className="min-h-screen felt-texture">
-      <header className="border-b border-masque-gold/20 bg-midnight-black/30 backdrop-blur-sm">
-        <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-          <Link href="/" className="flex items-center gap-3">
-            <JesterLogo size="md" className="text-jester-purple-light" />
-            <BrandWordmark />
-          </Link>
-          <nav className="flex items-center gap-6">
-            <Link href="/blackjack" className="hover:text-masque-gold transition-colors">
-              Blackjack
-            </Link>
-            <Link href="/video-poker" className="hover:text-masque-gold transition-colors">
-              Video Poker
-            </Link>
-            <Link href="/provably-fair" className="hover:text-masque-gold transition-colors">
-              Provably Fair
-            </Link>
-          </nav>
-        </div>
-      </header>
+      <SiteHeader />
 
       <div className="container mx-auto px-4 py-12 max-w-3xl">
         <h1 className="text-4xl font-display font-bold mb-2 text-bone-white">

@@ -549,6 +549,32 @@ Safe because: a seed with nonce 0 has never been used to derive a game outcome, 
 
 **File:** `src/lib/services/session-seed-pool-manager.ts`
 
+### Pool stuck at same size despite raising targetSize (2026-02-20)
+
+**Symptom:** Pool has 81 total seeds, 7 available. Changed `targetSize` from 15 to 1000 but pool didn't grow after 24+ hours.
+
+**Root Cause:** The refill gate checked `autoRefillThreshold` (5) BEFORE `targetSize`:
+```typescript
+// BUG: With available=7 > threshold=5, this always exits early
+if (status.available > tuning.autoRefillThreshold) {
+  return  // ← never reaches targetSize check
+}
+const needed = Math.max(0, tuning.targetSize - status.available)
+```
+
+The `autoRefillThreshold` was designed as a "low water mark" for a small pool (target=15). When target was raised to 1000, the gate still blocked creation anytime available > 5.
+
+**Fix:** Changed gate to check targetSize:
+```typescript
+if (status.available >= tuning.targetSize) {
+  return
+}
+```
+
+**Lesson:** When two sequential gates exist (threshold gate → target gate), raising the second gate's limit has no effect if the first gate blocks first. Always trace the full code path to confirm your config change actually takes effect. In this case, changing `targetSize` from 15 to 1000 was invisible because the `autoRefillThreshold` gate (line 131) returned early before `targetSize` was ever read (line 135).
+
+**File:** `src/lib/services/session-seed-pool-manager.ts`
+
 ---
 
 ### Session creation fails with generic error when zcashd is briefly unreachable (2026-02-18)
@@ -685,6 +711,38 @@ The `handleRealSelect` callback called `setStep('deposit')` unconditionally, but
 ---
 
 ## Investigation Process — Gotchas (2026-02-18)
+
+### Module-level cache pollution in Vitest (2026-02-20)
+
+**Symptom:** 8/12 feed API tests fail. First test passes, subsequent tests return cached data from the first test instead of hitting mocked DB calls.
+
+**Root Cause:** The feed route handler has a module-level `let cachedResponse` variable that persists between tests in the same Vitest worker. After one test caches a response, all subsequent tests get stale data regardless of their mock setup.
+
+**Important:** `vi.clearAllMocks()` does NOT help — it only resets mock call counts and return values, not module-level state like cache variables.
+
+**Fix:**
+```typescript
+async function importGET() {
+  vi.resetModules()  // Clears module registry
+  const mod = await import('./route')  // Fresh import = empty cache
+  return mod.GET
+}
+
+it('test case', async () => {
+  const GET = await importGET()
+  // Each test gets its own module instance with empty cache
+})
+```
+
+**Rule:** Any route handler with module-level state (cache, counters, singletons) needs `vi.resetModules()` + dynamic import in tests. This applies to:
+- In-memory response caches
+- Rate limiter instances created at module scope
+- Singleton database connections
+- Any `let` or `const` at the top level of a module
+
+**File:** `src/app/api/feed/route.test.ts`
+
+---
 
 ### Never infer production config from .env.example files
 

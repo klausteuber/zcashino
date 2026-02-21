@@ -139,7 +139,7 @@ export default function VideoPokerGame() {
           )
         }
       })
-      .catch(() => {})
+      .catch(() => { })
   }, [session?.id])
 
   // Balance animation
@@ -544,33 +544,30 @@ export default function VideoPokerGame() {
       )}
 
       {/* === GAME ZONE === */}
-      <div className={`bg-midnight-black/15 rounded-2xl cyber-panel p-3 sm:p-5 space-y-4 ${
-        resultAnimation === 'royal_flush' || resultAnimation === 'natural_royal_flush'
+      <div className={`bg-midnight-black/15 rounded-2xl cyber-panel p-3 sm:p-5 space-y-4 ${resultAnimation === 'royal_flush' || resultAnimation === 'natural_royal_flush'
           ? 'table-flash-blackjack'
           : resultAnimation === 'straight_flush' || resultAnimation === 'four_of_a_kind' || resultAnimation === 'four_deuces'
             ? 'table-flash-win' : ''
-      }`}>
+        }`}>
         {/* Variant selector */}
         <div className="flex justify-center gap-2">
           <button
             onClick={() => !isGameActive && setVariant('jacks_or_better')}
             disabled={isGameActive}
-            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-200 ${
-              variant === 'jacks_or_better'
+            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-200 ${variant === 'jacks_or_better'
                 ? 'bg-masque-gold text-midnight-black'
                 : 'bg-midnight-black/30 text-venetian-gold/60 hover:text-masque-gold border border-masque-gold/20'
-            } ${isGameActive ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+              } ${isGameActive ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
           >
             Jacks or Better
           </button>
           <button
             onClick={() => !isGameActive && setVariant('deuces_wild')}
             disabled={isGameActive}
-            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-200 ${
-              variant === 'deuces_wild'
+            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-200 ${variant === 'deuces_wild'
                 ? 'bg-masque-gold text-midnight-black'
                 : 'bg-midnight-black/30 text-venetian-gold/60 hover:text-masque-gold border border-masque-gold/20'
-            } ${isGameActive ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+              } ${isGameActive ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
           >
             Deuces Wild
           </button>
@@ -590,11 +587,11 @@ export default function VideoPokerGame() {
             <div className="absolute inset-0 flex items-center justify-center z-30 pointer-events-none">
               {(resultAnimation === 'royal_flush' || resultAnimation === 'natural_royal_flush' ||
                 resultAnimation === 'straight_flush' || resultAnimation === 'four_of_a_kind' || resultAnimation === 'four_deuces') && (
-                <>
-                  <ConfettiBurst />
-                  <ChipSlide />
-                </>
-              )}
+                  <>
+                    <ConfettiBurst />
+                    <ChipSlide />
+                  </>
+                )}
               <div className={`text-3xl sm:text-4xl lg:text-5xl font-display font-bold ${resultDisplay.className} ${resultDisplay.animClass}`}>
                 {resultDisplay.text}
                 {gameState && gameState.lastPayout > 0 && (
@@ -653,11 +650,10 @@ export default function VideoPokerGame() {
               key={m}
               onClick={() => !isGameActive && setBetMultiplier(m)}
               disabled={isGameActive}
-              className={`w-8 h-8 rounded-full text-sm font-bold transition-all duration-150 ${
-                m === betMultiplier
+              className={`w-8 h-8 rounded-full text-sm font-bold transition-all duration-150 ${m === betMultiplier
                   ? 'bg-masque-gold text-midnight-black scale-110'
                   : 'bg-midnight-black/50 text-venetian-gold/60 border border-masque-gold/20 hover:text-masque-gold'
-              } ${isGameActive ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                } ${isGameActive ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
             >
               {m}
             </button>
@@ -688,12 +684,12 @@ export default function VideoPokerGame() {
 
         {/* Action buttons */}
         <div className="flex flex-col items-center gap-2">
-          <div className="flex justify-center gap-3">
+          <div className="flex justify-center gap-2 sm:gap-4 w-full px-2">
             {canDeal && (
               <button
                 onClick={handleDeal}
                 disabled={isActing || !session || (selectedBet * betMultiplier > (session?.balance ?? 0))}
-                className="px-8 py-3 bg-gradient-to-r from-masque-gold to-venetian-gold text-midnight-black font-bold rounded-lg hover:shadow-[0_0_20px_rgba(201,162,39,0.4)] transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed text-lg font-cinzel"
+                className="px-6 sm:px-8 py-2.5 sm:py-3 bg-gradient-to-r from-masque-gold to-venetian-gold text-midnight-black font-bold flex-1 sm:flex-none min-w-[120px] rounded-lg hover:shadow-[0_0_20px_rgba(201,162,39,0.4)] transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed text-base sm:text-lg font-cinzel"
               >
                 {isComplete ? 'DEAL AGAIN' : 'DEAL'}
                 <span className="text-xs ml-2 opacity-60 hidden sm:inline">[D]</span>
@@ -704,7 +700,7 @@ export default function VideoPokerGame() {
               <button
                 onClick={handleDraw}
                 disabled={isActing}
-                className="px-8 py-3 bg-gradient-to-r from-masque-gold to-venetian-gold text-midnight-black font-bold rounded-lg hover:shadow-[0_0_20px_rgba(201,162,39,0.4)] transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed text-lg font-cinzel"
+                className="px-6 sm:px-8 py-2.5 sm:py-3 bg-gradient-to-r from-masque-gold to-venetian-gold text-midnight-black font-bold flex-1 sm:flex-none min-w-[120px] rounded-lg hover:shadow-[0_0_20px_rgba(201,162,39,0.4)] transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed text-base sm:text-lg font-cinzel"
               >
                 DRAW
                 <span className="text-xs ml-2 opacity-60 hidden sm:inline">[D]</span>

@@ -66,6 +66,12 @@ setInterval(() => {
 **Root Cause:** Missing postcss.config.mjs for Tailwind v4
 **Fix:** Create `postcss.config.mjs` with `@tailwindcss/postcss` plugin
 
+### [2026-02-20] Pool Manager Refill Gate Blocked Stockpiling
+**Problem:** Raised `targetSize` from 15 to 1000 but pool stayed stuck at 81 total for 24+ hours.
+**Root Cause:** Refill gate checked `autoRefillThreshold` (5) before `targetSize`. With 7 available > 5, it returned early every cycle — `targetSize` was never reached.
+**Fix:** Changed gate from `status.available > tuning.autoRefillThreshold` to `status.available >= tuning.targetSize`. Pool immediately started growing.
+**Rule:** When chaining sequential gates, trace the full code path. A config change to gate #2 is invisible if gate #1 blocks first.
+
 ### [2026-02-15] zcashd Sapling Witness Constraint
 **Problem:** Commitment pool refill creates 1 tx then all subsequent fail with "Missing witness for Sapling note"
 **Root Cause:** Sapling notes can't be spent until their witness is anchored in a block. Each self-send creates unconfirmed change that isn't spendable for ~75 seconds.
@@ -204,7 +210,8 @@ useEffect(() => { sessionRef.current = session }, [session])
 - `ensureActiveFairnessState()` lazily creates state on first game start
 - `allocateNonce()` atomically increments `nextNonce` per hand
 - `SESSION_SEED_ON_DEMAND_CREATE=true` — games work even if pool is empty
-- Pool target: 15, min healthy: 5, refill: 1 seed per 5-min cycle
+- Pool target: 1000 (admin-adjustable), min healthy: 5, refill: 1 seed per 5-min cycle
+- Lazy assignment: seeds claimed on first game start, NOT on session creation
 - Stale reclaim: seeds assigned to sessions inactive 24h+ with nextNonce=0
 - Server seed hidden until player rotates seed (NOT revealed per-game like legacy)
 
@@ -248,7 +255,7 @@ sqlite3 /var/lib/docker/volumes/mainnet_app-data/_data/zcashino.db "SELECT statu
 **CRITICAL: Never rsync source files directly to VPS.** Always commit → push → git pull on VPS → rebuild. Direct rsync can overwrite deployment-specific patches and introduce stale files into the Docker build context.
 
 ## Testing
-- 448 tests across 30 files
+- 464 tests across 31 files
 - Run: `npm test` or `npx vitest run`
 - Game is at: http://localhost:3000/blackjack
 
@@ -258,6 +265,7 @@ sqlite3 /var/lib/docker/volumes/mainnet_app-data/_data/zcashino.db "SELECT statu
 - `POST /api/video-poker` - Video poker (start, draw)
 - `POST /api/wallet` - Deposits/withdrawals
 - `GET /api/verify` - Game verification
+- `GET /api/feed` - Verified hands feed (privacy-hardened, rate-limited, feature-flagged)
 - `GET /api/health` - System health (db, node, pool, balance, kill switch)
 - `GET /api/reserves` - Public reserve proof
 

@@ -132,18 +132,20 @@ export default function VerifiedHandsFeed({
     )
   }
 
-  if (!feed || feed.volumeFloor) {
+  if (!feed || feed.volumeFloor || feed.hands.length === 0) {
     return (
-      <div className={`${compact ? '' : 'py-8'} text-center text-venetian-gold/50 text-sm`}>
-        {feed?.message ?? 'No recent verified hands to display.'}
-      </div>
-    )
-  }
-
-  if (feed.hands.length === 0) {
-    return (
-      <div className={`${compact ? '' : 'py-8'} text-center text-venetian-gold/50 text-sm`}>
-        No recent verified hands to display.
+      <div className={`${compact ? '' : 'py-12'} flex flex-col items-center justify-center space-y-4`}>
+        <div className="relative flex items-center justify-center w-16 h-16">
+          <div className="absolute inset-0 rounded-full border-2 border-masque-gold/20 animate-[ping_2s_cubic-bezier(0,0,0.2,1)_infinite]"></div>
+          <div className="absolute inset-2 rounded-full border border-masque-gold/40 animate-[ping_2s_cubic-bezier(0,0,0.2,1)_infinite_0.5s]"></div>
+          <div className="w-8 h-8 rounded-full bg-masque-gold/20 border border-masque-gold flex items-center justify-center z-10 shadow-[0_0_15px_rgba(201,162,39,0.5)]">
+            <div className="w-3 h-3 rounded-full bg-masque-gold animate-pulse"></div>
+          </div>
+        </div>
+        <div className="text-center">
+          <p className="text-masque-gold font-display font-medium mb-1">Live Seed Active</p>
+          <p className="text-venetian-gold/50 text-xs">Waiting for the next verified hand...</p>
+        </div>
       </div>
     )
   }
@@ -155,19 +157,17 @@ export default function VerifiedHandsFeed({
         return (
           <div
             key={hand.id}
-            className={`flex items-center justify-between gap-3 ${
-              compact
+            className={`flex items-center justify-between gap-3 ${compact
                 ? 'py-2 border-b border-masque-gold/10 last:border-0'
                 : 'bg-midnight-black/30 rounded-lg px-4 py-3 border border-masque-gold/10 hover:border-masque-gold/20 transition-colors'
-            }`}
+              }`}
           >
             <div className="flex items-center gap-3 min-w-0">
               {/* Game type badge */}
-              <span className={`shrink-0 text-xs font-mono px-2 py-0.5 rounded ${
-                hand.gameType === 'blackjack'
+              <span className={`shrink-0 text-xs font-mono px-2 py-0.5 rounded ${hand.gameType === 'blackjack'
                   ? 'bg-jester-purple/20 text-jester-purple-light'
                   : 'bg-masque-gold/20 text-masque-gold'
-              }`}>
+                }`}>
                 {formatGameType(hand)}
               </span>
 
