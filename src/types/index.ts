@@ -332,4 +332,9 @@ export interface WalletBalance {
   confirmed: number           // Confirmed balance (3+ confirmations)
   pending: number             // Pending deposits (< 3 confirmations)
   total: number               // confirmed + pending
+  pools?: {                   // Per-pool breakdown (from z_getbalanceforaccount)
+    transparent: number
+    sapling: number
+    orchard: number
+  }
 }

@@ -83,7 +83,12 @@ interface AdminOverview {
     createdAt: string
   }>
   treasury?: {
-    houseBalance: { confirmed: number; pending: number; total: number } | null
+    houseBalance: {
+      confirmed: number
+      pending: number
+      total: number
+      pools?: { transparent: number; sapling: number; orchard: number } | null
+    } | null
     liabilities: number
     coverageRatio: number | null
   }
@@ -718,24 +723,40 @@ export default function AdminPage() {
               <MetricCard
                 label="House Balance"
                 value={overview.treasury?.houseBalance ? formatZecWithUsd(overview.treasury.houseBalance.confirmed) : 'N/A'}
-                detail={overview.treasury?.coverageRatio != null && overview.treasury.coverageRatio !== Infinity
-                  ? `${overview.treasury.coverageRatio.toFixed(2)}x coverage ratio`
-                  : overview.treasury?.liabilities === 0 ? 'No liabilities' : 'Coverage unavailable'}
+                detail={(() => {
+                  const pools = overview.treasury?.houseBalance?.pools
+                  if (pools) {
+                    const parts = []
+                    if (pools.sapling > 0) parts.push(`Sapling: ${pools.sapling.toFixed(4)}`)
+                    if (pools.orchard > 0) parts.push(`Orchard: ${pools.orchard.toFixed(4)}`)
+                    if (pools.transparent > 0) parts.push(`T: ${pools.transparent.toFixed(4)}`)
+                    return parts.join(' · ') || 'Empty wallet'
+                  }
+                  if (overview.treasury?.coverageRatio != null && overview.treasury.coverageRatio !== Infinity) {
+                    return `${overview.treasury.coverageRatio.toFixed(2)}x coverage ratio`
+                  }
+                  return overview.treasury?.liabilities === 0 ? 'No liabilities' : 'Coverage unavailable'
+                })()}
               />
               <MetricCard
                 label="User Liabilities"
                 value={formatZecWithUsd(overview.platform.liabilities)}
-                detail={`${overview.platform.authenticatedSessions}/${overview.platform.totalSessions} verified sessions`}
+                detail={(() => {
+                  if (overview.treasury?.coverageRatio != null && overview.treasury.coverageRatio !== Infinity) {
+                    return `${overview.treasury.coverageRatio.toFixed(2)}x coverage · ${overview.platform.authenticatedSessions} verified sessions`
+                  }
+                  return `${overview.platform.authenticatedSessions}/${overview.platform.totalSessions} verified sessions`
+                })()}
               />
               <MetricCard
                 label="Net Flow"
                 value={formatZecWithUsd(overview.platform.netFlow)}
-                detail={`Deposited ${formatZecWithUsd(overview.platform.totalDeposited)} • Withdrawn ${formatZecWithUsd(overview.platform.totalWithdrawn)}`}
+                detail={`Deposited ${formatZecWithUsd(overview.platform.totalDeposited)} · Withdrawn ${formatZecWithUsd(overview.platform.totalWithdrawn)}`}
               />
               <MetricCard
                 label="Pending Withdrawals"
                 value={String(overview.transactions.pendingWithdrawalCount)}
-                detail={`${overview.transactions.failedWithdrawalCount} failed • ${overview.transactions.unpaidActionRetries24h} unpaid retries (24h)`}
+                detail={`${overview.transactions.failedWithdrawalCount} failed · ${overview.transactions.unpaidActionRetries24h} unpaid retries (24h)`}
               />
               <MetricCard
                 label="Active Games"
@@ -745,7 +766,7 @@ export default function AdminPage() {
               <MetricCard
                 label="Failed Logins (24h)"
                 value={String(overview.security.failedLoginAttempts24h)}
-                detail={`${overview.security.rateLimitedEvents24h} rate-limited admin events • ${overview.security.legacyPlayerAuthFallback24h} legacy auth fallbacks`}
+                detail={`${overview.security.rateLimitedEvents24h} rate-limited admin events · ${overview.security.legacyPlayerAuthFallback24h} legacy auth fallbacks`}
               />
             </section>
 

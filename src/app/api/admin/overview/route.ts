@@ -3,7 +3,7 @@ import prisma from '@/lib/db'
 import { requireAdmin } from '@/lib/admin/auth'
 import { REAL_SESSIONS_WHERE, REAL_SESSION_RELATION } from '@/lib/admin/query-filters'
 import { getPoolStatus } from '@/lib/provably-fair/commitment-pool'
-import { checkNodeStatus, getAddressBalance } from '@/lib/wallet/rpc'
+import { checkNodeStatus, getWalletBalance } from '@/lib/wallet/rpc'
 import { DEFAULT_NETWORK } from '@/lib/wallet'
 import {
   checkAdminRateLimit,
@@ -272,14 +272,13 @@ export async function GET(request: NextRequest) {
           createdAt: true,
         },
       }),
-      // House wallet balance — uses house address from env
+      // House wallet balance — total across ALL accounts/pools in the zcashd wallet.
+      // Uses z_gettotalbalance (all accounts) rather than z_getbalanceforaccount 0
+      // because user deposit addresses live in separate accounts and un-swept
+      // deposits would otherwise be invisible.
       (async () => {
-        const houseAddress = process.env.ZCASH_NETWORK === 'mainnet' || !process.env.ZCASH_NETWORK
-          ? process.env.HOUSE_ZADDR_MAINNET
-          : process.env.HOUSE_ZADDR_TESTNET
-        if (!houseAddress) return null
         try {
-          return await getAddressBalance(houseAddress, DEFAULT_NETWORK)
+          return await getWalletBalance(DEFAULT_NETWORK)
         } catch {
           return null
         }
@@ -414,6 +413,7 @@ export async function GET(request: NextRequest) {
           confirmed: houseBalance.confirmed,
           pending: houseBalance.pending,
           total: houseBalance.total,
+          pools: houseBalance.pools ?? null,
         } : null,
         liabilities,
         coverageRatio: houseBalance && liabilities > 0

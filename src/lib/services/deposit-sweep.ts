@@ -17,6 +17,7 @@ import {
   getAddressBalance,
   sendZec,
   getOperationStatus,
+  DEFAULT_Z_SENDMANY_FEE,
 } from '@/lib/wallet/rpc'
 import type { ZcashNetwork } from '@/types'
 
@@ -87,7 +88,11 @@ export async function sweepDeposits(
   for (const wallet of wallets) {
     try {
       const balance = await getAddressBalance(wallet.transparentAddr, network)
-      const sweepAmount = roundZec(balance.confirmed)
+      // Reserve the tx fee so z_sendmany has enough for amount + fee.
+      // Without this, the send would fail with "Insufficient funds" because
+      // the t-addr balance exactly equals the send amount with nothing left
+      // for the miner fee.
+      const sweepAmount = roundZec(balance.confirmed - DEFAULT_Z_SENDMANY_FEE)
 
       if (sweepAmount < MIN_SWEEP_AMOUNT) {
         skipped++

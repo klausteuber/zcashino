@@ -10,7 +10,7 @@
  */
 
 import type { ZcashNetwork, WalletBalance } from '@/types'
-import { NETWORK_CONFIG, DEFAULT_NETWORK, zatoshiToZec } from './index'
+import { NETWORK_CONFIG, DEFAULT_NETWORK } from './index'
 
 // RPC configuration from environment
 const RPC_USER = process.env.ZCASH_RPC_USER || 'zcashrpc'
@@ -241,7 +241,15 @@ export async function generateUnifiedAddress(
 }
 
 /**
- * Get the balance of a specific address
+ * Get the balance of a specific address (or entire wallet for z/u addresses).
+ *
+ * For z/u addresses: Uses z_getbalanceforaccount (account 0) which properly
+ * includes all pools (transparent, sapling, orchard). Falls back to
+ * z_gettotalbalance if unavailable.
+ *
+ * IMPORTANT: z_gettotalbalance is deprecated and may not reliably report
+ * Orchard pool funds in all zcashd versions. z_getbalanceforaccount is the
+ * recommended replacement since zcashd 5.x.
  */
 export async function getAddressBalance(
   address: string,
@@ -249,15 +257,57 @@ export async function getAddressBalance(
   minConfirmations: number = 3
 ): Promise<WalletBalance> {
   try {
-    // For z-addresses, use z_gettotalbalance (z_getbalance is deprecated in zcashd 6.x)
-    // z_gettotalbalance returns the entire wallet balance, which is correct since
-    // the zcashd wallet IS the house wallet
     if (address.startsWith('z') || address.startsWith('u')) {
+      // Primary: z_getbalanceforaccount — gives explicit per-pool breakdown
+      try {
+        const [confirmedResult, totalResult] = await Promise.all([
+          rpcCall<{
+            pools: {
+              transparent?: { valueZat: number }
+              sapling?: { valueZat: number }
+              orchard?: { valueZat: number }
+            }
+          }>('z_getbalanceforaccount', [0, minConfirmations], network),
+          rpcCall<{
+            pools: {
+              transparent?: { valueZat: number }
+              sapling?: { valueZat: number }
+              orchard?: { valueZat: number }
+            }
+          }>('z_getbalanceforaccount', [0, 0], network),
+        ])
+
+        const zat = (v: number) => v / 1e8
+        const transparentConfirmed = zat(confirmedResult.pools.transparent?.valueZat ?? 0)
+        const saplingConfirmed = zat(confirmedResult.pools.sapling?.valueZat ?? 0)
+        const orchardConfirmed = zat(confirmedResult.pools.orchard?.valueZat ?? 0)
+        const confirmed = transparentConfirmed + saplingConfirmed + orchardConfirmed
+
+        const transparentTotal = zat(totalResult.pools.transparent?.valueZat ?? 0)
+        const saplingTotal = zat(totalResult.pools.sapling?.valueZat ?? 0)
+        const orchardTotal = zat(totalResult.pools.orchard?.valueZat ?? 0)
+        const total = transparentTotal + saplingTotal + orchardTotal
+
+        return {
+          confirmed,
+          pending: total - confirmed,
+          total,
+          pools: {
+            transparent: transparentConfirmed,
+            sapling: saplingConfirmed,
+            orchard: orchardConfirmed,
+          },
+        }
+      } catch (e) {
+        console.warn('[RPC] z_getbalanceforaccount failed, falling back to z_gettotalbalance:', e)
+      }
+
+      // Fallback: z_gettotalbalance (deprecated, may miss Orchard pool)
       try {
         const totals = await rpcCall<{ transparent: string; private: string; total: string }>(
           'z_gettotalbalance', [minConfirmations], network
         )
-        const confirmed = parseFloat(totals.private) + parseFloat(totals.transparent)
+        const confirmed = parseFloat(totals.total)
         const totalsUnconfirmed = await rpcCall<{ transparent: string; private: string; total: string }>(
           'z_gettotalbalance', [0], network
         )
@@ -268,16 +318,10 @@ export async function getAddressBalance(
           total,
         }
       } catch (e) {
-        console.error('[RPC] z_gettotalbalance failed, trying deprecated z_getbalance:', e)
-        // Fallback to z_getbalance with -allowdeprecated flag
-        const confirmed = await rpcCall<number>('z_getbalance', [address, minConfirmations], network)
-        const total = await rpcCall<number>('z_getbalance', [address, 0], network)
-        return {
-          confirmed,
-          pending: total - confirmed,
-          total,
-        }
+        console.error('[RPC] z_gettotalbalance also failed:', e)
       }
+
+      return { confirmed: 0, pending: 0, total: 0 }
     }
 
     // For t-addresses, get UTXOs
@@ -310,32 +354,64 @@ export async function getAddressBalance(
 }
 
 /**
- * Get wallet total balance (all addresses)
+ * Get wallet total balance (ALL accounts, ALL pools).
+ *
+ * Uses z_gettotalbalance which sums across every account and pool in the
+ * zcashd wallet.  This is the correct call for the admin "House Balance"
+ * because user deposit addresses live in separate accounts (1, 2, 3…) and
+ * z_getbalanceforaccount 0 only covers the house account.
+ *
+ * Optionally returns the house-account-0 per-pool breakdown so the admin
+ * can still see Sapling vs Orchard vs Transparent.
  */
 export async function getWalletBalance(
-  network: ZcashNetwork = DEFAULT_NETWORK
+  network: ZcashNetwork = DEFAULT_NETWORK,
+  minConfirmations: number = 3
 ): Promise<WalletBalance> {
   try {
-    const balances = await rpcCall<{
-      transparent: number
-      private: number
-      total: number
-    }>('z_gettotalbalance', [], network)
+    // z_gettotalbalance — sums ALL accounts, ALL pools
+    const [confirmed, unconfirmed] = await Promise.all([
+      rpcCall<{ transparent: string; private: string; total: string }>(
+        'z_gettotalbalance', [minConfirmations], network
+      ),
+      rpcCall<{ transparent: string; private: string; total: string }>(
+        'z_gettotalbalance', [0], network
+      ),
+    ])
 
-    // Get unconfirmed separately
-    const unconfirmed = await rpcCall<{
-      transparent: number
-      private: number
-      total: number
-    }>('z_gettotalbalance', [0], network)
+    const confirmedTotal = parseFloat(confirmed.total)
+    const allTotal = parseFloat(unconfirmed.total)
 
-    const confirmed = balances.total
-    const total = unconfirmed.total
-    const pending = total - confirmed
+    // Also grab per-pool breakdown from house account 0 for admin visibility.
+    // This is a best-effort enrichment — failures here don't break the balance.
+    let pools: WalletBalance['pools']
+    try {
+      const acct0 = await rpcCall<{
+        pools: {
+          transparent?: { valueZat: number }
+          sapling?: { valueZat: number }
+          orchard?: { valueZat: number }
+        }
+      }>('z_getbalanceforaccount', [0, minConfirmations], network)
 
-    return { confirmed, pending, total }
+      const zat = (v: number) => v / 1e8
+      pools = {
+        transparent: zat(acct0.pools.transparent?.valueZat ?? 0),
+        sapling: zat(acct0.pools.sapling?.valueZat ?? 0),
+        orchard: zat(acct0.pools.orchard?.valueZat ?? 0),
+      }
+    } catch {
+      // Pool breakdown unavailable — non-fatal
+    }
+
+    return {
+      confirmed: confirmedTotal,
+      pending: allTotal - confirmedTotal,
+      total: allTotal,
+      pools,
+    }
   } catch (error) {
-    console.error('Failed to get wallet balance:', error)
+    console.error('[RPC] getWalletBalance failed:', error)
     return { confirmed: 0, pending: 0, total: 0 }
   }
 }
