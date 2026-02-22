@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
-import { checkNodeStatus, getAddressBalance } from '@/lib/wallet/rpc'
-import { DEFAULT_NETWORK, getHouseAddress } from '@/lib/wallet'
+import { checkNodeStatus, getWalletBalance } from '@/lib/wallet/rpc'
+import { DEFAULT_NETWORK } from '@/lib/wallet'
 import { isKillSwitchActive } from '@/lib/kill-switch'
 import { getProvablyFairMode } from '@/lib/provably-fair/mode'
 import { getSessionSeedPoolStatus } from '@/lib/services/session-seed-pool-manager'
@@ -72,22 +72,19 @@ export async function GET() {
     checks.commitmentPool = { available: 0 }
   }
 
-  // House wallet balance check
+  // House wallet balance check — uses z_gettotalbalance (all accounts)
   try {
-    const houseAddr = getHouseAddress(DEFAULT_NETWORK)
-    if (houseAddr && !houseAddr.startsWith('ztestsapling1...')) {
-      const balance = await getAddressBalance(houseAddr, DEFAULT_NETWORK)
-      checks.houseBalance = {
-        confirmed: balance.confirmed,
-        pending: balance.pending,
-      }
-      // Use total (confirmed + pending) for the warning, since pending change
-      // from self-send commitment txs is still fully under our control
-      const totalBalance = balance.confirmed + balance.pending
-      if (totalBalance < BALANCE_WARN_THRESHOLD) {
-        if (severity === 'ok') severity = 'warning'
-        checks.houseBalanceWarning = `House balance low: ${totalBalance} ZEC (${balance.confirmed} confirmed)`
-      }
+    const balance = await getWalletBalance(DEFAULT_NETWORK)
+    checks.houseBalance = {
+      confirmed: balance.confirmed,
+      pending: balance.pending,
+    }
+    // Use total (confirmed + pending) for the warning, since pending change
+    // from self-send commitment txs is still fully under our control
+    const totalBalance = balance.confirmed + balance.pending
+    if (totalBalance < BALANCE_WARN_THRESHOLD) {
+      if (severity === 'ok') severity = 'warning'
+      checks.houseBalanceWarning = `House balance low: ${totalBalance} ZEC (${balance.confirmed} confirmed)`
     }
   } catch {
     // Balance check failure is not critical — node may be offline
