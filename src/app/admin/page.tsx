@@ -711,7 +711,7 @@ export default function AdminPage() {
                       <span className={`${overview.treasury!.coverageRatio! < 1 ? 'text-crimson-mask' : 'text-masque-gold'} font-bold text-lg`}>!</span>
                       <span className={`${overview.treasury!.coverageRatio! < 1 ? 'text-crimson-mask' : 'text-masque-gold'} font-semibold`}>
                         {overview.treasury!.coverageRatio! < 1 ? 'CRITICAL' : 'WARNING'}: House reserve coverage at {overview.treasury!.coverageRatio!.toFixed(2)}x liabilities
-                        {' '}({formatZecWithUsd(overview.treasury!.houseBalance!.confirmed)} vs {formatZecWithUsd(overview.treasury!.liabilities)} liabilities)
+                        {' '}({formatZecWithUsd(overview.treasury!.houseBalance!.total)} vs {formatZecWithUsd(overview.treasury!.liabilities)} liabilities)
                       </span>
                     </div>
                   )}
@@ -722,20 +722,23 @@ export default function AdminPage() {
             <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
               <MetricCard
                 label="House Balance"
-                value={overview.treasury?.houseBalance ? formatZecWithUsd(overview.treasury.houseBalance.confirmed) : 'N/A'}
+                value={overview.treasury?.houseBalance ? formatZecWithUsd(overview.treasury.houseBalance.total) : 'N/A'}
                 detail={(() => {
-                  const pools = overview.treasury?.houseBalance?.pools
+                  const hb = overview.treasury?.houseBalance
+                  if (!hb) return 'Unavailable'
+                  const parts: string[] = []
+                  if (hb.confirmed !== hb.total) {
+                    parts.push(`${hb.confirmed.toFixed(4)} confirmed · ${hb.pending.toFixed(4)} pending`)
+                  }
+                  const pools = hb.pools
                   if (pools) {
-                    const parts = []
-                    if (pools.sapling > 0) parts.push(`Sapling: ${pools.sapling.toFixed(4)}`)
-                    if (pools.orchard > 0) parts.push(`Orchard: ${pools.orchard.toFixed(4)}`)
-                    if (pools.transparent > 0) parts.push(`T: ${pools.transparent.toFixed(4)}`)
-                    return parts.join(' · ') || 'Empty wallet'
+                    const poolParts: string[] = []
+                    if (pools.sapling > 0) poolParts.push(`S: ${pools.sapling.toFixed(4)}`)
+                    if (pools.orchard > 0) poolParts.push(`O: ${pools.orchard.toFixed(4)}`)
+                    if (pools.transparent > 0) poolParts.push(`T: ${pools.transparent.toFixed(4)}`)
+                    if (poolParts.length > 0) parts.push(poolParts.join(' · '))
                   }
-                  if (overview.treasury?.coverageRatio != null && overview.treasury.coverageRatio !== Infinity) {
-                    return `${overview.treasury.coverageRatio.toFixed(2)}x coverage ratio`
-                  }
-                  return overview.treasury?.liabilities === 0 ? 'No liabilities' : 'Coverage unavailable'
+                  return parts.join(' | ') || 'All confirmed'
                 })()}
               />
               <MetricCard

@@ -416,8 +416,11 @@ export async function GET(request: NextRequest) {
           pools: houseBalance.pools ?? null,
         } : null,
         liabilities,
+        // Use total (confirmed + pending) for coverage ratio because pending
+        // funds are from internal self-sends (commitment pool) and are fully
+        // under house control.
         coverageRatio: houseBalance && liabilities > 0
-          ? Math.round((houseBalance.confirmed / liabilities) * 100) / 100
+          ? Math.round((houseBalance.total / liabilities) * 100) / 100
           : houseBalance && liabilities === 0 ? Infinity : null,
       },
       security: {
