@@ -1,0 +1,35 @@
+
+> cypherjester-app@0.1.0 dev
+> next dev
+
+▲ Next.js 16.1.4 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://10.20.10.185:3000
+- Environments: .env
+- Experiments (use with caution):
+  · clientTraceMetadata
+
+✓ Starting...
+[StartupValidator] ⚠️  HOUSE_ZADDR_TESTNET is placeholder or empty. Will use mock commitments.
+[StartupValidator] ⚠️  ADMIN_SESSION_SECRET is weak (4 chars). Use 32+ characters in production.
+[StartupValidator] ⚠️  ZCASH_RPC_PASSWORD is empty. RPC calls may fail.
+[StartupValidator] ✅ Configuration valid for testnet
+[PoolManager] Starting commitment pool manager...
+[CommitmentPool] DEMO_MODE enabled, skipping pool initialization (using on-demand mock commitments)
+[PoolManager] Started successfully
+[Sweep] Starting deposit sweep service...
+[Sweep] Started successfully
+[alert-generator] Starting alert generator (interval: 5m)
+✓ Ready in 1142ms
+ HEAD / 200 in 711ms (compile: 371ms, render: 341ms)
+ GET / 200 in 49ms (compile: 4ms, render: 45ms)
+ GET /api/feed?limit=5 404 in 45ms (compile: 38ms, render: 7ms)
+ GET /blackjack 200 in 503ms (compile: 11ms, render: 492ms)
+ GET /api/session?sessionId=cml7qjpfk000rfys85k0rn74p 200 in 51ms (compile: 40ms, render: 10ms)
+ GET /api/game?sessionId=cml7qjpfk000rfys85k0rn74p 200 in 264ms (compile: 260ms, render: 4ms)
+ GET /video-poker 200 in 10.1s (compile: 987ms, render: 9.1s)
+ GET /api/session?sessionId=cml7qjpfk000rfys85k0rn74p 200 in 14ms (compile: 2ms, render: 11ms)
+ GET /api/video-poker?sessionId=cml7qjpfk000rfys85k0rn74p 200 in 28ms (compile: 25ms, render: 3ms)
+ GET /video-poker 200 in 1384ms (compile: 52ms, render: 1332ms)
+ GET /video-poker 200 in 1025ms (compile: 263ms, render: 762ms)
+ GET /video-poker 200 in 280ms (compile: 59ms, render: 221ms)

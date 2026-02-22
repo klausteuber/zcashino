@@ -95,11 +95,9 @@ body[data-brand="21z"] {
 
 body {
   color: var(--text-primary);
-  background: linear-gradient(
-    to bottom,
-    var(--bg-base),
-    var(--bg-base-alt)
-  );
+  background: linear-gradient(to bottom,
+      var(--bg-base),
+      var(--bg-base-alt));
   min-height: 100vh;
   font-family: var(--font-body);
 }
@@ -114,11 +112,9 @@ body[data-brand="21z"]::before {
   inset: 0;
   pointer-events: none;
   z-index: 0;
-  background: radial-gradient(
-    ellipse 80% 70% at 50% 40%,
-    transparent 0%,
-    rgba(0, 0, 0, 0.4) 100%
-  );
+  background: radial-gradient(ellipse 80% 70% at 50% 40%,
+      transparent 0%,
+      rgba(0, 0, 0, 0.4) 100%);
   opacity: 1;
 }
 
@@ -219,13 +215,11 @@ body[data-brand="21z"] .cyber-grid {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: repeating-linear-gradient(
-    to bottom,
-    rgba(224, 228, 240, 0.08) 0px,
-    rgba(224, 228, 240, 0.08) 1px,
-    transparent 2px,
-    transparent 5px
-  );
+  background: repeating-linear-gradient(to bottom,
+      rgba(224, 228, 240, 0.08) 0px,
+      rgba(224, 228, 240, 0.08) 1px,
+      transparent 2px,
+      transparent 5px);
   opacity: 0.05;
 }
 
@@ -245,6 +239,43 @@ body[data-brand="21z"] .scanline-overlay::after {
   width: 48px;
   height: 48px;
 }
+
+/* 21z Custom Chip Colors */
+body[data-brand="21z"] .chip {
+  border-radius: 0 !important;
+  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 0 100%);
+  background: var(--bg-surface) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-active) !important;
+  background-image: none !important;
+}
+
+body[data-brand="21z"] .chip[data-value="0.05"] {
+  border-color: var(--color-error) !important;
+  color: var(--color-error) !important;
+}
+
+body[data-brand="21z"] .chip[data-value="0.1"] {
+  border-color: var(--jester-purple) !important;
+  color: var(--jester-purple) !important;
+}
+
+body[data-brand="21z"] .chip[data-value="0.25"] {
+  border-color: var(--color-success) !important;
+  color: var(--color-success) !important;
+}
+
+body[data-brand="21z"] .chip[data-value="0.5"] {
+  border-color: var(--color-warning) !important;
+  color: var(--color-warning) !important;
+}
+
+body[data-brand="21z"] .chip[data-value="1"] {
+  border-color: var(--accent-primary) !important;
+  color: var(--accent-primary) !important;
+  background: color-mix(in srgb, var(--accent-primary) 10%, transparent) !important;
+}
+
 
 /* Custom color utilities for Tailwind v4 */
 @theme {
@@ -376,18 +407,14 @@ body[data-brand="21z"] .btn-gold-shimmer.text-midnight-black {
   color: var(--text-primary) !important;
 }
 
-body[data-brand="21z"]
-  :is(div, section, article, aside, main, header, footer, form, details, table, button, a, input, textarea, select).rounded-2xl:not(.rounded-full),
-body[data-brand="21z"]
-  :is(div, section, article, aside, main, header, footer, form, details, table, button, a, input, textarea, select).rounded-xl:not(.rounded-full) {
+body[data-brand="21z"] :is(div, section, article, aside, main, header, footer, form, details, table, button, a, input, textarea, select).rounded-2xl:not(.rounded-full),
+body[data-brand="21z"] :is(div, section, article, aside, main, header, footer, form, details, table, button, a, input, textarea, select).rounded-xl:not(.rounded-full) {
   border-radius: 0 !important;
   clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 0 100%);
 }
 
-body[data-brand="21z"]
-  :is(button, a, input, textarea, select).rounded-lg:not(.rounded-full),
-body[data-brand="21z"]
-  :is(div, section, article, aside, form, details, table).rounded-lg:not(.rounded-full) {
+body[data-brand="21z"] :is(button, a, input, textarea, select).rounded-lg:not(.rounded-full),
+body[data-brand="21z"] :is(div, section, article, aside, form, details, table).rounded-lg:not(.rounded-full) {
   border-radius: 0 !important;
   clip-path: polygon(0 0, calc(100% - 9px) 0, 100% 9px, 100% 100%, 0 100%);
 }
@@ -411,10 +438,12 @@ body[data-brand="21z"]
     transform: translateY(-2px);
     text-shadow: 2px 0 rgba(255, 46, 99, 0.4), -2px 0 rgba(0, 240, 255, 0.45);
   }
+
   60% {
     opacity: 1;
     text-shadow: -1px 0 rgba(255, 46, 99, 0.25), 1px 0 rgba(0, 240, 255, 0.3);
   }
+
   100% {
     opacity: 1;
     transform: none;
@@ -453,6 +482,7 @@ body[data-brand="21z"] .brand-cardback-21z {
     transform: translateX(50px) translateY(-30px) rotate(5deg);
     opacity: 0;
   }
+
   100% {
     transform: translateX(0) translateY(0) rotate(0);
     opacity: 1;
@@ -468,9 +498,11 @@ body[data-brand="21z"] .brand-cardback-21z {
   0% {
     transform: rotateY(0deg);
   }
+
   50% {
     transform: rotateY(90deg);
   }
+
   100% {
     transform: rotateY(0deg);
   }
@@ -482,8 +514,15 @@ body[data-brand="21z"] .brand-cardback-21z {
 
 /* Win celebration */
 @keyframes goldPulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(201, 162, 39, 0.4); }
-  50% { box-shadow: 0 0 20px 10px rgba(201, 162, 39, 0.2); }
+
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(201, 162, 39, 0.4);
+  }
+
+  50% {
+    box-shadow: 0 0 20px 10px rgba(201, 162, 39, 0.2);
+  }
 }
 
 .win-glow {
@@ -492,15 +531,37 @@ body[data-brand="21z"] .brand-cardback-21z {
 
 /* Balance change animations */
 @keyframes balanceIncrease {
-  0% { transform: scale(1); color: var(--masque-gold); }
-  50% { transform: scale(1.15); color: #4ade80; }
-  100% { transform: scale(1); color: var(--masque-gold); }
+  0% {
+    transform: scale(1);
+    color: var(--masque-gold);
+  }
+
+  50% {
+    transform: scale(1.15);
+    color: #4ade80;
+  }
+
+  100% {
+    transform: scale(1);
+    color: var(--masque-gold);
+  }
 }
 
 @keyframes balanceDecrease {
-  0% { transform: scale(1); color: var(--masque-gold); }
-  50% { transform: scale(0.95); color: var(--blood-ruby); }
-  100% { transform: scale(1); color: var(--masque-gold); }
+  0% {
+    transform: scale(1);
+    color: var(--masque-gold);
+  }
+
+  50% {
+    transform: scale(0.95);
+    color: var(--blood-ruby);
+  }
+
+  100% {
+    transform: scale(1);
+    color: var(--masque-gold);
+  }
 }
 
 .balance-increase {
@@ -517,6 +578,7 @@ body[data-brand="21z"] .brand-cardback-21z {
     opacity: 1;
     transform: translateY(0) scale(1);
   }
+
   100% {
     opacity: 0;
     transform: translateY(-30px) scale(1.2);
@@ -533,9 +595,11 @@ body[data-brand="21z"] .brand-cardback-21z {
     transform: scale(0.8);
     opacity: 0;
   }
+
   50% {
     transform: scale(1.05);
   }
+
   100% {
     transform: scale(1);
     opacity: 1;
@@ -548,11 +612,27 @@ body[data-brand="21z"] .brand-cardback-21z {
 
 /* Loss shake animation */
 @keyframes lossShake {
-  0%, 100% { transform: translateX(0); }
-  20% { transform: translateX(-5px); }
-  40% { transform: translateX(5px); }
-  60% { transform: translateX(-3px); }
-  80% { transform: translateX(3px); }
+
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+
+  20% {
+    transform: translateX(-5px);
+  }
+
+  40% {
+    transform: translateX(5px);
+  }
+
+  60% {
+    transform: translateX(-3px);
+  }
+
+  80% {
+    transform: translateX(3px);
+  }
 }
 
 .loss-shake {
@@ -561,10 +641,13 @@ body[data-brand="21z"] .brand-cardback-21z {
 
 /* Blackjack celebration */
 @keyframes blackjackGlow {
-  0%, 100% {
+
+  0%,
+  100% {
     box-shadow: 0 0 10px rgba(201, 162, 39, 0.5), 0 0 20px rgba(201, 162, 39, 0.3);
     text-shadow: 0 0 10px rgba(201, 162, 39, 0.8);
   }
+
   50% {
     box-shadow: 0 0 25px rgba(201, 162, 39, 0.8), 0 0 40px rgba(201, 162, 39, 0.5);
     text-shadow: 0 0 20px rgba(201, 162, 39, 1);
@@ -581,13 +664,16 @@ body[data-brand="21z"] .brand-cardback-21z {
     opacity: 0;
     transform: scale(0.3);
   }
+
   60% {
     opacity: 1;
     transform: scale(1.1);
   }
+
   80% {
     transform: scale(0.95);
   }
+
   100% {
     opacity: 1;
     transform: scale(1);
@@ -599,6 +685,7 @@ body[data-brand="21z"] .brand-cardback-21z {
     opacity: 1;
     transform: scale(1);
   }
+
   100% {
     opacity: 0;
     transform: scale(1.3);
@@ -607,7 +694,7 @@ body[data-brand="21z"] .brand-cardback-21z {
 
 .outcome-overlay {
   animation: outcomeOverlayIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards,
-             outcomeOverlayOut 0.5s ease-in 1s forwards;
+    outcomeOverlayOut 0.5s ease-in 1s forwards;
   pointer-events: none;
 }
 
@@ -618,14 +705,17 @@ body[data-brand="21z"] .brand-cardback-21z {
     transform: scale(0.2) rotate(-5deg);
     filter: blur(8px);
   }
+
   50% {
     opacity: 1;
     transform: scale(1.15) rotate(1deg);
     filter: blur(0px);
   }
+
   70% {
     transform: scale(0.95) rotate(-0.5deg);
   }
+
   100% {
     opacity: 1;
     transform: scale(1) rotate(0deg);
@@ -638,6 +728,7 @@ body[data-brand="21z"] .brand-cardback-21z {
     opacity: 1;
     transform: scale(1);
   }
+
   100% {
     opacity: 0;
     transform: scale(1.5);
@@ -646,14 +737,22 @@ body[data-brand="21z"] .brand-cardback-21z {
 }
 
 @keyframes blackjackShimmer {
-  0% { background-position: -200% center; }
-  100% { background-position: 200% center; }
+  0% {
+    background-position: -200% center;
+  }
+
+  100% {
+    background-position: 200% center;
+  }
 }
 
 @keyframes blackjackPulse {
-  0%, 100% {
+
+  0%,
+  100% {
     text-shadow: 0 0 20px rgba(201, 162, 39, 0.6), 0 0 40px rgba(201, 162, 39, 0.3);
   }
+
   50% {
     text-shadow: 0 0 40px rgba(201, 162, 39, 0.9), 0 0 80px rgba(201, 162, 39, 0.5), 0 0 120px rgba(201, 162, 39, 0.2);
   }
@@ -664,10 +763,12 @@ body[data-brand="21z"] .brand-cardback-21z {
     opacity: 0;
     transform: scale(0) translateY(0);
   }
+
   30% {
     opacity: 1;
     transform: scale(1.2);
   }
+
   100% {
     opacity: 0;
     transform: scale(0.8) translateY(-40px);
@@ -676,19 +777,17 @@ body[data-brand="21z"] .brand-cardback-21z {
 
 .outcome-overlay-blackjack {
   animation: blackjackOverlayIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards,
-             blackjackOverlayOut 0.6s ease-in 2s forwards;
+    blackjackOverlayOut 0.6s ease-in 2s forwards;
   pointer-events: none;
 }
 
 .blackjack-shimmer-text {
-  background: linear-gradient(
-    90deg,
-    #C9A227 0%,
-    #E8D5A3 25%,
-    var(--bone-white) 50%,
-    #E8D5A3 75%,
-    #C9A227 100%
-  );
+  background: linear-gradient(90deg,
+      #C9A227 0%,
+      #E8D5A3 25%,
+      var(--bone-white) 50%,
+      #E8D5A3 75%,
+      #C9A227 100%);
   background-size: 200% auto;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -700,37 +799,92 @@ body[data-brand="21z"] .brand-cardback-21z {
   animation: starBurst 1.2s ease-out forwards;
 }
 
-.star-burst-delay-1 { animation-delay: 0.1s; }
-.star-burst-delay-2 { animation-delay: 0.25s; }
-.star-burst-delay-3 { animation-delay: 0.4s; }
+.star-burst-delay-1 {
+  animation-delay: 0.1s;
+}
+
+.star-burst-delay-2 {
+  animation-delay: 0.25s;
+}
+
+.star-burst-delay-3 {
+  animation-delay: 0.4s;
+}
 
 /* ================================
    WIN CELEBRATION: CONFETTI BURST
    ================================ */
 
 @keyframes confettiBurst1 {
-  0%   { opacity: 1; transform: translate(0, 0) rotate(0deg) scale(1); }
-  100% { opacity: 0; transform: translate(-120px, -180px) rotate(720deg) scale(0.3); }
+  0% {
+    opacity: 1;
+    transform: translate(0, 0) rotate(0deg) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-120px, -180px) rotate(720deg) scale(0.3);
+  }
 }
+
 @keyframes confettiBurst2 {
-  0%   { opacity: 1; transform: translate(0, 0) rotate(0deg) scale(1); }
-  100% { opacity: 0; transform: translate(150px, -160px) rotate(-540deg) scale(0.4); }
+  0% {
+    opacity: 1;
+    transform: translate(0, 0) rotate(0deg) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(150px, -160px) rotate(-540deg) scale(0.4);
+  }
 }
+
 @keyframes confettiBurst3 {
-  0%   { opacity: 1; transform: translate(0, 0) rotate(0deg) scale(1); }
-  100% { opacity: 0; transform: translate(-80px, -220px) rotate(480deg) scale(0.2); }
+  0% {
+    opacity: 1;
+    transform: translate(0, 0) rotate(0deg) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-80px, -220px) rotate(480deg) scale(0.2);
+  }
 }
+
 @keyframes confettiBurst4 {
-  0%   { opacity: 1; transform: translate(0, 0) rotate(0deg) scale(1); }
-  100% { opacity: 0; transform: translate(100px, -140px) rotate(-360deg) scale(0.5); }
+  0% {
+    opacity: 1;
+    transform: translate(0, 0) rotate(0deg) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(100px, -140px) rotate(-360deg) scale(0.5);
+  }
 }
+
 @keyframes confettiBurst5 {
-  0%   { opacity: 1; transform: translate(0, 0) rotate(0deg) scale(1); }
-  100% { opacity: 0; transform: translate(-160px, -100px) rotate(600deg) scale(0.3); }
+  0% {
+    opacity: 1;
+    transform: translate(0, 0) rotate(0deg) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-160px, -100px) rotate(600deg) scale(0.3);
+  }
 }
+
 @keyframes confettiBurst6 {
-  0%   { opacity: 1; transform: translate(0, 0) rotate(0deg) scale(1); }
-  100% { opacity: 0; transform: translate(130px, -200px) rotate(-480deg) scale(0.2); }
+  0% {
+    opacity: 1;
+    transform: translate(0, 0) rotate(0deg) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(130px, -200px) rotate(-480deg) scale(0.2);
+  }
 }
 
 .confetti-container {
@@ -749,6 +903,7 @@ body[data-brand="21z"] .brand-cardback-21z {
   height: 12px;
   opacity: 0;
 }
+
 .confetti-particle svg {
   width: 100%;
   height: 100%;
@@ -756,55 +911,174 @@ body[data-brand="21z"] .brand-cardback-21z {
 }
 
 /* Trajectory assignment — 6 paths across 24 particles */
-.confetti-particle:nth-child(6n+1) { animation: confettiBurst1 1.4s ease-out forwards; }
-.confetti-particle:nth-child(6n+2) { animation: confettiBurst2 1.3s ease-out forwards; }
-.confetti-particle:nth-child(6n+3) { animation: confettiBurst3 1.5s ease-out forwards; }
-.confetti-particle:nth-child(6n+4) { animation: confettiBurst4 1.2s ease-out forwards; }
-.confetti-particle:nth-child(6n+5) { animation: confettiBurst5 1.6s ease-out forwards; }
-.confetti-particle:nth-child(6n+6) { animation: confettiBurst6 1.35s ease-out forwards; }
+.confetti-particle:nth-child(6n+1) {
+  animation: confettiBurst1 1.4s ease-out forwards;
+}
+
+.confetti-particle:nth-child(6n+2) {
+  animation: confettiBurst2 1.3s ease-out forwards;
+}
+
+.confetti-particle:nth-child(6n+3) {
+  animation: confettiBurst3 1.5s ease-out forwards;
+}
+
+.confetti-particle:nth-child(6n+4) {
+  animation: confettiBurst4 1.2s ease-out forwards;
+}
+
+.confetti-particle:nth-child(6n+5) {
+  animation: confettiBurst5 1.6s ease-out forwards;
+}
+
+.confetti-particle:nth-child(6n+6) {
+  animation: confettiBurst6 1.35s ease-out forwards;
+}
 
 /* Staggered delays */
-.confetti-particle:nth-child(1)  { animation-delay: 0ms; }
-.confetti-particle:nth-child(2)  { animation-delay: 50ms; }
-.confetti-particle:nth-child(3)  { animation-delay: 80ms; }
-.confetti-particle:nth-child(4)  { animation-delay: 120ms; }
-.confetti-particle:nth-child(5)  { animation-delay: 40ms; }
-.confetti-particle:nth-child(6)  { animation-delay: 100ms; }
-.confetti-particle:nth-child(7)  { animation-delay: 150ms; }
-.confetti-particle:nth-child(8)  { animation-delay: 60ms; }
-.confetti-particle:nth-child(9)  { animation-delay: 180ms; }
-.confetti-particle:nth-child(10) { animation-delay: 30ms; }
-.confetti-particle:nth-child(11) { animation-delay: 200ms; }
-.confetti-particle:nth-child(12) { animation-delay: 70ms; }
-.confetti-particle:nth-child(13) { animation-delay: 130ms; }
-.confetti-particle:nth-child(14) { animation-delay: 90ms; }
-.confetti-particle:nth-child(15) { animation-delay: 220ms; }
-.confetti-particle:nth-child(16) { animation-delay: 110ms; }
-.confetti-particle:nth-child(17) { animation-delay: 160ms; }
-.confetti-particle:nth-child(18) { animation-delay: 45ms; }
-.confetti-particle:nth-child(19) { animation-delay: 190ms; }
-.confetti-particle:nth-child(20) { animation-delay: 75ms; }
-.confetti-particle:nth-child(21) { animation-delay: 140ms; }
-.confetti-particle:nth-child(22) { animation-delay: 210ms; }
-.confetti-particle:nth-child(23) { animation-delay: 170ms; }
-.confetti-particle:nth-child(24) { animation-delay: 55ms; }
+.confetti-particle:nth-child(1) {
+  animation-delay: 0ms;
+}
+
+.confetti-particle:nth-child(2) {
+  animation-delay: 50ms;
+}
+
+.confetti-particle:nth-child(3) {
+  animation-delay: 80ms;
+}
+
+.confetti-particle:nth-child(4) {
+  animation-delay: 120ms;
+}
+
+.confetti-particle:nth-child(5) {
+  animation-delay: 40ms;
+}
+
+.confetti-particle:nth-child(6) {
+  animation-delay: 100ms;
+}
+
+.confetti-particle:nth-child(7) {
+  animation-delay: 150ms;
+}
+
+.confetti-particle:nth-child(8) {
+  animation-delay: 60ms;
+}
+
+.confetti-particle:nth-child(9) {
+  animation-delay: 180ms;
+}
+
+.confetti-particle:nth-child(10) {
+  animation-delay: 30ms;
+}
+
+.confetti-particle:nth-child(11) {
+  animation-delay: 200ms;
+}
+
+.confetti-particle:nth-child(12) {
+  animation-delay: 70ms;
+}
+
+.confetti-particle:nth-child(13) {
+  animation-delay: 130ms;
+}
+
+.confetti-particle:nth-child(14) {
+  animation-delay: 90ms;
+}
+
+.confetti-particle:nth-child(15) {
+  animation-delay: 220ms;
+}
+
+.confetti-particle:nth-child(16) {
+  animation-delay: 110ms;
+}
+
+.confetti-particle:nth-child(17) {
+  animation-delay: 160ms;
+}
+
+.confetti-particle:nth-child(18) {
+  animation-delay: 45ms;
+}
+
+.confetti-particle:nth-child(19) {
+  animation-delay: 190ms;
+}
+
+.confetti-particle:nth-child(20) {
+  animation-delay: 75ms;
+}
+
+.confetti-particle:nth-child(21) {
+  animation-delay: 140ms;
+}
+
+.confetti-particle:nth-child(22) {
+  animation-delay: 210ms;
+}
+
+.confetti-particle:nth-child(23) {
+  animation-delay: 170ms;
+}
+
+.confetti-particle:nth-child(24) {
+  animation-delay: 55ms;
+}
 
 /* Positional offsets — scatter starting positions */
-.confetti-particle:nth-child(4n+1) { margin-left: -10px; margin-top: -5px; }
-.confetti-particle:nth-child(4n+2) { margin-left: 10px; margin-top: 5px; }
-.confetti-particle:nth-child(4n+3) { margin-left: -5px; margin-top: 10px; }
-.confetti-particle:nth-child(4n)   { margin-left: 5px; margin-top: -10px; }
+.confetti-particle:nth-child(4n+1) {
+  margin-left: -10px;
+  margin-top: -5px;
+}
+
+.confetti-particle:nth-child(4n+2) {
+  margin-left: 10px;
+  margin-top: 5px;
+}
+
+.confetti-particle:nth-child(4n+3) {
+  margin-left: -5px;
+  margin-top: 10px;
+}
+
+.confetti-particle:nth-child(4n) {
+  margin-left: 5px;
+  margin-top: -10px;
+}
 
 /* ================================
    WIN CELEBRATION: CHIP SLIDE
    ================================ */
 
 @keyframes chipSlideIn {
-  0%   { opacity: 0; transform: translateX(200px) rotate(0deg); }
-  30%  { opacity: 1; }
-  70%  { transform: translateX(-10px) rotate(-720deg); }
-  85%  { transform: translateX(5px) rotate(-700deg); }
-  100% { opacity: 0; transform: translateX(0) rotate(-720deg); }
+  0% {
+    opacity: 0;
+    transform: translateX(200px) rotate(0deg);
+  }
+
+  30% {
+    opacity: 1;
+  }
+
+  70% {
+    transform: translateX(-10px) rotate(-720deg);
+  }
+
+  85% {
+    transform: translateX(5px) rotate(-700deg);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateX(0) rotate(-720deg);
+  }
 }
 
 .chip-slide-container {
@@ -823,44 +1097,74 @@ body[data-brand="21z"] .brand-cardback-21z {
   display: block;
   margin-bottom: 4px;
 }
+
 .chip-slide svg {
   width: 100%;
   height: 100%;
   display: block;
 }
 
-.chip-slide:nth-child(1) { animation: chipSlideIn 1.2s ease-out 0.1s forwards; }
-.chip-slide:nth-child(2) { animation: chipSlideIn 1.2s ease-out 0.25s forwards; }
-.chip-slide:nth-child(3) { animation: chipSlideIn 1.2s ease-out 0.4s forwards; }
-.chip-slide:nth-child(4) { animation: chipSlideIn 1.2s ease-out 0.55s forwards; }
+.chip-slide:nth-child(1) {
+  animation: chipSlideIn 1.2s ease-out 0.1s forwards;
+}
+
+.chip-slide:nth-child(2) {
+  animation: chipSlideIn 1.2s ease-out 0.25s forwards;
+}
+
+.chip-slide:nth-child(3) {
+  animation: chipSlideIn 1.2s ease-out 0.4s forwards;
+}
+
+.chip-slide:nth-child(4) {
+  animation: chipSlideIn 1.2s ease-out 0.55s forwards;
+}
 
 /* ================================
    WIN CELEBRATION: TABLE FLASH
    ================================ */
 
 @keyframes tableFlash {
-  0%   { box-shadow: inset 0 0 0 0 rgba(201, 162, 39, 0); }
-  15%  { box-shadow: inset 0 0 60px 20px rgba(201, 162, 39, 0.15); }
-  100% { box-shadow: inset 0 0 0 0 rgba(201, 162, 39, 0); }
+  0% {
+    box-shadow: inset 0 0 0 0 rgba(201, 162, 39, 0);
+  }
+
+  15% {
+    box-shadow: inset 0 0 60px 20px rgba(201, 162, 39, 0.15);
+  }
+
+  100% {
+    box-shadow: inset 0 0 0 0 rgba(201, 162, 39, 0);
+  }
 }
 
 .table-flash-win {
   animation: tableFlash 1s ease-out;
 }
+
 .table-flash-blackjack {
   animation: tableFlash 1.2s ease-out;
 }
 
 /* 21z table flash: cyan */
 @keyframes tableFlash21z {
-  0%   { box-shadow: inset 0 0 0 0 rgba(0, 240, 255, 0); }
-  15%  { box-shadow: inset 0 0 80px 30px rgba(0, 240, 255, 0.1); }
-  100% { box-shadow: inset 0 0 0 0 rgba(0, 240, 255, 0); }
+  0% {
+    box-shadow: inset 0 0 0 0 rgba(0, 240, 255, 0);
+  }
+
+  15% {
+    box-shadow: inset 0 0 80px 30px rgba(0, 240, 255, 0.1);
+  }
+
+  100% {
+    box-shadow: inset 0 0 0 0 rgba(0, 240, 255, 0);
+  }
 }
 
 body[data-brand="21z"] .table-flash-win {
   animation: tableFlash21z 1s ease-out;
 }
+
 body[data-brand="21z"] .table-flash-blackjack {
   animation: tableFlash21z 1.2s ease-out;
 }
@@ -873,14 +1177,17 @@ body[data-brand="21z"] .table-flash-blackjack {
   .confetti-particle:nth-child(n+13) {
     display: none;
   }
+
   .confetti-particle {
     width: 10px;
     height: 10px;
   }
+
   .chip-slide {
     width: 28px;
     height: 28px;
   }
+
   .chip-slide:nth-child(n+3) {
     display: none;
   }
@@ -924,9 +1231,17 @@ body[data-brand="21z"] .tooltip::after {
 
 /* Button press animation */
 @keyframes buttonPress {
-  0% { transform: scale(1); }
-  50% { transform: scale(0.95); }
-  100% { transform: scale(1); }
+  0% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(0.95);
+  }
+
+  100% {
+    transform: scale(1);
+  }
 }
 
 .btn-press:active {
@@ -939,12 +1254,15 @@ body[data-brand="21z"] .tooltip::after {
     transform: translate(300px, -200px) rotate(15deg) scale(0.8);
     opacity: 0;
   }
+
   20% {
     opacity: 1;
   }
+
   80% {
     transform: translate(10px, -10px) rotate(2deg) scale(1.02);
   }
+
   100% {
     transform: translate(0, 0) rotate(0) scale(1);
   }
@@ -959,9 +1277,11 @@ body[data-brand="21z"] .tooltip::after {
   0% {
     transform: perspective(1000px) rotateY(0deg);
   }
+
   50% {
     transform: perspective(1000px) rotateY(90deg);
   }
+
   100% {
     transform: perspective(1000px) rotateY(0deg);
   }
@@ -973,9 +1293,12 @@ body[data-brand="21z"] .tooltip::after {
 
 /* Active hand pulse - gold glow for player's turn */
 @keyframes activeHandPulse {
-  0%, 100% {
+
+  0%,
+  100% {
     box-shadow: 0 0 10px rgba(201, 162, 39, 0.3), inset 0 0 5px rgba(201, 162, 39, 0.1);
   }
+
   50% {
     box-shadow: 0 0 20px rgba(201, 162, 39, 0.6), 0 0 30px rgba(201, 162, 39, 0.3), inset 0 0 10px rgba(201, 162, 39, 0.2);
   }
@@ -990,10 +1313,13 @@ body[data-brand="21z"] .tooltip::after {
 
 /* Winner celebration - green glow */
 @keyframes winnerCelebrate {
-  0%, 100% {
+
+  0%,
+  100% {
     box-shadow: 0 0 15px rgba(74, 222, 128, 0.5);
     transform: scale(1);
   }
+
   50% {
     box-shadow: 0 0 30px rgba(74, 222, 128, 0.8), 0 0 50px rgba(74, 222, 128, 0.4);
     transform: scale(1.02);
@@ -1016,10 +1342,13 @@ body[data-brand="21z"] .tooltip::after {
 
 /* Dealer turn indicator */
 @keyframes dealerDrawing {
-  0%, 100% {
+
+  0%,
+  100% {
     opacity: 1;
     box-shadow: 0 0 10px rgba(201, 162, 39, 0.3);
   }
+
   50% {
     opacity: 0.8;
     box-shadow: 0 0 20px rgba(201, 162, 39, 0.5);
@@ -1047,9 +1376,12 @@ body[data-brand="21z"] .tooltip::after {
 
 /* 21z: active hand uses cyan pulse instead of gold */
 @keyframes activeHandPulse21z {
-  0%, 100% {
+
+  0%,
+  100% {
     box-shadow: 0 0 10px rgba(0, 240, 255, 0.2), inset 0 0 5px rgba(0, 240, 255, 0.05);
   }
+
   50% {
     box-shadow: 0 0 20px rgba(0, 240, 255, 0.4), 0 0 30px rgba(0, 240, 255, 0.15), inset 0 0 10px rgba(0, 240, 255, 0.1);
   }
@@ -1064,10 +1396,13 @@ body[data-brand="21z"] .active-hand {
 
 /* 21z: winner hand uses neon green */
 @keyframes winnerCelebrate21z {
-  0%, 100% {
+
+  0%,
+  100% {
     box-shadow: 0 0 15px rgba(0, 255, 179, 0.35);
     transform: scale(1);
   }
+
   50% {
     box-shadow: 0 0 25px rgba(0, 255, 179, 0.55), 0 0 40px rgba(0, 255, 179, 0.2);
     transform: scale(1.02);
@@ -1083,10 +1418,13 @@ body[data-brand="21z"] .winner-hand {
 
 /* 21z: dealer turn uses cyan */
 @keyframes dealerDrawing21z {
-  0%, 100% {
+
+  0%,
+  100% {
     opacity: 1;
     box-shadow: 0 0 10px rgba(0, 240, 255, 0.2);
   }
+
   50% {
     opacity: 0.8;
     box-shadow: 0 0 20px rgba(0, 240, 255, 0.35);
@@ -1110,8 +1448,15 @@ body[data-brand="21z"] .push-hand {
 
 /* 21z: win glow uses neon green */
 @keyframes goldPulse21z {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(0, 255, 179, 0.3); }
-  50% { box-shadow: 0 0 20px 8px rgba(0, 255, 179, 0.15); }
+
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(0, 255, 179, 0.3);
+  }
+
+  50% {
+    box-shadow: 0 0 20px 8px rgba(0, 255, 179, 0.15);
+  }
 }
 
 body[data-brand="21z"] .win-glow {
@@ -1120,10 +1465,13 @@ body[data-brand="21z"] .win-glow {
 
 /* 21z: blackjack celebration uses cyan */
 @keyframes blackjackGlow21z {
-  0%, 100% {
+
+  0%,
+  100% {
     box-shadow: 0 0 10px rgba(0, 240, 255, 0.4), 0 0 20px rgba(0, 240, 255, 0.2);
     text-shadow: 0 0 10px rgba(0, 240, 255, 0.6);
   }
+
   50% {
     box-shadow: 0 0 25px rgba(0, 240, 255, 0.6), 0 0 40px rgba(0, 240, 255, 0.3);
     text-shadow: 0 0 20px rgba(0, 240, 255, 0.8);
@@ -1136,23 +1484,24 @@ body[data-brand="21z"] .blackjack-glow {
 
 /* 21z: blackjack shimmer text uses cyan gradient */
 @keyframes blackjackPulse21z {
-  0%, 100% {
+
+  0%,
+  100% {
     text-shadow: 0 0 20px rgba(0, 240, 255, 0.5), 0 0 40px rgba(0, 240, 255, 0.2);
   }
+
   50% {
     text-shadow: 0 0 40px rgba(0, 240, 255, 0.7), 0 0 80px rgba(0, 240, 255, 0.35), 0 0 120px rgba(0, 240, 255, 0.1);
   }
 }
 
 body[data-brand="21z"] .blackjack-shimmer-text {
-  background: linear-gradient(
-    90deg,
-    #00f0ff 0%,
-    #8890a6 25%,
-    var(--bone-white) 50%,
-    #8890a6 75%,
-    #00f0ff 100%
-  );
+  background: linear-gradient(90deg,
+      #00f0ff 0%,
+      #8890a6 25%,
+      var(--bone-white) 50%,
+      #8890a6 75%,
+      #00f0ff 100%);
   background-size: 200% auto;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -1170,6 +1519,7 @@ body[data-brand="21z"] .blackjack-shimmer-text {
     opacity: 0;
     transform: scale(0.95) translateY(20px);
   }
+
   100% {
     opacity: 1;
     transform: scale(1) translateY(0);
@@ -1186,9 +1536,11 @@ body[data-brand="21z"] .blackjack-shimmer-text {
     transform: scale(0.8);
     opacity: 0;
   }
+
   50% {
     transform: scale(1.05);
   }
+
   100% {
     transform: scale(1);
     opacity: 1;
@@ -1201,9 +1553,12 @@ body[data-brand="21z"] .blackjack-shimmer-text {
 
 /* Pulse animation for pending states */
 @keyframes gentle-pulse {
-  0%, 100% {
+
+  0%,
+  100% {
     opacity: 1;
   }
+
   50% {
     opacity: 0.6;
   }
@@ -1215,12 +1570,16 @@ body[data-brand="21z"] .blackjack-shimmer-text {
 
 /* Card shuffle loading animation */
 @keyframes shuffle-bob {
-  0%, 100% {
+
+  0%,
+  100% {
     transform: translateY(0) rotate(0deg);
   }
+
   25% {
     transform: translateY(-8px) rotate(-2deg);
   }
+
   75% {
     transform: translateY(-4px) rotate(1deg);
   }
@@ -1232,9 +1591,11 @@ body[data-brand="21z"] .blackjack-shimmer-text {
     background-color: rgb(63, 63, 70);
     transform: scale(1);
   }
+
   50% {
     transform: scale(1.2);
   }
+
   100% {
     background-color: rgb(34, 197, 94);
     transform: scale(1);
@@ -1250,18 +1611,17 @@ body[data-brand="21z"] .blackjack-shimmer-text {
   0% {
     background-position: -200% 0;
   }
+
   100% {
     background-position: 200% 0;
   }
 }
 
 .animate-shimmer {
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(255, 255, 255, 0.1) 50%,
-    transparent 100%
-  );
+  background: linear-gradient(90deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.1) 50%,
+      transparent 100%);
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
 }
@@ -1272,6 +1632,7 @@ body[data-brand="21z"] .blackjack-shimmer-text {
     opacity: 0;
     transform: scale(0.9);
   }
+
   100% {
     opacity: 1;
     transform: scale(1);
@@ -1287,15 +1648,19 @@ body[data-brand="21z"] .blackjack-shimmer-text {
   0% {
     transform: scale(1);
   }
+
   25% {
     transform: scale(1.02);
   }
+
   50% {
     transform: scale(0.98);
   }
+
   75% {
     transform: scale(1.01);
   }
+
   100% {
     transform: scale(1);
   }
@@ -1307,9 +1672,17 @@ body[data-brand="21z"] .blackjack-shimmer-text {
 
 /* Chip selection bounce animation */
 @keyframes chipSelect {
-  0% { transform: scale(1); }
-  50% { transform: scale(1.15) translateY(-2px); }
-  100% { transform: scale(1.1); }
+  0% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.15) translateY(-2px);
+  }
+
+  100% {
+    transform: scale(1.1);
+  }
 }
 
 .chip-select {
@@ -1322,10 +1695,14 @@ body[data-brand="21z"] .blackjack-shimmer-text {
 
 /* Spacing scale */
 :root {
-  --space-tight: 0.5rem;    /* gap-2, 8px */
-  --space-standard: 1rem;   /* gap-4, 16px */
-  --space-loose: 2rem;      /* gap-8, 32px */
-  --space-section: 3rem;    /* gap-12, 48px */
+  --space-tight: 0.5rem;
+  /* gap-2, 8px */
+  --space-standard: 1rem;
+  /* gap-4, 16px */
+  --space-loose: 2rem;
+  /* gap-8, 32px */
+  --space-section: 3rem;
+  /* gap-12, 48px */
 }
 
 /* Shadow system */
@@ -1345,11 +1722,14 @@ body[data-brand="21z"] {
 }
 
 /* Default transitions for interactive elements */
-button, a, [role="button"] {
+button,
+a,
+[role="button"] {
   transition: all 0.15s ease-out;
 }
 
 @media (prefers-reduced-motion: reduce) {
+
   *,
   *::before,
   *::after {
@@ -1390,7 +1770,7 @@ body[data-brand="21z"] .demo-banner-cta:hover {
 }
 
 /* Demo Nudge Toast — 21z overrides */
-body[data-brand="21z"] .demo-nudge-toast > div {
+body[data-brand="21z"] .demo-nudge-toast>div {
   background: rgba(5, 5, 10, 0.97);
   border-color: rgba(0, 240, 255, 0.3);
   clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));

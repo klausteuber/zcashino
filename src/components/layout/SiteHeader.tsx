@@ -25,9 +25,6 @@ export default function SiteHeader() {
           <Link href="/provably-fair" className="hover:text-masque-gold transition-colors shrink-0 snap-start">
             Provably Fair
           </Link>
-          <Link href="/responsible-gambling" className="hover:text-masque-gold transition-colors shrink-0 snap-start">
-            Responsible Gambling
-          </Link>
         </nav>
       </div>
     </header>

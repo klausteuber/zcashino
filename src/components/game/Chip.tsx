@@ -36,6 +36,7 @@ export default function Chip({
     <button
       onClick={onClick}
       disabled={disabled}
+      data-value={value}
       className={`
         ${sizeClasses[size]}
         ${baseStyle} chip
