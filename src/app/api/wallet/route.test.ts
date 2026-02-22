@@ -140,7 +140,15 @@ describe('/api/wallet POST withdrawal-status transitions', () => {
     checkPublicRateLimitMock.mockReturnValue({ allowed: true })
     createRateLimitResponseMock.mockReturnValue(new Response('rate-limited', { status: 429 }))
     isKillSwitchActiveMock.mockReturnValue(false)
-    requirePlayerSessionMock.mockReturnValue({ ok: true })
+    requirePlayerSessionMock.mockReturnValue({
+      ok: true,
+      legacyFallback: false,
+      session: {
+        sessionId: 'session-1',
+        walletAddress: 'demo_wallet',
+        exp: Date.now() + 60_000,
+      },
+    })
     logPlayerCounterEventMock.mockResolvedValue(undefined)
     prismaMock.$transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => fn(prismaMock))
     checkNodeStatusMock.mockResolvedValue({ connected: true, synced: true })
@@ -384,6 +392,76 @@ describe('/api/wallet POST withdrawal-status transitions', () => {
       'unified',
       'testnet'
     )
+  })
+
+  it('rejects GET wallet access when session falls back to legacy mode', async () => {
+    requirePlayerSessionMock.mockReturnValueOnce({
+      ok: true,
+      legacyFallback: true,
+      session: {
+        sessionId: 'session-legacy',
+        walletAddress: 'legacy',
+        exp: Date.now() + 60_000,
+      },
+    })
+
+    const response = await GET({
+      nextUrl: { searchParams: new URLSearchParams('sessionId=session-legacy') },
+    } as unknown as NextRequest)
+
+    expect(response.status).toBe(401)
+    await expect(response.json()).resolves.toMatchObject({
+      error: 'Player session expired. Please refresh your session.',
+    })
+    expect(prismaMock.session.findUnique).not.toHaveBeenCalled()
+  })
+
+  it('uses trusted cookie session id for GET wallet lookup', async () => {
+    requirePlayerSessionMock.mockReturnValueOnce({
+      ok: true,
+      legacyFallback: false,
+      session: {
+        sessionId: 'session-cookie',
+        walletAddress: 'real_wallet',
+        exp: Date.now() + 60_000,
+      },
+    })
+
+    prismaMock.session.findUnique.mockResolvedValueOnce({
+      id: 'session-cookie',
+      balance: 1,
+      walletAddress: 'real_wallet',
+      isAuthenticated: true,
+      withdrawalAddress: 'u1dest',
+      authTxHash: null,
+      authConfirmedAt: null,
+      wallet: {
+        id: 'wallet-cookie',
+        unifiedAddr: 'utestUnifiedDepositAddressCookie',
+        transparentAddr: 'tmock-cookie',
+        network: 'testnet',
+      },
+    })
+
+    getDepositInfoMock.mockReturnValueOnce({
+      address: 'utestUnifiedDepositAddressCookie',
+      addressType: 'unified',
+      network: 'testnet',
+      minimumDeposit: 0.001,
+      confirmationsRequired: 3,
+      qrCodeData: 'utestUnifiedDepositAddressCookie',
+    })
+
+    const response = await GET({
+      nextUrl: { searchParams: new URLSearchParams('sessionId=attacker-session-id') },
+    } as unknown as NextRequest)
+
+    expect(response.status).toBe(200)
+    await response.json()
+    expect(prismaMock.session.findUnique).toHaveBeenCalledWith({
+      where: { id: 'session-cookie' },
+      include: { wallet: true },
+    })
   })
 
   it('returns compatibility fields and monitors unified deposit address on check-deposits', async () => {

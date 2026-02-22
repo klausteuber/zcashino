@@ -93,9 +93,21 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    const playerSession = requirePlayerSession(request, sessionId)
+    if (!playerSession.ok) {
+      return playerSession.response
+    }
+    if (playerSession.legacyFallback) {
+      return NextResponse.json(
+        { error: 'Player session expired. Please refresh your session.' },
+        { status: 401 }
+      )
+    }
+    const trustedSessionId = playerSession.session.sessionId
+
     // Get session with wallet
     const session = await prisma.session.findUnique({
-      where: { id: sessionId },
+      where: { id: trustedSessionId },
       include: { wallet: true },
     })
 
@@ -106,7 +118,7 @@ export async function GET(request: NextRequest) {
     // If no wallet exists, create one
     let wallet = session.wallet
     if (!wallet) {
-      wallet = await createDepositWalletForSession(sessionId)
+      wallet = await createDepositWalletForSession(trustedSessionId)
     }
 
     const { depositAddress, depositAddressType } = getPreferredDepositAddress(wallet)

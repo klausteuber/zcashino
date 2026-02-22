@@ -446,3 +446,22 @@ In-memory limits and remote font fetches are acceptable in dev, but must be call
 
 3. **Empty states must communicate system status visually, not just through text.**
    A text string "No recent verified hands" fails to engage players and doesn't communicate the system's "always active" heartbeat. An empty state visualization (e.g., a pulsing "Live Seed Active" ring) transforms a blank feed into a manifestation of the platform's provably fair operations.
+
+## Session Hardening Learnings (2026-02-22)
+
+1. **Strict mode is not enough if session restore trusts query/localStorage identifiers.**
+   Flipping `PLAYER_SESSION_AUTH_MODE=strict` protects privileged POST flows, but `GET /api/session?sessionId=...` can still become an escalation path if it mints a fresh signed cookie from a caller-supplied ID.
+
+2. **Every read endpoint that accepts `sessionId` must bind to a trusted cookie identity.**
+   Query params are convenience hints, not identity. Route handlers must derive effective identity from `requirePlayerSession(...)` and use `playerSession.session.sessionId` for DB lookups.
+
+3. **Legacy fallback should be denied on sensitive GET routes during hardening.**
+   For wallet/game history endpoints, returning 401 on `legacyFallback` prevents an attacker from using an ID-only path to read data during compat migration windows.
+
+4. **Coverage should include mismatch attacks, not just happy paths.**
+   Added tests for:
+   - no-cookie + query ID restore attempts
+   - cookie/query session mismatch
+   - forced trusted-session DB queries despite attacker query values
+
+**Key files:** `src/app/api/session/route.ts`, `src/app/api/wallet/route.ts`, `src/app/api/game/route.ts`, `src/app/api/video-poker/route.ts`, `src/app/api/session/route.test.ts`, `src/app/api/wallet/route.test.ts`, `src/app/api/game/route.test.ts`, `src/app/api/video-poker/route.test.ts`

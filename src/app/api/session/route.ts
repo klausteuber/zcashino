@@ -4,7 +4,11 @@ import { validateAddress, DEFAULT_NETWORK, roundZec } from '@/lib/wallet'
 import { createDepositWalletForSession } from '@/lib/wallet/session-wallet'
 import { checkPublicRateLimit, createRateLimitResponse } from '@/lib/admin/rate-limit'
 import { isKillSwitchActive } from '@/lib/kill-switch'
-import { requirePlayerSession, setPlayerSessionCookie } from '@/lib/auth/player-session'
+import {
+  parsePlayerSessionFromRequest,
+  requirePlayerSession,
+  setPlayerSessionCookie,
+} from '@/lib/auth/player-session'
 import { parseWithSchema, sessionBodySchema } from '@/lib/validation/api-schemas'
 import { getProvablyFairMode, LEGACY_PER_GAME_MODE } from '@/lib/provably-fair/mode'
 import { getPublicFairnessStateIfExists } from '@/lib/provably-fair/session-fairness'
@@ -141,7 +145,10 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Try to restore session by ID first (returning user with localStorage)
+    const cookieSession = parsePlayerSessionFromRequest(request)
+    const trustedSessionId = cookieSession?.sessionId
+
+    // Legacy localStorage session restore hint (accepted only when it matches a valid signed cookie)
     const requestedSessionId = request.nextUrl.searchParams.get('sessionId')
     // Also accept wallet address for direct lookups
     const walletAddress = request.headers.get('x-wallet-address') ||
@@ -149,20 +156,38 @@ export async function GET(request: NextRequest) {
 
     let session = null
 
-    // Priority 1: Restore by session ID (most common for returning users)
-    if (requestedSessionId) {
+    // Prevent restoring another session by passing an ID without a matching signed cookie.
+    if (requestedSessionId && (!trustedSessionId || requestedSessionId !== trustedSessionId)) {
+      return NextResponse.json(
+        { error: 'Session expired. Please refresh to start a new session.' },
+        { status: 401 }
+      )
+    }
+
+    // Priority 1: Restore by signed cookie
+    if (trustedSessionId) {
       session = await prisma.session.findUnique({
-        where: { id: requestedSessionId },
+        where: { id: trustedSessionId },
         include: { wallet: true }
       })
     }
 
-    // Priority 2: Find by wallet address
+    // Priority 2: Find by wallet address (only if this browser already has a matching signed cookie)
     if (!session && walletAddress) {
-      session = await prisma.session.findUnique({
+      const walletSession = await prisma.session.findUnique({
         where: { walletAddress },
         include: { wallet: true }
       })
+
+      if (walletSession) {
+        if (!trustedSessionId || trustedSessionId !== walletSession.id) {
+          return NextResponse.json(
+            { error: 'Session expired. Please refresh to start a new session.' },
+            { status: 401 }
+          )
+        }
+        session = walletSession
+      }
     }
 
     // Priority 3: Create new demo session

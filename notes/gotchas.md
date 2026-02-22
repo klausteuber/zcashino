@@ -761,3 +761,19 @@ Also ignored the user's own statement ("I thought we changed the architecture") 
 6. **Trust the user's memory** — if they say "we changed X", verify on VPS before contradicting
 
 **Lesson:** Production state = what's running on the VPS. Repo state = what code supports. These are different things. Always verify the former when answering questions about "what is production doing."
+
+---
+
+### Session ID restore can bypass strict cookie intent if restore endpoint mints cookies from query IDs (2026-02-22)
+
+**Symptom:** Even with strict player-session auth for privileged actions, an attacker with a leaked `sessionId` could attempt to restore that session by calling `GET /api/session?sessionId=<victim>` and receive a fresh signed cookie.
+
+**Root Cause:** Session restore accepted caller-provided identifiers as authority. The route used query `sessionId` (and wallet lookup hints) directly, then set a signed cookie for the found session. Identity was not derived from an existing valid cookie.
+
+**Fix:**
+1. In `GET /api/session`, only allow restore when query `sessionId` matches a valid signed cookie identity.
+2. Reject ID-only/mismatch restore attempts with 401.
+3. In `GET /api/wallet`, `GET /api/game`, and `GET /api/video-poker`, require `requirePlayerSession(...)`, reject `legacyFallback`, and use trusted cookie session ID for DB queries.
+4. Added regression tests for no-cookie/mismatch/attacker-query scenarios.
+
+**Key files:** `src/app/api/session/route.ts`, `src/app/api/wallet/route.ts`, `src/app/api/game/route.ts`, `src/app/api/video-poker/route.ts`, `src/app/api/session/route.test.ts`, `src/app/api/wallet/route.test.ts`, `src/app/api/game/route.test.ts`, `src/app/api/video-poker/route.test.ts`

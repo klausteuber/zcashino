@@ -659,12 +659,23 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Session ID required' }, { status: 400 })
   }
 
+  const playerSession = requirePlayerSession(request, sessionId)
+  if (!playerSession.ok) return playerSession.response
+  if (playerSession.legacyFallback) {
+    return NextResponse.json(
+      { error: 'Player session expired. Please refresh your session.' },
+      { status: 401 }
+    )
+  }
+
+  const trustedSessionId = playerSession.session.sessionId
+
   if (gameId) {
     const game = await prisma.videoPokerGame.findUnique({
       where: { id: gameId },
     })
 
-    if (!game || game.sessionId !== sessionId) {
+    if (!game || game.sessionId !== trustedSessionId) {
       return NextResponse.json({ error: 'Game not found' }, { status: 404 })
     }
 
@@ -706,7 +717,7 @@ export async function GET(request: NextRequest) {
 
   // Game history
   const games = await prisma.videoPokerGame.findMany({
-    where: { sessionId },
+    where: { sessionId: trustedSessionId },
     orderBy: { createdAt: 'desc' },
     take: 50,
     select: {

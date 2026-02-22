@@ -162,11 +162,17 @@ vi.mock('@/lib/telemetry/player-events', () => ({
   logPlayerCounterEvent: mocks.logPlayerCounterEventMock,
 }))
 
-import { POST } from './route'
+import { GET, POST } from './route'
 
 function makeRequest(body: unknown): NextRequest {
   return {
     json: vi.fn().mockResolvedValue(body),
+  } as unknown as NextRequest
+}
+
+function makeGetRequest(search: string): NextRequest {
+  return {
+    nextUrl: { searchParams: new URLSearchParams(search) },
   } as unknown as NextRequest
 }
 
@@ -382,8 +388,69 @@ describe('/api/game POST race/idempotency', () => {
     await expect(response.json()).resolves.toMatchObject({
       error: 'Invalid request payload',
       code: 'INVALID_SIDE_BET',
+  })
+})
+
+describe('/api/game GET session auth', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    checkPublicRateLimitMock.mockReturnValue({ allowed: true })
+    createRateLimitResponseMock.mockReturnValue(new Response('rate-limited', { status: 429 }))
+    requirePlayerSessionMock.mockReturnValue({
+      ok: true,
+      legacyFallback: false,
+      session: {
+        sessionId: 'session-cookie',
+        walletAddress: 'real_wallet',
+        exp: Date.now() + 60_000,
+      },
     })
   })
+
+  it('rejects legacy fallback access for GET history', async () => {
+    requirePlayerSessionMock.mockReturnValueOnce({
+      ok: true,
+      legacyFallback: true,
+      session: {
+        sessionId: 'session-legacy',
+        walletAddress: 'legacy',
+        exp: Date.now() + 60_000,
+      },
+    })
+
+    const response = await GET(makeGetRequest('sessionId=session-legacy'))
+
+    expect(response.status).toBe(401)
+    await expect(response.json()).resolves.toMatchObject({
+      error: 'Player session expired. Please refresh your session.',
+    })
+    expect(prismaMock.blackjackGame.findMany).not.toHaveBeenCalled()
+  })
+
+  it('uses trusted cookie session for GET history query', async () => {
+    prismaMock.blackjackGame.findMany.mockResolvedValueOnce([])
+
+    const response = await GET(makeGetRequest('sessionId=attacker-session'))
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({ games: [] })
+    expect(prismaMock.blackjackGame.findMany).toHaveBeenCalledWith({
+      where: { sessionId: 'session-cookie' },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+      select: {
+        id: true,
+        mainBet: true,
+        status: true,
+        outcome: true,
+        payout: true,
+        serverSeedHash: true,
+        nonce: true,
+        createdAt: true,
+      },
+    })
+  })
+})
 
   it('rejects perfectPairsBet above main bet with INVALID_SIDE_BET code', async () => {
     prismaMock.session.findUnique.mockResolvedValueOnce({
