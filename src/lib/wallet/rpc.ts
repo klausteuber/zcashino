@@ -61,13 +61,19 @@ export function nextFeeForUnpaidActionError(currentFee: number, errorMessage: st
   return nextFeeZats / 1e8
 }
 
+// Short timeout for liveness probes (checkNodeStatus), longer for queries
+// that may block while zcashd is busy building shielded proofs.
+const RPC_LIVENESS_TIMEOUT_MS = 5_000   // 5s for getblockchaininfo
+const RPC_DEFAULT_TIMEOUT_MS = 30_000   // 30s for balance/send operations
+
 /**
  * Make an RPC call to the Zcash node
  */
 async function rpcCall<T = unknown>(
   method: string,
   params: unknown[] = [],
-  network: ZcashNetwork = DEFAULT_NETWORK
+  network: ZcashNetwork = DEFAULT_NETWORK,
+  timeoutMs?: number
 ): Promise<T> {
   const config = NETWORK_CONFIG[network]
 
@@ -80,6 +86,9 @@ async function rpcCall<T = unknown>(
 
   const auth = Buffer.from(`${RPC_USER}:${RPC_PASSWORD}`).toString('base64')
 
+  // Use short timeout for liveness checks, longer for everything else
+  const timeout = timeoutMs ?? (method === 'getblockchaininfo' ? RPC_LIVENESS_TIMEOUT_MS : RPC_DEFAULT_TIMEOUT_MS)
+
   try {
     const response = await fetch(config.rpcUrl, {
       method: 'POST',
@@ -88,7 +97,7 @@ async function rpcCall<T = unknown>(
         Authorization: `Basic ${auth}`,
       },
       body,
-      signal: AbortSignal.timeout(5000), // 5s timeout to fail fast when node is down
+      signal: AbortSignal.timeout(timeout),
     })
 
     // zcashd returns HTTP 500 for JSON-RPC errors but the body still has structured error info
