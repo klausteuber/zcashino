@@ -10,9 +10,10 @@ import { getSessionSeedPoolStatus } from '@/lib/services/session-seed-pool-manag
 const POOL_LOW_THRESHOLD = 5
 const BALANCE_WARN_THRESHOLD = parseFloat(process.env.HOUSE_BALANCE_ALERT_THRESHOLD || '0.5')
 
-// Max time the health endpoint should take to respond.
-// Keeps monitoring scripts (curl --max-time 15) from timing out.
-const HEALTH_RPC_TIMEOUT_MS = 8_000
+// Max time the balance RPC is allowed before the health endpoint gives up
+// and returns houseBalance: null.  Must be well under the monitoring
+// script's curl --max-time (20s) to avoid false "unreachable" alerts.
+const HEALTH_RPC_TIMEOUT_MS = 12_000
 
 export async function GET() {
   const checks: Record<string, unknown> = {}

@@ -41,14 +41,25 @@ if ! command -v jq &> /dev/null; then
 fi
 
 SEVERITY=$(echo "$RESPONSE" | jq -r '.status // .severity // "unknown"')
-HOUSE_BALANCE=$(echo "$RESPONSE" | jq -r '.houseBalance.confirmed // "0"')
-PENDING_BALANCE=$(echo "$RESPONSE" | jq -r '.houseBalance.pending // "0"')
 PENDING_WITHDRAWALS=$(echo "$RESPONSE" | jq -r '.pendingWithdrawals // "0"')
-TOTAL_BALANCE=$(echo "$HOUSE_BALANCE + $PENDING_BALANCE" | bc -l 2>/dev/null || echo "$HOUSE_BALANCE")
 
-# Check if balance is below threshold
-if [[ "$TOTAL_BALANCE" != "null" ]] && (( $(echo "$TOTAL_BALANCE < $MIN_BALANCE" | bc -l 2>/dev/null || echo "0") )); then
-  alert "LOW BALANCE: House wallet total is ${TOTAL_BALANCE} ZEC (${HOUSE_BALANCE} confirmed, ${PENDING_BALANCE} pending). Threshold: ${MIN_BALANCE} ZEC. Pending withdrawals: ${PENDING_WITHDRAWALS}"
+# houseBalance may be null when zcashd is slow (RPC timeout).
+# Skip the balance check entirely in that case — don't fire a false LOW BALANCE alert.
+BALANCE_NULL=$(echo "$RESPONSE" | jq -r '.houseBalance == null')
+
+if [[ "$BALANCE_NULL" == "true" ]]; then
+  HOUSE_BALANCE="unavailable"
+  PENDING_BALANCE="unavailable"
+  TOTAL_BALANCE="unavailable"
+else
+  HOUSE_BALANCE=$(echo "$RESPONSE" | jq -r '.houseBalance.confirmed // "0"')
+  PENDING_BALANCE=$(echo "$RESPONSE" | jq -r '.houseBalance.pending // "0"')
+  TOTAL_BALANCE=$(echo "$HOUSE_BALANCE + $PENDING_BALANCE" | bc -l 2>/dev/null || echo "$HOUSE_BALANCE")
+
+  # Check if balance is below threshold
+  if (( $(echo "$TOTAL_BALANCE < $MIN_BALANCE" | bc -l 2>/dev/null || echo "0") )); then
+    alert "LOW BALANCE: House wallet total is ${TOTAL_BALANCE} ZEC (${HOUSE_BALANCE} confirmed, ${PENDING_BALANCE} pending). Threshold: ${MIN_BALANCE} ZEC. Pending withdrawals: ${PENDING_WITHDRAWALS}"
+  fi
 fi
 
 # Also alert on critical severity
