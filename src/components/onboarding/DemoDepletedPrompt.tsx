@@ -21,12 +21,20 @@ export function DemoDepletedPrompt({ onDeposit, onResetDemo }: DemoDepletedPromp
       >
         Deposit Real ZEC →
       </button>
-      <button
-        onClick={onResetDemo}
-        className="text-xs text-venetian-gold/40 hover:text-venetian-gold/70 underline transition-colors"
-      >
-        Reset demo balance
-      </button>
+      <div className="flex items-center gap-4">
+        <a
+          href="/get-zec"
+          className="text-xs text-venetian-gold/40 hover:text-masque-gold underline transition-colors"
+        >
+          Don&apos;t have ZEC?
+        </a>
+        <button
+          onClick={onResetDemo}
+          className="text-xs text-venetian-gold/40 hover:text-venetian-gold/70 underline transition-colors"
+        >
+          Reset demo balance
+        </button>
+      </div>
     </div>
   )
 }

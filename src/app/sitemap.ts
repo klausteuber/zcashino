@@ -34,6 +34,18 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.8,
     },
     {
+      url: `${canonicalOrigin}/get-zec`,
+      lastModified: new Date(),
+      changeFrequency: 'monthly',
+      priority: 0.7,
+    },
+    {
+      url: `${canonicalOrigin}/why-zcash`,
+      lastModified: new Date(),
+      changeFrequency: 'monthly',
+      priority: 0.6,
+    },
+    {
       url: `${canonicalOrigin}/verify`,
       lastModified: new Date(),
       changeFrequency: 'monthly',

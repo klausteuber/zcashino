@@ -25,6 +25,9 @@ export default function SiteHeader() {
           <Link href="/provably-fair" className="hover:text-masque-gold transition-colors shrink-0 snap-start">
             Provably Fair
           </Link>
+          <Link href="/get-zec" className="hover:text-masque-gold transition-colors shrink-0 snap-start">
+            Get ZEC
+          </Link>
         </nav>
       </div>
     </header>

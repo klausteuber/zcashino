@@ -205,6 +205,8 @@ export default async function Home() {
                 <h4 className="font-semibold mb-4 text-bone-white">Resources</h4>
                 <ul className="space-y-2 text-venetian-gold/60 text-sm">
                   <li><a href="/provably-fair" className="hover:text-masque-gold transition-colors">Provably Fair</a></li>
+                  <li><a href="/get-zec" className="hover:text-masque-gold transition-colors">Get Zcash</a></li>
+                  <li><a href="/why-zcash" className="hover:text-masque-gold transition-colors">Why Zcash?</a></li>
                   <li><a href="/feed" className="hover:text-masque-gold transition-colors">Verified Hands</a></li>
                   <li><a href="/responsible-gambling" className="hover:text-masque-gold transition-colors">Responsible Gambling</a></li>
                   <li><a href="/terms" className="hover:text-masque-gold transition-colors">Terms of Service</a></li>

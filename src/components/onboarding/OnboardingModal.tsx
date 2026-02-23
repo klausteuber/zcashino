@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect } from 'react'
 import { QRCode, CopyButton } from '@/components/ui/QRCode'
 import { useDepositPolling, DepositStatus } from '@/hooks/useDepositPolling'
 import { useBrand } from '@/hooks/useBrand'
+import { SwapWidget } from '@/components/swap/SwapWidget'
 
 type OnboardingStep = 'welcome' | 'setup' | 'deposit' | 'confirming' | 'ready' | 'error'
 
@@ -395,6 +396,8 @@ function SetupScreen({
 }
 
 // Deposit Screen Component
+type DepositTab = 'have-zec' | 'need-zec'
+
 function DepositScreen({
   depositAddress,
   withdrawalAddress,
@@ -406,6 +409,7 @@ function DepositScreen({
   onBack: () => void
   depositStatus: DepositStatus
 }) {
+  const [activeTab, setActiveTab] = useState<DepositTab>('have-zec')
   const truncatedAddress = withdrawalAddress && withdrawalAddress.length > 20
     ? `${withdrawalAddress.slice(0, 10)}...${withdrawalAddress.slice(-8)}`
     : withdrawalAddress
@@ -427,49 +431,83 @@ function DepositScreen({
         Send ZEC to start playing
       </p>
 
-      {/* Withdrawal address confirmation (only shown if already set) */}
-      {truncatedAddress && (
-        <div className="mb-4 p-3 bg-midnight-black/60 rounded-lg cyber-panel border border-masque-gold/20">
-          <div className="text-xs text-venetian-gold/50 mb-1">Withdrawals will go to:</div>
-          <div className="text-sm text-masque-gold font-mono">{truncatedAddress}</div>
-        </div>
+      {/* Tab bar */}
+      <div className="flex border-b border-masque-gold/20 mb-4">
+        <button
+          onClick={() => setActiveTab('have-zec')}
+          className={`flex-1 py-2 text-sm font-semibold transition-colors border-b-2 ${
+            activeTab === 'have-zec'
+              ? 'border-masque-gold text-masque-gold'
+              : 'border-transparent text-venetian-gold/50 hover:text-venetian-gold/70'
+          }`}
+        >
+          I Have ZEC
+        </button>
+        <button
+          onClick={() => setActiveTab('need-zec')}
+          className={`flex-1 py-2 text-sm font-semibold transition-colors border-b-2 ${
+            activeTab === 'need-zec'
+              ? 'border-masque-gold text-masque-gold'
+              : 'border-transparent text-venetian-gold/50 hover:text-venetian-gold/70'
+          }`}
+        >
+          Need ZEC?
+        </button>
+      </div>
+
+      {/* Tab content: I Have ZEC */}
+      {activeTab === 'have-zec' && (
+        <>
+          {/* Withdrawal address confirmation (only shown if already set) */}
+          {truncatedAddress && (
+            <div className="mb-4 p-3 bg-midnight-black/60 rounded-lg cyber-panel border border-masque-gold/20">
+              <div className="text-xs text-venetian-gold/50 mb-1">Withdrawals will go to:</div>
+              <div className="text-sm text-masque-gold font-mono">{truncatedAddress}</div>
+            </div>
+          )}
+
+          {/* QR Code */}
+          <div className="flex flex-col items-center mb-4">
+            <div className="bg-bone-white p-3 rounded-xl mb-3">
+              <QRCode value={depositAddress} size={160} />
+            </div>
+
+            {/* Deposit address */}
+            <div className="w-full">
+              <div className="flex items-center gap-2 p-3 bg-midnight-black/60 rounded-lg cyber-panel border border-masque-gold/20">
+                <code className="flex-1 text-sm text-venetian-gold font-mono break-all">
+                  {depositAddress}
+                </code>
+                <CopyButton text={depositAddress} />
+              </div>
+            </div>
+          </div>
+
+          {/* Info */}
+          <div className="space-y-2 text-sm text-venetian-gold/50 mb-4">
+            <div className="flex items-center gap-2">
+              <span className="text-masque-gold">•</span>
+              <span>Minimum: 0.001 ZEC</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-masque-gold">•</span>
+              <span>3 confirmations required (~10-20 min)</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-masque-gold">•</span>
+              <span>Network: {networkLabel}</span>
+            </div>
+          </div>
+        </>
       )}
 
-      {/* QR Code */}
-      <div className="flex flex-col items-center mb-4">
-        <div className="bg-bone-white p-3 rounded-xl mb-3">
-          <QRCode value={depositAddress} size={160} />
-        </div>
+      {/* Tab content: Need ZEC? */}
+      {activeTab === 'need-zec' && (
+        <SwapWidget depositAddress={depositAddress} />
+      )}
 
-        {/* Deposit address */}
-        <div className="w-full">
-          <div className="flex items-center gap-2 p-3 bg-midnight-black/60 rounded-lg cyber-panel border border-masque-gold/20">
-            <code className="flex-1 text-sm text-venetian-gold font-mono break-all">
-              {depositAddress}
-            </code>
-            <CopyButton text={depositAddress} />
-          </div>
-        </div>
-      </div>
-
-      {/* Info */}
-      <div className="space-y-2 text-sm text-venetian-gold/50 mb-4">
-        <div className="flex items-center gap-2">
-          <span className="text-masque-gold">•</span>
-          <span>Minimum: 0.001 ZEC</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-masque-gold">•</span>
-          <span>3 confirmations required (~10-20 min)</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-masque-gold">•</span>
-          <span>Network: {networkLabel}</span>
-        </div>
-      </div>
-
-      {/* Polling status */}
-      <div className="flex items-center justify-center gap-2 py-3 px-4 bg-midnight-black/60 rounded-lg cyber-panel border border-masque-gold/20">
+      {/* Polling status — always visible on both tabs */}
+      <div className="flex items-center justify-center gap-2 py-3 px-4 bg-midnight-black/60 rounded-lg cyber-panel border border-masque-gold/20 mt-4">
         <div className="w-2 h-2 bg-masque-gold rounded-full animate-pulse" />
         <span className="text-sm text-venetian-gold">
           {depositStatus.status === 'waiting'

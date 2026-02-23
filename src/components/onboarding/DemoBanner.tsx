@@ -20,12 +20,17 @@ export function DemoBanner({ balance, onDepositClick }: DemoBannerProps) {
           {balance.toFixed(4)} ZEC
         </span>
       </div>
-      <button
-        onClick={onDepositClick}
-        className="demo-banner-cta flex-shrink-0 px-3 py-1 btn-gold-shimmer text-midnight-black text-sm font-semibold rounded-lg transition-colors"
-      >
-        Deposit Real ZEC →
-      </button>
+      <div className="flex items-center gap-3 flex-shrink-0">
+        <a href="/get-zec" className="text-xs text-venetian-gold/50 hover:text-masque-gold transition-colors whitespace-nowrap">
+          Don&apos;t have ZEC?
+        </a>
+        <button
+          onClick={onDepositClick}
+          className="demo-banner-cta flex-shrink-0 px-3 py-1 btn-gold-shimmer text-midnight-black text-sm font-semibold rounded-lg transition-colors"
+        >
+          Deposit Real ZEC →
+        </button>
+      </div>
     </div>
   )
 }
