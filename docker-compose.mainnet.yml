@@ -55,7 +55,7 @@ services:
     image: electriccoinco/zcashd:latest  # v6.11.0 — protocol 170140 required for peer connectivity
     command:
       - -par=6
-      - -dbcache=1000              # 1GB UTXO cache — sufficient post-IBD
+      - -dbcache=2000              # 2GB UTXO cache — helps with 770+ shielded notes
       - -rpcuser=${ZCASH_RPC_USER:-zcashrpc}
       - -rpcpassword=${ZCASH_RPC_PASSWORD:?ZCASH_RPC_PASSWORD is required}
       - -rpcallowip=172.16.0.0/12    # Docker internal network only
