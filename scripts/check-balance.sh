@@ -24,11 +24,13 @@ alert() {
   "${SCRIPT_DIR}/send-alert.sh" "$1" || true
 }
 
-# Query health endpoint which now includes house balance
-RESPONSE=$(curl -s --max-time 10 "$HEALTH_URL" 2>/dev/null || echo "")
+# Query health endpoint which now includes house balance.
+# Timeout must exceed the health endpoint's internal RPC timeout (8s)
+# to avoid false "unreachable" alerts when zcashd is slow.
+RESPONSE=$(curl -s --max-time 20 "$HEALTH_URL" 2>/dev/null || echo "")
 
 if [[ -z "$RESPONSE" ]]; then
-  alert "Balance check FAILED: Health endpoint unreachable"
+  alert "Balance check FAILED: Health endpoint unreachable (no response within 20s)"
   exit 1
 fi
 

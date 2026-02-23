@@ -10,22 +10,65 @@ import { getSessionSeedPoolStatus } from '@/lib/services/session-seed-pool-manag
 const POOL_LOW_THRESHOLD = 5
 const BALANCE_WARN_THRESHOLD = parseFloat(process.env.HOUSE_BALANCE_ALERT_THRESHOLD || '0.5')
 
+// Max time the health endpoint should take to respond.
+// Keeps monitoring scripts (curl --max-time 15) from timing out.
+const HEALTH_RPC_TIMEOUT_MS = 8_000
+
 export async function GET() {
   const checks: Record<string, unknown> = {}
   let severity: 'ok' | 'warning' | 'critical' = 'ok'
 
-  // Database check
-  try {
-    await prisma.session.count()
+  // Run all checks in parallel so a slow zcashd RPC doesn't block the
+  // entire response.  Each check has its own error handling.
+
+  const [dbResult, nodeResult, poolResult, balanceResult, withdrawalResult] =
+    await Promise.allSettled([
+      // 1. Database check
+      prisma.session.count(),
+
+      // 2. Zcash node check (uses 5s liveness timeout internally)
+      checkNodeStatus(DEFAULT_NETWORK),
+
+      // 3. Seed / commitment pool check
+      (async () => {
+        const fairnessMode = getProvablyFairMode()
+        if (fairnessMode === 'session_nonce_v1') {
+          return { mode: fairnessMode, seedPool: await getSessionSeedPoolStatus() }
+        }
+        const now = new Date()
+        const available = await prisma.seedCommitment.count({
+          where: { status: 'available', expiresAt: { gt: now } },
+        })
+        return { mode: fairnessMode, commitmentPool: { available } }
+      })(),
+
+      // 4. House wallet balance — short timeout so the health endpoint
+      //    responds quickly even when zcashd is overloaded.
+      raceTimeout(
+        getWalletBalance(DEFAULT_NETWORK),
+        HEALTH_RPC_TIMEOUT_MS,
+        null
+      ),
+
+      // 5. Pending withdrawals count
+      prisma.transaction.count({
+        where: { type: 'withdrawal', status: { in: ['pending', 'pending_approval'] } },
+      }),
+    ])
+
+  // --- Process results ---
+
+  // DB
+  if (dbResult.status === 'fulfilled') {
     checks.db = true
-  } catch {
+  } else {
     checks.db = false
     severity = 'critical'
   }
 
-  // Zcash node check
-  try {
-    const nodeStatus = await checkNodeStatus(DEFAULT_NETWORK)
+  // Zcash node
+  if (nodeResult.status === 'fulfilled') {
+    const nodeStatus = nodeResult.value
     checks.zcashNode = {
       connected: nodeStatus.connected,
       synced: nodeStatus.synced,
@@ -34,74 +77,63 @@ export async function GET() {
     if (!nodeStatus.connected) {
       checks.zcashNodeWarning = 'Node not connected (demo mode may be active)'
     }
-  } catch {
+  } else {
     checks.zcashNode = { connected: false, synced: false, blockHeight: 0 }
   }
 
-  // Commitment pool check
-  try {
-    const fairnessMode = getProvablyFairMode()
-    checks.fairnessMode = fairnessMode
+  // Seed / commitment pool
+  if (poolResult.status === 'fulfilled') {
+    const poolData = poolResult.value
+    checks.fairnessMode = poolData.mode
 
-    if (fairnessMode === 'session_nonce_v1') {
-      const seedPool = await getSessionSeedPoolStatus()
-      checks.sessionSeedPool = seedPool
-
-      if (seedPool.available === 0) {
+    if ('seedPool' in poolData) {
+      checks.sessionSeedPool = poolData.seedPool
+      if (poolData.seedPool.available === 0) {
         severity = 'critical'
         checks.sessionSeedPoolWarning = 'Session seed pool is empty — new seed streams cannot start'
-      } else if (seedPool.available < POOL_LOW_THRESHOLD) {
+      } else if (poolData.seedPool.available < POOL_LOW_THRESHOLD) {
         if (severity === 'ok') severity = 'warning'
         checks.sessionSeedPoolWarning = 'Session seed pool is low, rotations may experience delays'
       }
-    } else {
-      const now = new Date()
-      const available = await prisma.seedCommitment.count({
-        where: { status: 'available', expiresAt: { gt: now } },
-      })
-      checks.commitmentPool = { available }
-      if (available === 0) {
+    } else if ('commitmentPool' in poolData) {
+      checks.commitmentPool = poolData.commitmentPool
+      if (poolData.commitmentPool.available === 0) {
         severity = 'critical'
         checks.commitmentPoolWarning = 'Pool is empty — games cannot start'
-      } else if (available < POOL_LOW_THRESHOLD) {
+      } else if (poolData.commitmentPool.available < POOL_LOW_THRESHOLD) {
         if (severity === 'ok') severity = 'warning'
         checks.commitmentPoolWarning = 'Pool is low, games may experience delays'
       }
     }
-  } catch {
+  } else {
     checks.commitmentPool = { available: 0 }
   }
 
-  // House wallet balance check — uses z_gettotalbalance (all accounts)
-  try {
-    const balance = await getWalletBalance(DEFAULT_NETWORK)
+  // House balance
+  if (balanceResult.status === 'fulfilled' && balanceResult.value != null) {
+    const balance = balanceResult.value
     checks.houseBalance = {
       confirmed: balance.confirmed,
       pending: balance.pending,
     }
-    // Use total (confirmed + pending) for the warning, since pending change
-    // from self-send commitment txs is still fully under our control
     const totalBalance = balance.confirmed + balance.pending
     if (totalBalance < BALANCE_WARN_THRESHOLD) {
       if (severity === 'ok') severity = 'warning'
       checks.houseBalanceWarning = `House balance low: ${totalBalance} ZEC (${balance.confirmed} confirmed)`
     }
-  } catch {
-    // Balance check failure is not critical — node may be offline
+  } else {
+    // Balance unavailable (RPC timeout or error) — not critical
     checks.houseBalance = null
   }
 
-  // Pending withdrawals check
-  try {
-    const pendingWithdrawals = await prisma.transaction.count({
-      where: { type: 'withdrawal', status: { in: ['pending', 'pending_approval'] } },
-    })
-    checks.pendingWithdrawals = pendingWithdrawals
-  } catch {
+  // Pending withdrawals
+  if (withdrawalResult.status === 'fulfilled') {
+    checks.pendingWithdrawals = withdrawalResult.value
+  } else {
     checks.pendingWithdrawals = null
   }
 
-  // Kill switch status
+  // Kill switch (synchronous, always available)
   checks.killSwitch = isKillSwitchActive()
 
   const healthy = severity !== 'critical'
@@ -115,4 +147,15 @@ export async function GET() {
     },
     { status: healthy ? 200 : 503 }
   )
+}
+
+/**
+ * Race a promise against a timeout.  Returns the fallback value if the
+ * promise doesn't settle within `ms` milliseconds.
+ */
+function raceTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms)),
+  ])
 }
