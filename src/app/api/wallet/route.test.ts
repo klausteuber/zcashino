@@ -193,6 +193,25 @@ describe('/api/wallet POST withdrawal-status transitions', () => {
       confirmedAt: null,
     })
     getOperationStatusMock.mockResolvedValue({ status: 'success', txid: 'zcash-tx-hash' })
+    prismaMock.transaction.update.mockResolvedValue({
+      id: 'tx-1',
+      sessionId: 'session-1',
+      type: 'withdrawal',
+      status: 'confirmed',
+      operationId: 'op-1',
+      amount: 0.25,
+      fee: 0.0001,
+      txHash: 'zcash-tx-hash',
+      address: 't1dest',
+      memo: null,
+      failReason: null,
+      confirmedAt: new Date('2026-03-24T12:00:00Z'),
+      session: {
+        wallet: {
+          network: 'testnet',
+        },
+      },
+    })
 
     const response = await POST(makeRequest({
       action: 'withdrawal-status',
@@ -213,6 +232,7 @@ describe('/api/wallet POST withdrawal-status transitions', () => {
         confirmedAt: expect.any(Date),
         failReason: null,
       },
+      select: expect.any(Object),
     })
     expect(prismaMock.session.update).not.toHaveBeenCalled()
   })

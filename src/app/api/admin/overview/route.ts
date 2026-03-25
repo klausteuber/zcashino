@@ -17,6 +17,7 @@ import { getAlertServiceStatus } from '@/lib/services/alert-generator'
 import { getSweepServiceStatus } from '@/lib/services/deposit-sweep'
 import { getManagerStatus } from '@/lib/services/commitment-pool-manager'
 import { getSessionSeedPoolManagerStatus, getSessionSeedPoolStatus } from '@/lib/services/session-seed-pool-manager'
+import { reconcilePendingWithdrawals } from '@/lib/services/withdrawal-reconciliation'
 import { getProvablyFairMode, SESSION_NONCE_MODE } from '@/lib/provably-fair/mode'
 
 /**
@@ -51,6 +52,12 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    try {
+      await reconcilePendingWithdrawals()
+    } catch (error) {
+      console.error('[admin.overview] reconciliation failed:', error)
+    }
+
     const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000)
     const fairnessMode = getProvablyFairMode()
     const isSessionMode = fairnessMode === SESSION_NONCE_MODE

@@ -250,6 +250,40 @@ export default function AdminWithdrawalsPage() {
     }
   }
 
+  const handleManualConfirm = async (transactionId: string) => {
+    const input = window.prompt('Confirmed chain txid (64 hex chars):', '')
+    if (input === null) return
+
+    const txHash = input.trim().toLowerCase()
+    if (!/^[0-9a-f]{64}$/.test(txHash)) {
+      setActionMessage('Manual confirm requires a 64-character hex txid.')
+      return
+    }
+
+    setActionLoadingId(transactionId)
+    setActionMessage(null)
+    try {
+      const res = await fetch('/api/admin/pool', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'manual-confirm-withdrawal',
+          transactionId,
+          txHash,
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'manual-confirm-withdrawal failed')
+
+      setActionMessage(`Manually confirmed withdrawal (${shortId(transactionId)})`)
+      await fetchWithdrawals()
+    } catch (err) {
+      setActionMessage(err instanceof Error ? err.message : 'manual-confirm-withdrawal failed')
+    } finally {
+      setActionLoadingId(null)
+    }
+  }
+
   const handleRequeueWithdrawal = async (transactionId: string) => {
     const msg =
       'Requeue this failed withdrawal? This creates a NEW pending-approval withdrawal (reserves funds again). You still need to approve the new withdrawal.'
@@ -705,14 +739,24 @@ export default function AdminWithdrawalsPage() {
                             </button>
                           </div>
                         ) : w.status === 'pending' ? (
-                          <button
-                            onClick={() => handlePollWithdrawal(w.id)}
-                            disabled={actionLoadingId === w.id || bulkLoading || !w.operationId}
-                            className="text-xs px-2.5 py-1 rounded bg-masque-gold/20 hover:bg-masque-gold/30 text-masque-gold disabled:opacity-60 transition-colors"
-                            title={w.operationId ? 'Poll operation status now' : 'Missing operationId'}
-                          >
-                            {actionLoadingId === w.id ? '...' : 'Poll'}
-                          </button>
+                          <div className="flex gap-1 justify-end">
+                            <button
+                              onClick={() => handlePollWithdrawal(w.id)}
+                              disabled={actionLoadingId === w.id || bulkLoading || !w.operationId}
+                              className="text-xs px-2.5 py-1 rounded bg-masque-gold/20 hover:bg-masque-gold/30 text-masque-gold disabled:opacity-60 transition-colors"
+                              title={w.operationId ? 'Poll operation status now' : 'Missing operationId'}
+                            >
+                              {actionLoadingId === w.id ? '...' : 'Poll'}
+                            </button>
+                            <button
+                              onClick={() => handleManualConfirm(w.id)}
+                              disabled={actionLoadingId === w.id || bulkLoading}
+                              className="text-xs px-2.5 py-1 rounded bg-jester-purple/20 hover:bg-jester-purple/30 text-jester-purple disabled:opacity-60 transition-colors"
+                              title="Manually confirm this withdrawal with the chain txid"
+                            >
+                              {actionLoadingId === w.id ? '...' : 'Confirm'}
+                            </button>
+                          </div>
                         ) : w.status === 'failed' ? (
                           <button
                             onClick={() => handleRequeueWithdrawal(w.id)}

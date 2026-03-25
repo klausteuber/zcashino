@@ -23,6 +23,10 @@ import {
   getSweepHistory,
   getSweepServiceStatus,
 } from '@/lib/services/deposit-sweep'
+import {
+  reconcilePendingWithdrawals,
+  reconcileWithdrawalById,
+} from '@/lib/services/withdrawal-reconciliation'
 import { getProvablyFairMode, SESSION_NONCE_MODE } from '@/lib/provably-fair/mode'
 import {
   getSessionSeedPoolStatus,
@@ -199,58 +203,7 @@ export async function POST(request: NextRequest) {
 
       case 'process-withdrawals': {
         console.log('[Admin] Processing pending withdrawals')
-        const pendingTxs = await prisma.transaction.findMany({
-          where: {
-            type: 'withdrawal',
-            status: 'pending',
-            operationId: { not: null },
-          },
-        })
-
-        const results: Array<{ id: string; result: string }> = []
-        const network = DEFAULT_NETWORK
-
-        for (const tx of pendingTxs) {
-          try {
-            const opStatus = await getOperationStatus(tx.operationId!, network)
-
-            if (opStatus.status === 'success' && opStatus.txid) {
-              await prisma.transaction.update({
-                where: { id: tx.id },
-                data: {
-                  status: 'confirmed',
-                  txHash: opStatus.txid,
-                  confirmedAt: new Date(),
-                },
-              })
-              results.push({ id: tx.id, result: 'confirmed' })
-            } else if (opStatus.status === 'failed') {
-              const totalAmount = tx.amount + tx.fee
-              await prisma.session.update({
-                where: { id: tx.sessionId },
-                data: {
-                  balance: { increment: totalAmount },
-                  totalWithdrawn: { decrement: tx.amount },
-                },
-              })
-              await prisma.transaction.update({
-                where: { id: tx.id },
-                data: {
-                  status: 'failed',
-                  failReason: opStatus.error || 'Operation failed',
-                },
-              })
-              results.push({ id: tx.id, result: 'failed-refunded' })
-            } else {
-              results.push({ id: tx.id, result: 'still-pending' })
-            }
-          } catch (err) {
-            results.push({
-              id: tx.id,
-              result: `error: ${err instanceof Error ? err.message : 'unknown'}`,
-            })
-          }
-        }
+        const results = await reconcilePendingWithdrawals({ request })
 
         await logAdminEvent({
           request,
@@ -258,14 +211,19 @@ export async function POST(request: NextRequest) {
           success: true,
           actor: adminCheck.session.username,
           details: 'Processed pending withdrawals',
-          metadata: { adminAction: action, total: pendingTxs.length },
+          metadata: { adminAction: action, total: results.length },
         })
 
         return NextResponse.json({
           success: true,
           action: 'process-withdrawals',
-          processed: results,
-          total: pendingTxs.length,
+          processed: results.map((result) => ({
+            id: result.id,
+            result: result.outcome,
+            operationStatus: result.operationStatus?.status ?? null,
+            message: result.message ?? null,
+          })),
+          total: results.length,
         })
       }
 
@@ -277,6 +235,7 @@ export async function POST(request: NextRequest) {
 
         const txRow = await prisma.transaction.findFirst({
           where: { id: transactionId, type: 'withdrawal', status: 'pending', operationId: { not: null } },
+          select: { id: true, operationId: true },
         })
 
         if (!txRow) {
@@ -286,72 +245,101 @@ export async function POST(request: NextRequest) {
           )
         }
 
-        const network = DEFAULT_NETWORK
-        const opStatus = await getOperationStatus(txRow.operationId!, network)
-
-        if (opStatus.status === 'success' && opStatus.txid) {
-          const updated = await prisma.transaction.update({
-            where: { id: txRow.id },
-            data: {
-              status: 'confirmed',
-              txHash: opStatus.txid,
-              confirmedAt: new Date(),
-              failReason: null,
-            },
-          })
-          await logAdminEvent({
-            request,
-            action: 'admin.pool.action',
-            success: true,
-            actor: adminCheck.session.username,
-            details: 'Polled withdrawal: confirmed',
-            metadata: { adminAction: action, transactionId, operationId: txRow.operationId },
-          })
-          return NextResponse.json({ success: true, action: 'poll-withdrawal', transaction: updated, operationStatus: opStatus })
+        const result = await reconcileWithdrawalById(transactionId, { request })
+        if (result.outcome === 'not_found' || !result.transaction) {
+          return NextResponse.json(
+            { error: 'Withdrawal not found or not pending with an operationId' },
+            { status: 404 }
+          )
         }
 
-        if (opStatus.status === 'failed') {
-          const refundTotal = roundZec(txRow.amount + txRow.fee)
-          await prisma.$transaction([
-            prisma.session.update({
-              where: { id: txRow.sessionId },
-              data: {
-                balance: { increment: refundTotal },
-                totalWithdrawn: { decrement: txRow.amount },
-              },
-            }),
-            prisma.transaction.update({
-              where: { id: txRow.id },
-              data: {
-                status: 'failed',
-                failReason: opStatus.error || 'Operation failed',
-              },
-            }),
-          ])
+        await logAdminEvent({
+          request,
+          action: 'admin.pool.action',
+          success: result.outcome !== 'failed',
+          actor: adminCheck.session.username,
+          details: `Polled withdrawal: ${result.outcome}`,
+          metadata: {
+            adminAction: action,
+            transactionId,
+            operationId: txRow.operationId,
+            status: result.operationStatus?.status ?? result.transaction.status,
+            message: result.message ?? null,
+          },
+        })
 
-          await logAdminEvent({
-            request,
-            action: 'admin.pool.action',
-            success: false,
-            actor: adminCheck.session.username,
-            details: 'Polled withdrawal: failed + refunded',
-            metadata: { adminAction: action, transactionId, operationId: txRow.operationId, error: opStatus.error },
-          })
+        return NextResponse.json({
+          success: true,
+          action: 'poll-withdrawal',
+          transaction: result.transaction,
+          operationStatus: result.operationStatus ?? null,
+          message: result.message ?? null,
+        })
+      }
 
-          const updated = await prisma.transaction.findUnique({ where: { id: txRow.id } })
-          return NextResponse.json({ success: true, action: 'poll-withdrawal', transaction: updated, operationStatus: opStatus })
+      case 'manual-confirm-withdrawal': {
+        if (!hasPermission(adminCheck.session.role as AdminRole, 'approve_withdrawals')) {
+          return NextResponse.json({ error: 'Forbidden: insufficient permissions' }, { status: 403 })
         }
+
+        const { transactionId, txHash } = body as { transactionId?: string; txHash?: string }
+        if (!transactionId || typeof transactionId !== 'string') {
+          return NextResponse.json({ error: 'transactionId required' }, { status: 400 })
+        }
+        if (!txHash || typeof txHash !== 'string') {
+          return NextResponse.json({ error: 'txHash required' }, { status: 400 })
+        }
+
+        const normalizedTxHash = txHash.trim().toLowerCase()
+        if (!/^[0-9a-f]{64}$/.test(normalizedTxHash)) {
+          return NextResponse.json({ error: 'txHash must be a 64-character hex string' }, { status: 400 })
+        }
+
+        const target = await prisma.transaction.findFirst({
+          where: {
+            id: transactionId,
+            type: 'withdrawal',
+            status: 'pending',
+          },
+          select: {
+            id: true,
+            operationId: true,
+          },
+        })
+
+        if (!target) {
+          return NextResponse.json({ error: 'Withdrawal not found or not pending' }, { status: 404 })
+        }
+
+        const updated = await prisma.transaction.update({
+          where: { id: target.id },
+          data: {
+            status: 'confirmed',
+            txHash: normalizedTxHash,
+            confirmedAt: new Date(),
+            failReason: null,
+          },
+        })
 
         await logAdminEvent({
           request,
           action: 'admin.pool.action',
           success: true,
           actor: adminCheck.session.username,
-          details: 'Polled withdrawal: still pending',
-          metadata: { adminAction: action, transactionId, operationId: txRow.operationId, status: opStatus.status },
+          details: 'Withdrawal manually confirmed',
+          metadata: {
+            adminAction: action,
+            transactionId: target.id,
+            txHash: normalizedTxHash,
+            operationId: target.operationId,
+          },
         })
 
-        return NextResponse.json({ success: true, action: 'poll-withdrawal', transaction: txRow, operationStatus: opStatus })
+        return NextResponse.json({
+          success: true,
+          action: 'manual-confirm-withdrawal',
+          transaction: updated,
+        })
       }
 
       case 'requeue-withdrawal': {
@@ -697,7 +685,7 @@ export async function POST(request: NextRequest) {
           metadata: { adminAction: action },
         })
         return NextResponse.json(
-          { error: 'Invalid action. Use: refill, cleanup, init, process-withdrawals, poll-withdrawal, requeue-withdrawal, toggle-kill-switch, approve-withdrawal, reject-withdrawal, sweep, or sweep-status' },
+          { error: 'Invalid action. Use: refill, cleanup, init, process-withdrawals, poll-withdrawal, manual-confirm-withdrawal, requeue-withdrawal, toggle-kill-switch, approve-withdrawal, reject-withdrawal, sweep, or sweep-status' },
           { status: 400 }
         )
     }

@@ -8,6 +8,7 @@ import {
 import { logAdminEvent } from '@/lib/admin/audit'
 import { guardCypherAdminRequest } from '@/lib/admin/host-guard'
 import { toCsvResponse, isCsvRequest } from '@/lib/admin/csv-export'
+import { reconcilePendingWithdrawals } from '@/lib/services/withdrawal-reconciliation'
 import type { Prisma } from '@prisma/client'
 
 type ValidStatus = 'pending' | 'pending_approval' | 'confirmed' | 'failed'
@@ -47,6 +48,12 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    try {
+      await reconcilePendingWithdrawals()
+    } catch (error) {
+      console.error('[admin.withdrawals] reconciliation failed:', error)
+    }
+
     const params = request.nextUrl.searchParams
 
     const page = Math.max(1, Number(params.get('page') || 1))

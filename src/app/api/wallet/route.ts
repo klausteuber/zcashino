@@ -13,7 +13,6 @@ import {
   checkNodeStatus,
   getAddressBalance,
   sendZec,
-  getOperationStatus,
   listAddressTransactions,
   validateAddressViaRPC,
 } from '@/lib/wallet/rpc'
@@ -25,11 +24,9 @@ import { requirePlayerSession } from '@/lib/auth/player-session'
 import { parseWithSchema, walletBodySchema } from '@/lib/validation/api-schemas'
 import { reserveFunds, releaseFunds, creditFunds } from '@/lib/services/ledger'
 import { logPlayerCounterEvent, PLAYER_COUNTER_ACTIONS } from '@/lib/telemetry/player-events'
+import { reconcileWithdrawalById } from '@/lib/services/withdrawal-reconciliation'
 
 type DepositAddressType = 'unified' | 'transparent'
-const UNPAID_ACTION_RETRY_PREFIX = 'retry_unpaid_action:'
-const MAX_UNPAID_ACTION_OPERATION_RETRIES = 3
-const ZIP317_MARGINAL_FEE_ZATS = 5000
 
 function getPreferredDepositAddress(wallet: {
   unifiedAddr: string | null
@@ -39,41 +36,6 @@ function getPreferredDepositAddress(wallet: {
     return { depositAddress: wallet.unifiedAddr, depositAddressType: 'unified' }
   }
   return { depositAddress: wallet.transparentAddr, depositAddressType: 'transparent' }
-}
-
-function parseUnpaidActionDelta(errorMessage: string): number | null {
-  if (!errorMessage.toLowerCase().includes('tx unpaid action limit exceeded')) {
-    return null
-  }
-
-  const match = errorMessage.match(/tx unpaid action limit exceeded:\s*(\d+)\s*action\(s\)\s*exceeds limit of\s*(\d+)/i)
-  if (!match) {
-    return 1
-  }
-
-  const unpaidActions = Number.parseInt(match[1], 10)
-  const limit = Number.parseInt(match[2], 10)
-  return Math.max(1, unpaidActions - limit)
-}
-
-function getUnpaidActionRetryCount(marker: string | null): number {
-  if (!marker || !marker.startsWith(UNPAID_ACTION_RETRY_PREFIX)) {
-    return 0
-  }
-  const count = Number.parseInt(marker.slice(UNPAID_ACTION_RETRY_PREFIX.length), 10)
-  return Number.isFinite(count) && count > 0 ? count : 0
-}
-
-function buildUnpaidActionRetryMarker(count: number): string {
-  return `${UNPAID_ACTION_RETRY_PREFIX}${count}`
-}
-
-function estimateRetryFeeForUnpaidAction(errorMessage: string, retryCount: number): number {
-  const unpaidActionDelta = parseUnpaidActionDelta(errorMessage) || 1
-  const baseFeeZats = Math.round(WITHDRAWAL_FEE * 1e8)
-  const extraPaidActions = unpaidActionDelta * (retryCount + 1)
-  const retryFeeZats = baseFeeZats + (extraPaidActions * ZIP317_MARGINAL_FEE_ZATS)
-  return roundZec(retryFeeZats / 1e8)
 }
 
 /**
@@ -93,7 +55,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const playerSession = requirePlayerSession(request, sessionId)
+    const playerSession = await requirePlayerSession(request, sessionId)
     if (!playerSession.ok) {
       return playerSession.response
     }
@@ -187,7 +149,7 @@ export async function POST(request: NextRequest) {
     const payload = parsed.data
     const sessionId = payload.sessionId
 
-    const playerSession = requirePlayerSession(request, sessionId)
+    const playerSession = await requirePlayerSession(request, sessionId)
     if (!playerSession.ok) {
       return playerSession.response
     }
@@ -937,145 +899,31 @@ async function handleWithdrawalStatus(request: NextRequest, sessionId: string, t
     })
   }
 
-  // Pending with operation ID: poll RPC
+  // Pending with operation ID: poll shared reconciliation path
   if (transaction.operationId) {
-    const network = DEFAULT_NETWORK
-    try {
-      const opStatus = await getOperationStatus(transaction.operationId, network)
+    const result = await reconcileWithdrawalById(transaction.id, { request, sessionId })
 
-      if (opStatus.status === 'success' && opStatus.txid) {
-        await prisma.transaction.update({
-          where: { id: transaction.id },
-          data: {
-            status: 'confirmed',
-            txHash: opStatus.txid,
-            confirmedAt: new Date(),
-            failReason: null,
-          },
-        })
-        return NextResponse.json({
-          success: true,
-          transaction: {
-            id: transaction.id,
-            status: 'confirmed',
-            txHash: opStatus.txid,
-            amount: transaction.amount,
-            fee: transaction.fee,
-          },
-        })
-      }
-
-      if (opStatus.status === 'failed') {
-        const operationError = opStatus.error || 'Operation failed'
-        const unpaidActionDelta = parseUnpaidActionDelta(operationError)
-
-        if (unpaidActionDelta && transaction.address) {
-          const retryCount = getUnpaidActionRetryCount(transaction.failReason)
-
-          if (retryCount < MAX_UNPAID_ACTION_OPERATION_RETRIES) {
-            const houseAddress = network === 'mainnet'
-              ? process.env.HOUSE_ZADDR_MAINNET
-              : process.env.HOUSE_ZADDR_TESTNET
-
-            if (houseAddress) {
-              const retryAttempt = retryCount + 1
-              const retryFee = estimateRetryFeeForUnpaidAction(operationError, retryCount)
-
-              try {
-                const { operationId: retryOperationId } = await sendZec(
-                  houseAddress,
-                  transaction.address,
-                  transaction.amount,
-                  transaction.memo || undefined,
-                  network,
-                  1,
-                  retryFee
-                )
-
-                await prisma.transaction.update({
-                  where: { id: transaction.id },
-                  data: {
-                    status: 'pending',
-                    operationId: retryOperationId,
-                    failReason: buildUnpaidActionRetryMarker(retryAttempt),
-                  },
-                })
-
-                await logPlayerCounterEvent({
-                  request,
-                  action: PLAYER_COUNTER_ACTIONS.WITHDRAW_UNPAID_ACTION_RETRY,
-                  details: `Withdrawal unpaid-action retry ${retryAttempt}/${MAX_UNPAID_ACTION_OPERATION_RETRIES}`,
-                  metadata: {
-                    sessionId,
-                    transactionId: transaction.id,
-                    previousOperationId: transaction.operationId,
-                    retryOperationId,
-                    retryAttempt,
-                    retryFee,
-                    operationError,
-                  },
-                })
-
-                return NextResponse.json({
-                  success: true,
-                  transaction: {
-                    id: transaction.id,
-                    status: 'pending',
-                    operationId: retryOperationId,
-                    operationStatus: 'queued',
-                    amount: transaction.amount,
-                    retryAttempt,
-                  },
-                  message: `Withdrawal retry ${retryAttempt}/${MAX_UNPAID_ACTION_OPERATION_RETRIES} submitted with adjusted fee.`,
-                })
-              } catch (retryError) {
-                console.error('[Withdrawal] Unpaid-action retry failed:', retryError)
-              }
-            }
-          }
-        }
-
-        const totalAmount = transaction.amount + transaction.fee
-        await refundWithdrawal(
-          sessionId,
-          transaction.id,
-          totalAmount,
-          transaction.amount,
-          operationError
-        )
-        return NextResponse.json({
-          success: true,
-          transaction: {
-            id: transaction.id,
-            status: 'failed',
-            failReason: operationError,
-            amount: transaction.amount,
-          },
-        })
-      }
-
-      // Still queued or executing
-      return NextResponse.json({
-        success: true,
-        transaction: {
-          id: transaction.id,
-          status: 'pending',
-          operationStatus: opStatus.status,
-          amount: transaction.amount,
-        },
-      })
-    } catch {
-      // RPC unreachable — don't refund yet, just report pending
-      return NextResponse.json({
-        success: true,
-        transaction: {
-          id: transaction.id,
-          status: 'pending',
-          message: 'Unable to check status. Node may be temporarily unavailable.',
-          amount: transaction.amount,
-        },
-      })
+    if (result.outcome === 'not_found' || !result.transaction) {
+      return NextResponse.json({ error: 'Transaction not found' }, { status: 404 })
     }
+
+    return NextResponse.json({
+      success: true,
+      transaction: {
+        id: result.transaction.id,
+        status: result.transaction.status,
+        txHash: result.transaction.txHash,
+        failReason: result.transaction.failReason,
+        amount: result.transaction.amount,
+        fee: result.transaction.fee,
+        confirmedAt: result.transaction.confirmedAt,
+        operationId: result.transaction.operationId,
+        operationStatus: result.operationStatus?.status,
+        retryAttempt: result.retryAttempt,
+        message: result.message,
+      },
+      ...(result.message ? { message: result.message } : {}),
+    })
   }
 
   // No operation ID (demo or pre-RPC state)

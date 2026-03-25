@@ -463,6 +463,65 @@ export default function AdminPage() {
     }
   }
 
+  const handlePollWithdrawal = async (transactionId: string) => {
+    if (!window.confirm('Poll this pending withdrawal now?')) return
+
+    setWithdrawalActionLoading(transactionId)
+    setActionMessage(null)
+    try {
+      const res = await fetch('/api/admin/pool', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'poll-withdrawal', transactionId }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'poll-withdrawal failed')
+
+      const txStatus = data.transaction?.status
+      const opStatus = data.operationStatus?.status
+      setActionMessage(`Polled withdrawal (${shortId(transactionId)}): ${txStatus || opStatus || 'ok'}`)
+      await fetchOverview()
+    } catch (err) {
+      setActionMessage(err instanceof Error ? err.message : 'poll-withdrawal failed')
+    } finally {
+      setWithdrawalActionLoading(null)
+    }
+  }
+
+  const handleManualConfirmWithdrawal = async (transactionId: string) => {
+    const input = window.prompt('Confirmed chain txid (64 hex chars):', '')
+    if (input === null) return
+
+    const txHash = input.trim().toLowerCase()
+    if (!/^[0-9a-f]{64}$/.test(txHash)) {
+      setActionMessage('Manual confirm requires a 64-character hex txid.')
+      return
+    }
+
+    setWithdrawalActionLoading(transactionId)
+    setActionMessage(null)
+    try {
+      const res = await fetch('/api/admin/pool', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'manual-confirm-withdrawal',
+          transactionId,
+          txHash,
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'manual-confirm-withdrawal failed')
+
+      setActionMessage(`Manually confirmed withdrawal (${shortId(transactionId)})`)
+      await fetchOverview()
+    } catch (err) {
+      setActionMessage(err instanceof Error ? err.message : 'manual-confirm-withdrawal failed')
+    } finally {
+      setWithdrawalActionLoading(null)
+    }
+  }
+
   if (brand.id !== 'cypher') {
     return (
       <main className="min-h-screen felt-texture flex items-center justify-center px-4">
@@ -1106,6 +1165,25 @@ export default function AdminPage() {
                                       className="text-xs px-2 py-1 rounded bg-crimson-mask/80 hover:bg-crimson-mask text-white disabled:opacity-60"
                                     >
                                       Reject
+                                    </button>
+                                  </div>
+                                ) : withdrawal.status === 'pending' ? (
+                                  <div className="flex gap-1 justify-end">
+                                    <button
+                                      onClick={() => handlePollWithdrawal(withdrawal.id)}
+                                      disabled={withdrawalActionLoading === withdrawal.id || !withdrawal.operationId}
+                                      className="text-xs px-2 py-1 rounded bg-masque-gold/20 hover:bg-masque-gold/30 text-masque-gold disabled:opacity-60"
+                                      title={withdrawal.operationId ? 'Poll operation status now' : 'Missing operationId'}
+                                    >
+                                      {withdrawalActionLoading === withdrawal.id ? '...' : 'Poll'}
+                                    </button>
+                                    <button
+                                      onClick={() => handleManualConfirmWithdrawal(withdrawal.id)}
+                                      disabled={withdrawalActionLoading === withdrawal.id}
+                                      className="text-xs px-2 py-1 rounded bg-jester-purple/20 hover:bg-jester-purple/30 text-jester-purple disabled:opacity-60"
+                                      title="Manually confirm this withdrawal with the chain txid"
+                                    >
+                                      {withdrawalActionLoading === withdrawal.id ? '...' : 'Confirm'}
                                     </button>
                                   </div>
                                 ) : (

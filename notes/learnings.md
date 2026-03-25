@@ -465,3 +465,16 @@ In-memory limits and remote font fetches are acceptable in dev, but must be call
    - forced trusted-session DB queries despite attacker query values
 
 **Key files:** `src/app/api/session/route.ts`, `src/app/api/wallet/route.ts`, `src/app/api/game/route.ts`, `src/app/api/video-poker/route.ts`, `src/app/api/session/route.test.ts`, `src/app/api/wallet/route.test.ts`, `src/app/api/game/route.test.ts`, `src/app/api/video-poker/route.test.ts`
+
+## Withdrawal Reconciliation Learnings (2026-03-24)
+
+1. **Pending withdrawals cannot rely on manual polling alone.**
+   The March 24, 2026 withdrawal stayed `pending` in the admin UI even though zcashd had already finished the operation and produced txid `89a02396b83b2ec10fbf626b9c441e7f82f998dd45c7300c6a4feef80abca00c`. The dashboard list routes only read DB state; they never reconciled `operationId` state on refresh.
+
+2. **`Operation not found` is not the same as a failed withdrawal.**
+   zcashd can lose async operation memory after restart or after result consumption. Treating that as a hard failure would risk refunding an already-executed payout. The safer behavior is: leave it out of the automatic refund path, surface it for manual operator review, and require explicit confirmation if a txid is known.
+
+3. **Withdrawal lifecycle logic must live in one shared service.**
+   Player polling, admin polling, bulk processing, health checks, and dashboard reads had drifted into separate code paths. Consolidating confirmation, refund, and unpaid-action retry handling into a single reconciliation service removes the class of "one screen updated, another stayed stale" bugs.
+
+**Key files:** `src/lib/services/withdrawal-reconciliation.ts`, `src/app/api/wallet/route.ts`, `src/app/api/admin/overview/route.ts`, `src/app/api/admin/withdrawals/route.ts`, `src/app/api/admin/pool/route.ts`, `src/app/api/health/route.ts`
