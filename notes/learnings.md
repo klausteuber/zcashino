@@ -478,3 +478,11 @@ In-memory limits and remote font fetches are acceptable in dev, but must be call
    Player polling, admin polling, bulk processing, health checks, and dashboard reads had drifted into separate code paths. Consolidating confirmation, refund, and unpaid-action retry handling into a single reconciliation service removes the class of "one screen updated, another stayed stale" bugs.
 
 **Key files:** `src/lib/services/withdrawal-reconciliation.ts`, `src/app/api/wallet/route.ts`, `src/app/api/admin/overview/route.ts`, `src/app/api/admin/withdrawals/route.ts`, `src/app/api/admin/pool/route.ts`, `src/app/api/health/route.ts`
+
+## Swap Onboarding Learnings (2026-04-09)
+
+1. **A user-facing CTA is part of the product flow, not just page chrome.**
+   The swap feature looked broken from `/get-zec` because the button stopped at `/blackjack` instead of entering the deposit onboarding state. If a CTA promises a specific action, wire it to the exact in-app state that fulfills that promise.
+
+2. **Polling hooks should not depend directly on state they mutate or callbacks recreated by parents.**
+   `useDepositPolling()` looked harmless in isolation, but when embedded in `OnboardingModal` with inline `onDeposit`/`onConfirmed` handlers it recreated its polling callback every render and re-triggered its own effect. Keeping the latest status/callbacks in refs preserves fresh data without turning the interval setup into a render loop.

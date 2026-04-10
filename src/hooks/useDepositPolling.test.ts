@@ -208,4 +208,33 @@ describe('useDepositPolling', () => {
       })
     })
   })
+
+  it('does not restart polling when callback identities change on rerender', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ pendingDeposits: [] })
+    })
+    global.fetch = mockFetch
+
+    const { rerender } = renderHook(
+      ({ version }) => useDepositPolling('session-123', true, {
+        onDeposit: () => { void version },
+        onConfirmed: () => { void version },
+        onError: () => { void version },
+      }),
+      { initialProps: { version: 1 } }
+    )
+
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledTimes(1)
+    })
+
+    rerender({ version: 2 })
+
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    expect(mockFetch).toHaveBeenCalledTimes(1)
+  })
 })

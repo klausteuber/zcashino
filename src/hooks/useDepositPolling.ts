@@ -47,6 +47,24 @@ export function useDepositPolling(
   const isPollingRef = useRef(false)
   const lastCheckRef = useRef<number>(0)
   const backoffRef = useRef<number>(0)
+  const statusRef = useRef(status)
+  const callbacksRef = useRef({ onDeposit, onConfirmed, onError })
+
+  useEffect(() => {
+    statusRef.current = status
+  }, [status])
+
+  useEffect(() => {
+    callbacksRef.current = { onDeposit, onConfirmed, onError }
+  }, [onDeposit, onConfirmed, onError])
+
+  const updateStatus = useCallback((updater: (prev: DepositStatus) => DepositStatus) => {
+    setStatus((prev) => {
+      const next = updater(prev)
+      statusRef.current = next
+      return next
+    })
+  }, [])
 
   const checkForDeposits = useCallback(async () => {
     if (!sessionId || isPollingRef.current) return
@@ -85,29 +103,47 @@ export function useDepositPolling(
       backoffRef.current = 0
 
       const data = await res.json()
+      const currentStatus = statusRef.current
 
       // Check if we have any pending deposits
       if (data.pendingDeposits && data.pendingDeposits.length > 0) {
         const deposit = data.pendingDeposits[0]
         const confirmations = deposit.confirmations || 0
 
-        if (status.status !== 'detected' && status.status !== 'confirming') {
+        if (currentStatus.status !== 'detected' && currentStatus.status !== 'confirming') {
           // First detection
-          setStatus(prev => ({
-            ...prev,
-            status: 'detected',
-            amount: deposit.amount,
-            txHash: deposit.txHash,
-            confirmations
-          }))
-          onDeposit?.(deposit.amount, deposit.txHash)
+          updateStatus((prev) => {
+            if (
+              prev.status === 'detected' &&
+              prev.amount === deposit.amount &&
+              prev.txHash === deposit.txHash &&
+              prev.confirmations === confirmations
+            ) {
+              return prev
+            }
+
+            return {
+              ...prev,
+              status: 'detected',
+              amount: deposit.amount,
+              txHash: deposit.txHash,
+              confirmations
+            }
+          })
+          callbacksRef.current.onDeposit?.(deposit.amount, deposit.txHash)
         } else {
           // Update confirmations
-          setStatus(prev => ({
-            ...prev,
-            status: 'confirming',
-            confirmations
-          }))
+          updateStatus((prev) => {
+            if (prev.status === 'confirming' && prev.confirmations === confirmations) {
+              return prev
+            }
+
+            return {
+              ...prev,
+              status: 'confirming',
+              confirmations
+            }
+          })
         }
       }
 
@@ -115,26 +151,45 @@ export function useDepositPolling(
       // Note: data.authenticated is true for ANY already-authenticated session,
       // so it must NOT be used as a trigger — only data.newDeposit is reliable.
       if (data.newDeposit) {
-        setStatus(prev => ({
-          ...prev,
-          status: 'confirmed',
-          confirmations: REQUIRED_CONFIRMATIONS
-        }))
-        onConfirmed?.(data.depositAmount || status.amount || 0)
+        const confirmedAmount = data.depositAmount ?? currentStatus.amount ?? 0
+
+        updateStatus((prev) => {
+          if (
+            prev.status === 'confirmed' &&
+            prev.confirmations === REQUIRED_CONFIRMATIONS &&
+            prev.amount === confirmedAmount
+          ) {
+            return prev
+          }
+
+          return {
+            ...prev,
+            status: 'confirmed',
+            confirmations: REQUIRED_CONFIRMATIONS,
+            amount: confirmedAmount
+          }
+        })
+        callbacksRef.current.onConfirmed?.(confirmedAmount)
       }
 
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error'
-      setStatus(prev => ({
-        ...prev,
-        status: 'error',
-        error: errorMessage
-      }))
-      onError?.(errorMessage)
+      updateStatus((prev) => {
+        if (prev.status === 'error' && prev.error === errorMessage) {
+          return prev
+        }
+
+        return {
+          ...prev,
+          status: 'error',
+          error: errorMessage
+        }
+      })
+      callbacksRef.current.onError?.(errorMessage)
     } finally {
       isPollingRef.current = false
     }
-  }, [sessionId, status.status, status.amount, onDeposit, onConfirmed, onError])
+  }, [sessionId, updateStatus])
 
   // Start/stop polling based on isWaitingForDeposit
   useEffect(() => {
@@ -147,11 +202,17 @@ export function useDepositPolling(
     }
 
     // Set status to waiting
-    setStatus(prev => ({
-      ...prev,
-      status: 'waiting',
-      error: null
-    }))
+    updateStatus((prev) => {
+      if (prev.status === 'waiting' && prev.error === null) {
+        return prev
+      }
+
+      return {
+        ...prev,
+        status: 'waiting',
+        error: null
+      }
+    })
 
     // Initial check
     checkForDeposits()
@@ -165,7 +226,7 @@ export function useDepositPolling(
         intervalRef.current = null
       }
     }
-  }, [isWaitingForDeposit, sessionId, interval, checkForDeposits])
+  }, [isWaitingForDeposit, sessionId, interval, checkForDeposits, updateStatus])
 
   // Pause polling when tab is hidden
   useEffect(() => {
@@ -202,15 +263,15 @@ export function useDepositPolling(
 
   // Reset status
   const reset = useCallback(() => {
-    setStatus({
+    updateStatus(() => ({
       status: 'idle',
       confirmations: 0,
       requiredConfirmations: REQUIRED_CONFIRMATIONS,
       amount: null,
       txHash: null,
       error: null
-    })
-  }, [])
+    }))
+  }, [updateStatus])
 
   return {
     ...status,

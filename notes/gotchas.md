@@ -797,3 +797,15 @@ Also ignored the user's own statement ("I thought we changed the architecture") 
 4. Added regression tests for no-cookie/mismatch/attacker-query scenarios.
 
 **Key files:** `src/app/api/session/route.ts`, `src/app/api/wallet/route.ts`, `src/app/api/game/route.ts`, `src/app/api/video-poker/route.ts`, `src/app/api/session/route.test.ts`, `src/app/api/wallet/route.test.ts`, `src/app/api/game/route.test.ts`, `src/app/api/video-poker/route.test.ts`
+
+---
+
+### Swap onboarding can fail in two subtle ways at once (2026-04-09)
+
+**Symptom:** "Play & Swap" on `/get-zec` landed on Blackjack without opening the deposit flow, and once players manually opened the real-money onboarding modal the "Need ZEC?" tab could spam `/api/wallet`, throw `Maximum update depth exceeded`, and make the swap UI look broken.
+
+**Root Cause:** The CTA still linked to `/blackjack` instead of `/blackjack?onboarding=deposit`, so the swap journey was not entered directly. Separately, `useDepositPolling()` depended on mutable status values and inline callbacks, so every render rebuilt `checkForDeposits()`, restarted the polling effect, and triggered a render loop inside `OnboardingModal`.
+
+**Fix:** Pointed the `/get-zec` swap CTA directly at deposit onboarding and stabilized `useDepositPolling()` with refs for the latest status/callbacks so polling keeps one steady interval instead of rearming on every render. Added a regression test that rerenders with new callback identities and confirms polling does not restart.
+
+**Key files:** `src/app/get-zec/page.tsx`, `src/hooks/useDepositPolling.ts`, `src/hooks/useDepositPolling.test.ts`

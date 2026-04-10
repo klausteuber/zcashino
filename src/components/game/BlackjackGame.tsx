@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { BrandWordmark } from '@/components/brand/BrandWordmark'
 import type {
   BlackjackGameState,
@@ -76,6 +77,10 @@ export default function BlackjackGame() {
     demoWinNudgeShown,
     demoHandCount,
   } = useGameSession()
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const pathname = usePathname()
+  const onboardingDeepLinkHandled = useRef(false)
 
   const [gameState, setGameState] = useState<Partial<BlackjackGameState> | null>(null)
   const [gameId, setGameId] = useState<string | null>(null)
@@ -134,6 +139,16 @@ export default function BlackjackGame() {
       setIsAutoBetEnabled(savedAutoBet === 'true')
     }
   }, [])
+
+  useEffect(() => {
+    if (onboardingDeepLinkHandled.current) return
+    if (searchParams.get('onboarding') !== 'deposit') return
+    if (sessionLoading) return
+
+    onboardingDeepLinkHandled.current = true
+    handleSwitchToReal()
+    router.replace(pathname, { scroll: false })
+  }, [handleSwitchToReal, pathname, router, searchParams, sessionLoading])
 
   // Load client seed from localStorage or generate one
   useEffect(() => {

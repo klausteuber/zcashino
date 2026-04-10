@@ -98,7 +98,7 @@ export default async function GetZecPage() {
                 No account needed &mdash; the swap happens in minutes.
               </p>
               <Link
-                href="/blackjack"
+                href="/blackjack?onboarding=deposit"
                 className="btn-gold-shimmer px-4 py-2 text-midnight-black text-sm font-semibold rounded-lg text-center"
               >
                 Play &amp; Swap →

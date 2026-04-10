@@ -49,6 +49,12 @@ vi.mock('@/components/wallet/WithdrawalModal', () => ({
   WithdrawalModal: () => null,
 }))
 
+vi.mock('next/navigation', () => ({
+  useSearchParams: () => new URLSearchParams(),
+  useRouter: () => ({ replace: vi.fn() }),
+  usePathname: () => '/blackjack',
+}))
+
 import BlackjackGame from './BlackjackGame'
 
 const sessionPayload = {
