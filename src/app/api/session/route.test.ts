@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   logPlayerCounterEventMock: vi.fn(),
   getProvablyFairModeMock: vi.fn(),
   getPublicFairnessStateMock: vi.fn(),
+  getAdminSettingsMock: vi.fn(),
 }))
 
 const {
@@ -35,6 +36,7 @@ const {
   logPlayerCounterEventMock,
   getProvablyFairModeMock,
   getPublicFairnessStateMock,
+  getAdminSettingsMock,
 } = mocks
 
 vi.mock('@/lib/db', () => ({
@@ -75,6 +77,10 @@ vi.mock('@/lib/provably-fair/session-fairness', () => ({
   getPublicFairnessState: mocks.getPublicFairnessStateMock,
 }))
 
+vi.mock('@/lib/admin/runtime-settings', () => ({
+  getAdminSettings: mocks.getAdminSettingsMock,
+}))
+
 vi.mock('@/lib/telemetry/player-events', () => ({
   PLAYER_COUNTER_ACTIONS: {
     LEGACY_SESSION_FALLBACK: 'player.auth.legacy_fallback',
@@ -96,6 +102,13 @@ describe('/api/session address selection', () => {
     logPlayerCounterEventMock.mockResolvedValue(undefined)
     getProvablyFairModeMock.mockReturnValue('legacy_per_game_v1')
     getPublicFairnessStateMock.mockResolvedValue(null)
+    getAdminSettingsMock.mockResolvedValue({
+      rg: {
+        defaultDepositLimit: null,
+        defaultLossLimit: null,
+        defaultSessionLimit: null,
+      },
+    })
     createDepositWalletForSessionMock.mockResolvedValue({
       id: 'wallet-1',
       unifiedAddr: 'utestUnifiedDepositAddress1234567890',
@@ -162,6 +175,12 @@ describe('/api/session address selection', () => {
       exp: Date.now() + 60_000,
     })
 
+    prismaMock.session.findUnique.mockResolvedValueOnce({
+      id: 'session-2',
+      walletAddress: 'real_wallet_2',
+      wallet: null,
+    })
+
     const response = await GET({
       nextUrl: { searchParams: new URLSearchParams('sessionId=session-1') },
       headers: { get: vi.fn().mockReturnValue(null) },
@@ -170,7 +189,150 @@ describe('/api/session address selection', () => {
     expect(response.status).toBe(401)
     const payload = await response.json()
     expect(payload.error).toContain('Session expired')
-    expect(prismaMock.session.findUnique).not.toHaveBeenCalled()
+    expect(prismaMock.session.findUnique).toHaveBeenCalledWith({
+      where: { id: 'session-2' },
+      include: { wallet: true },
+    })
+  })
+
+  it('GET creates a new real session instead of reusing the current demo cookie session', async () => {
+    parsePlayerSessionFromRequestMock.mockReturnValue({
+      sessionId: 'demo-session',
+      walletAddress: 'demo_wallet',
+      exp: Date.now() + 60_000,
+    })
+
+    prismaMock.session.findUnique
+      .mockResolvedValueOnce({
+        id: 'demo-session',
+        walletAddress: 'demo_wallet',
+        balance: 10,
+        totalWagered: 0,
+        totalWon: 0,
+        depositLimit: null,
+        lossLimit: null,
+        sessionLimit: null,
+        isAuthenticated: true,
+        withdrawalAddress: null,
+        authTxHash: null,
+        excludedUntil: null,
+        wallet: null,
+      })
+      .mockResolvedValueOnce({
+        id: 'real-session',
+        walletAddress: 'real_wallet_new',
+        balance: 0,
+        totalWagered: 0,
+        totalWon: 0,
+        depositLimit: null,
+        lossLimit: null,
+        sessionLimit: null,
+        isAuthenticated: false,
+        withdrawalAddress: null,
+        authTxHash: null,
+        excludedUntil: null,
+        wallet: {
+          unifiedAddr: 'utestUnifiedDepositAddress1234567890',
+          transparentAddr: 'tmTransparentAddress1234567890123',
+        },
+      })
+
+    prismaMock.session.create.mockResolvedValueOnce({
+      id: 'real-session',
+      walletAddress: 'real_wallet_new',
+      balance: 0,
+      totalWagered: 0,
+      totalWon: 0,
+      depositLimit: null,
+      lossLimit: null,
+      sessionLimit: null,
+      isAuthenticated: false,
+      withdrawalAddress: null,
+      authTxHash: null,
+      excludedUntil: null,
+      wallet: null,
+    })
+    prismaMock.session.update.mockResolvedValueOnce({})
+
+    const response = await GET({
+      nextUrl: { searchParams: new URLSearchParams('wallet=real_wallet_new') },
+      headers: { get: vi.fn().mockReturnValue(null) },
+    } as unknown as NextRequest)
+
+    expect(createDepositWalletForSessionMock).toHaveBeenCalledWith('real-session')
+    expect(prismaMock.session.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        walletAddress: 'real_wallet_new',
+        balance: 0,
+        totalDeposited: 0,
+        isAuthenticated: false,
+      }),
+      include: { wallet: true },
+    })
+
+    const payload = await response.json()
+    expect(payload.id).toBe('real-session')
+    expect(payload.walletAddress).toBe('real_wallet_new')
+    expect(payload.isDemo).toBe(false)
+    expect(payload.depositAddress).toBe('utestUnifiedDepositAddress1234567890')
+  })
+
+  it('GET repairs a real session missing its deposit wallet', async () => {
+    parsePlayerSessionFromRequestMock.mockReturnValue({
+      sessionId: 'real-session',
+      walletAddress: 'real_wallet',
+      exp: Date.now() + 60_000,
+    })
+
+    prismaMock.session.findUnique
+      .mockResolvedValueOnce({
+        id: 'real-session',
+        walletAddress: 'real_wallet',
+        balance: 0,
+        totalWagered: 0,
+        totalWon: 0,
+        depositLimit: null,
+        lossLimit: null,
+        sessionLimit: null,
+        isAuthenticated: false,
+        withdrawalAddress: null,
+        authTxHash: null,
+        excludedUntil: null,
+        wallet: null,
+      })
+      .mockResolvedValueOnce({
+        id: 'real-session',
+        walletAddress: 'real_wallet',
+        balance: 0,
+        totalWagered: 0,
+        totalWon: 0,
+        depositLimit: null,
+        lossLimit: null,
+        sessionLimit: null,
+        isAuthenticated: false,
+        withdrawalAddress: null,
+        authTxHash: null,
+        excludedUntil: null,
+        wallet: {
+          unifiedAddr: 'utestUnifiedDepositAddress1234567890',
+          transparentAddr: 'tmTransparentAddress1234567890123',
+        },
+      })
+
+    prismaMock.session.update.mockResolvedValueOnce({})
+
+    const response = await GET({
+      nextUrl: { searchParams: new URLSearchParams() },
+      headers: { get: vi.fn().mockReturnValue(null) },
+    } as unknown as NextRequest)
+
+    expect(createDepositWalletForSessionMock).toHaveBeenCalledWith('real-session')
+    expect(prismaMock.session.create).not.toHaveBeenCalled()
+
+    const payload = await response.json()
+    expect(payload.id).toBe('real-session')
+    expect(payload.depositAddress).toBe('utestUnifiedDepositAddress1234567890')
+    expect(payload.isDemo).toBe(false)
   })
 
   it('POST set-withdrawal-address returns unified-first deposit fields', async () => {

@@ -41,6 +41,33 @@ function getPreferredDepositAddress(wallet: SessionDepositWallet) {
   return { depositAddress, depositAddressType, transparentAddress }
 }
 
+function createWalletCreationErrorResponse(
+  session: {
+    id: string
+    walletAddress: string
+    balance: number
+  },
+  err: unknown
+) {
+  const errMsg = err instanceof Error ? err.message : String(err)
+
+  return NextResponse.json({
+    id: session.id,
+    walletAddress: session.walletAddress,
+    balance: roundZec(session.balance),
+    isDemo: false,
+    depositAddress: null,
+    walletError: errMsg.includes('node not connected')
+      ? 'node_unavailable'
+      : errMsg.includes('unique constraint') || errMsg.includes('Unique constraint')
+      ? 'wallet_conflict'
+      : 'wallet_creation_failed',
+    walletErrorMessage: errMsg.includes('node not connected')
+      ? 'The Zcash node is temporarily unavailable. Please try again in a moment.'
+      : 'Failed to generate deposit address. Please try again.',
+  })
+}
+
 async function createSessionResponse(session: {
   id: string
   walletAddress: string
@@ -146,7 +173,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const cookieSession = parsePlayerSessionFromRequest(request)
-    const trustedSessionId = cookieSession?.sessionId
+    let trustedSessionId: string | null = cookieSession?.sessionId ?? null
 
     // Legacy localStorage session restore hint (accepted only when it matches a valid signed cookie)
     const requestedSessionId = request.nextUrl.searchParams.get('sessionId')
@@ -155,6 +182,28 @@ export async function GET(request: NextRequest) {
       request.nextUrl.searchParams.get('wallet')
 
     let session = null
+    let skipWalletLookup = false
+
+    if (trustedSessionId) {
+      const currentCookieSession = await prisma.session.findUnique({
+        where: { id: trustedSessionId },
+        include: { wallet: true }
+      })
+
+      if (currentCookieSession) {
+        const upgradingDemoToReal =
+          !!walletAddress &&
+          walletAddress !== currentCookieSession.walletAddress &&
+          isDemoSession(currentCookieSession.walletAddress)
+
+        if (upgradingDemoToReal) {
+          trustedSessionId = null
+          skipWalletLookup = true
+        } else {
+          session = currentCookieSession
+        }
+      }
+    }
 
     // Prevent restoring another session by passing an ID without a matching signed cookie.
     if (requestedSessionId && (!trustedSessionId || requestedSessionId !== trustedSessionId)) {
@@ -164,16 +213,8 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Priority 1: Restore by signed cookie
-    if (trustedSessionId) {
-      session = await prisma.session.findUnique({
-        where: { id: trustedSessionId },
-        include: { wallet: true }
-      })
-    }
-
     // Priority 2: Find by wallet address (only if this browser already has a matching signed cookie)
-    if (!session && walletAddress) {
+    if (!session && walletAddress && !skipWalletLookup) {
       const walletSession = await prisma.session.findUnique({
         where: { walletAddress },
         include: { wallet: true }
@@ -227,24 +268,26 @@ export async function GET(request: NextRequest) {
           }
         } catch (err) {
           console.error('[SessionAPI] Failed to create deposit wallet:', err)
-          const errMsg = err instanceof Error ? err.message : String(err)
-          // Return session with a specific wallet error so the frontend can show a useful message
-          return NextResponse.json({
-            id: session.id,
-            walletAddress: session.walletAddress,
-            balance: 0,
-            isDemo: false,
-            depositAddress: null,
-            walletError: errMsg.includes('node not connected')
-              ? 'node_unavailable'
-              : errMsg.includes('unique constraint') || errMsg.includes('Unique constraint')
-              ? 'wallet_conflict'
-              : 'wallet_creation_failed',
-            walletErrorMessage: errMsg.includes('node not connected')
-              ? 'The Zcash node is temporarily unavailable. Please try again in a moment.'
-              : 'Failed to generate deposit address. Please try again.',
-          })
+          return createWalletCreationErrorResponse(session, err)
         }
+      }
+    }
+
+    // Self-heal incomplete real sessions created during a transient wallet outage.
+    if (!isDemoSession(session.walletAddress) && !session.wallet) {
+      try {
+        const wallet = await createDepositWalletForSession(session.id)
+        session = await prisma.session.findUnique({
+          where: { id: session.id },
+          include: { wallet: true }
+        }) ?? session
+
+        if (!session.wallet && wallet) {
+          (session as Record<string, unknown>).wallet = wallet
+        }
+      } catch (err) {
+        console.error('[SessionAPI] Failed to repair missing deposit wallet:', err)
+        return createWalletCreationErrorResponse(session, err)
       }
     }
 

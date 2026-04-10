@@ -696,6 +696,26 @@ The `handleRealSelect` callback called `setStep('deposit')` unconditionally, but
 
 ---
 
+### Demo cookie blocked real-session creation and showed fake deposit-wallet error (2026-04-09)
+
+**Symptom:** A player clicked "Deposit Real ZEC" from an active demo session and saw "Something Went Wrong / Failed to generate deposit address." The live API looked healthy, but the modal still failed.
+
+**Root Cause:** `GET /api/session` trusted the existing signed player cookie before honoring the `?wallet=real_...` query param used by `handleCreateRealSession()`. If the browser already had a demo-session cookie, the route returned that same demo session instead of creating a new real-money session. The frontend then received `depositAddress: null` and showed the generic deposit-address failure message even though wallet generation had never actually been attempted for a real session.
+
+There was a second trap hiding behind the same symptom: if a real session had been created earlier during a transient wallet outage and therefore had `wallet: null`, later `GET /api/session` restores would keep returning that incomplete session without retrying wallet creation.
+
+**Fix:**
+1. Treat an explicit `?wallet=...` request from a demo cookie session as an upgrade request, not a restore request.
+2. Skip wallet-address lookup in that upgrade path so the route proceeds to create a new real session.
+3. Self-heal real sessions that exist without a deposit wallet by retrying `createDepositWalletForSession()` on subsequent session reads.
+4. Add regression tests for both flows.
+
+**Lesson:** When one route handles both "restore current session" and "create new real session", cookie restoration cannot blindly win. Explicit create intent must override a demo-session cookie, or the UI will surface a misleading downstream error.
+
+**Files:** `src/app/api/session/route.ts`, `src/app/api/session/route.test.ts`
+
+---
+
 ### Insurance decline must be server-side — game logic never client-only (2026-02-18)
 
 **Symptom:** Player allowed to Hit/Stand while insurance prompt was visible. Dealer blackjack not checked after declining insurance. Player could play a full hand and lose to a dealer blackjack that should have ended the round immediately.
