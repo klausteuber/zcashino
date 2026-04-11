@@ -15,7 +15,8 @@ interface OnboardingModalProps {
   onDepositComplete: (balance: number) => void
   sessionId: string | null
   depositAddress: string | null
-  onCreateRealSession: () => Promise<{ sessionId: string; depositAddress: string | null; walletError?: string; walletErrorMessage?: string } | null>
+  transparentAddress?: string | null
+  onCreateRealSession: () => Promise<{ sessionId: string; depositAddress: string | null; transparentAddress?: string | null; walletError?: string; walletErrorMessage?: string } | null>
   onSetWithdrawalAddress?: (address: string) => Promise<boolean>
   /** Skip welcome screen and go directly to deposit flow */
   initialStep?: 'welcome' | 'deposit'
@@ -28,6 +29,7 @@ export function OnboardingModal({
   onDepositComplete,
   sessionId,
   depositAddress,
+  transparentAddress = null,
   onCreateRealSession,
   onSetWithdrawalAddress,
   initialStep = 'welcome'
@@ -38,6 +40,7 @@ export function OnboardingModal({
   const [addressError, setAddressError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [localDepositAddress, setLocalDepositAddress] = useState<string | null>(depositAddress)
+  const [localTransparentAddress, setLocalTransparentAddress] = useState<string | null>(transparentAddress)
   const [localSessionId, setLocalSessionId] = useState<string | null>(sessionId)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
@@ -63,8 +66,9 @@ export function OnboardingModal({
   // Update local state when props change
   useEffect(() => {
     setLocalDepositAddress(depositAddress)
+    setLocalTransparentAddress(transparentAddress)
     setLocalSessionId(sessionId)
-  }, [depositAddress, sessionId])
+  }, [depositAddress, transparentAddress, sessionId])
 
   // Handle modal open/close and initialStep
   useEffect(() => {
@@ -72,6 +76,7 @@ export function OnboardingModal({
       if (depositAddress && sessionId) {
         // Already have a real session with deposit address — go straight to deposit
         setLocalDepositAddress(depositAddress)
+        setLocalTransparentAddress(transparentAddress)
         setLocalSessionId(sessionId)
         setStep('deposit')
       } else if (initialStep === 'deposit') {
@@ -119,6 +124,7 @@ export function OnboardingModal({
       if (result && result.depositAddress) {
         setLocalSessionId(result.sessionId)
         setLocalDepositAddress(result.depositAddress)
+        setLocalTransparentAddress(result.transparentAddress || null)
         setStep('deposit')
       } else if (result) {
         // Session created but no deposit address — check for specific wallet error
@@ -214,6 +220,7 @@ export function OnboardingModal({
         {step === 'deposit' && localDepositAddress && (
           <DepositScreen
             depositAddress={localDepositAddress}
+            transparentAddress={localTransparentAddress}
             withdrawalAddress={withdrawalAddress || null}
             onBack={() => setStep('welcome')}
             depositStatus={depositStatus}
@@ -400,11 +407,13 @@ type DepositTab = 'have-zec' | 'need-zec'
 
 function DepositScreen({
   depositAddress,
+  transparentAddress,
   withdrawalAddress,
   onBack,
   depositStatus
 }: {
   depositAddress: string
+  transparentAddress: string | null
   withdrawalAddress: string | null
   onBack: () => void
   depositStatus: DepositStatus
@@ -503,7 +512,10 @@ function DepositScreen({
 
       {/* Tab content: Need ZEC? */}
       {activeTab === 'need-zec' && (
-        <SwapWidget depositAddress={depositAddress} />
+        <SwapWidget
+          depositAddress={depositAddress}
+          transparentAddress={transparentAddress}
+        />
       )}
 
       {/* Polling status — always visible on both tabs */}

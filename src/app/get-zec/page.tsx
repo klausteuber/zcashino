@@ -14,14 +14,14 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title: 'Get Zcash (ZEC)',
     description:
-      `How to get Zcash to play at ${brandTitle}. Swap BTC, ETH, SOL, or USDT for ZEC — or buy from an exchange.`,
+      `How to get Zcash to play at ${brandTitle}. Quote BTC, ETH, SOL, or USDT into ZEC — or buy from an exchange.`,
     alternates: {
       canonical: canonicalUrl,
     },
     openGraph: {
       title: `Get ZEC to Play | ${brandTitle}`,
       description:
-        'Three ways to fund your account. Swap crypto, buy from an exchange, or use a wallet you already have.',
+        'Three ways to fund your account. Quote a swap, buy from an exchange, or use a wallet you already have.',
       url: brandUrl,
     },
   }
@@ -41,12 +41,12 @@ const faqItems = [
   {
     question: 'Can I use Bitcoin or Ethereum to play?',
     answer:
-      'Not directly, but you can swap BTC, ETH, SOL, or USDT for ZEC using the built-in swap widget when you deposit. The swap takes a few minutes and requires no account.',
+      'Yes. During deposit you can request a quote that swaps BTC, ETH, SOL, or Ethereum USDT into ZEC and delivers it to your session address.',
   },
   {
     question: 'Is there a fee for swapping?',
     answer:
-      'The swap service charges a small fee (typically under 1%) which is included in the exchange rate. There are no additional fees from us.',
+      'Network, route, and any Zcashino fee are shown in the quote before you send. The exact cost depends on the source chain and the amount.',
   },
   {
     question: 'Do I need to create an account?',
@@ -82,7 +82,7 @@ export default async function GetZecPage() {
         <div className="text-center mb-12">
           <h1 className="text-4xl font-display font-bold text-bone-white mb-4">Get Zcash to Play</h1>
           <p className="text-lg text-venetian-gold/70">
-            Three ways to fund your account &mdash; no account or KYC required.
+            Three ways to fund your account &mdash; including a native quote flow from your own wallet.
           </p>
         </div>
 
@@ -94,8 +94,11 @@ export default async function GetZecPage() {
               <div className="text-3xl mb-3">&#x21C4;</div>
               <h2 className="text-lg font-display font-bold text-bone-white mb-2">Swap Crypto</h2>
               <p className="text-sm text-venetian-gold/70 mb-4 flex-1">
-                Already hold BTC, ETH, SOL, or USDT? Swap to ZEC directly from the deposit screen.
-                No account needed &mdash; the swap happens in minutes.
+                Already hold BTC, ETH, SOL, or USDT? Request a live quote from the deposit screen and
+                send from your own wallet. The flow returns ZEC to your session address in minutes.
+              </p>
+              <p className="text-xs text-venetian-gold/50 mb-4">
+                Use a self-custody wallet and provide a refund address you control.
               </p>
               <Link
                 href="/blackjack?onboarding=deposit"
@@ -164,7 +167,7 @@ export default async function GetZecPage() {
               <h3 className="text-sm font-semibold text-bone-white mb-1">ZEC on Solana</h3>
               <p className="text-sm text-venetian-gold/70">
                 Wrapped ZEC (wZEC/zenZEC) is available on Solana via bridges like Zolana and Zenrock.
-                Direct bridge deposits are coming soon &mdash; for now, you can swap SOL to native ZEC using the in-app swap.
+                You can also quote SOL to native ZEC directly in the deposit flow and have it delivered to your session address.
               </p>
             </div>
           </div>

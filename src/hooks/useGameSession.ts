@@ -13,6 +13,7 @@ export interface SessionData {
   isDemo?: boolean
   isAuthenticated?: boolean
   depositAddress?: string
+  transparentAddress?: string | null
   withdrawalAddress?: string | null
   maintenanceMode?: boolean
 }
@@ -38,7 +39,7 @@ export interface UseGameSessionReturn {
 
   // Session actions
   handleDemoSelect: () => Promise<void>
-  handleCreateRealSession: () => Promise<{ sessionId: string; depositAddress: string | null; walletError?: string; walletErrorMessage?: string } | null>
+  handleCreateRealSession: () => Promise<{ sessionId: string; depositAddress: string | null; transparentAddress?: string | null; walletError?: string; walletErrorMessage?: string } | null>
   handleDepositComplete: (balance: number) => void
   handleSwitchToReal: () => void
   handleSetWithdrawalAddress: (address: string) => Promise<boolean>
@@ -150,9 +151,10 @@ export function useGameSession(): UseGameSessionReturn {
         return {
           sessionId: '',
           depositAddress: null,
+          transparentAddress: null,
           walletError: 'rate_limited',
           walletErrorMessage: `Too many attempts. Please wait ${retryAfter} seconds and try again.`,
-        } as { sessionId: string; depositAddress: string | null; walletError?: string; walletErrorMessage?: string }
+        } as { sessionId: string; depositAddress: string | null; transparentAddress?: string | null; walletError?: string; walletErrorMessage?: string }
       }
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
@@ -169,6 +171,7 @@ export function useGameSession(): UseGameSessionReturn {
       return {
         sessionId: data.id,
         depositAddress: data.depositAddress || null,
+        transparentAddress: data.transparentAddress || null,
         walletError: data.walletError,
         walletErrorMessage: data.walletErrorMessage,
       }

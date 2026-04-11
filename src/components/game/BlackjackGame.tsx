@@ -1802,6 +1802,7 @@ export default function BlackjackGame() {
         onDepositComplete={handleDepositComplete}
         sessionId={session?.id || null}
         depositAddress={depositAddress}
+        transparentAddress={session?.transparentAddress ?? null}
         onCreateRealSession={handleCreateRealSession}
         onSetWithdrawalAddress={handleSetWithdrawalAddress}
         initialStep={onboardingMode === 'deposit' ? 'deposit' : 'welcome'}

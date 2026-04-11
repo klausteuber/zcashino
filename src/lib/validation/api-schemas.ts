@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { getSupportedSwapRail } from '@/lib/swap/rails'
 
 const nonEmptyString = z.string().trim().min(1)
 const finiteNumber = z.number().finite()
@@ -94,6 +95,27 @@ export const walletBodySchema = z.discriminatedUnion('action', [
   }).strict(),
 ])
 
+export const swapBodySchema = z.discriminatedUnion('action', [
+  z.object({
+    action: z.literal('quote'),
+    railId: z.string().trim().refine((value) => getSupportedSwapRail(value) !== null, {
+      message: 'Unsupported source asset',
+    }),
+    amount: nonEmptyString.max(64),
+    recipientAddress: nonEmptyString.max(256),
+    refundAddress: nonEmptyString.max(256),
+  }).strict(),
+  z.object({
+    action: z.literal('status'),
+    depositAddress: nonEmptyString.max(256),
+  }).strict(),
+  z.object({
+    action: z.literal('submit-deposit'),
+    depositAddress: nonEmptyString.max(256),
+    txHash: nonEmptyString.max(256),
+  }).strict(),
+])
+
 export const sessionBodySchema = z.object({
   action: z.enum(['set-withdrawal-address', 'change-withdrawal-address', 'update-limits', 'reset-demo-balance']).optional(),
   sessionId: nonEmptyString,
@@ -149,6 +171,7 @@ export const provablyFairModeEnumSchema = provablyFairModeSchema
 export type BlackjackBody = z.infer<typeof blackjackBodySchema>
 export type VideoPokerBody = z.infer<typeof videoPokerBodySchema>
 export type WalletBody = z.infer<typeof walletBodySchema>
+export type SwapBody = z.infer<typeof swapBodySchema>
 export type SessionBody = z.infer<typeof sessionBodySchema>
 export type VerifyPostBody = z.infer<typeof verifyPostSchema>
 export type FairnessPostBody = z.infer<typeof fairnessPostSchema>
