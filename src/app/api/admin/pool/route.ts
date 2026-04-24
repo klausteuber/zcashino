@@ -7,7 +7,7 @@ import {
 } from '@/lib/provably-fair/commitment-pool'
 import prisma from '@/lib/db'
 import { getOperationStatus, sendZec, checkNodeStatus, getAddressBalance } from '@/lib/wallet/rpc'
-import { DEFAULT_NETWORK, roundZec, WITHDRAWAL_FEE } from '@/lib/wallet'
+import { DEFAULT_NETWORK, roundZec } from '@/lib/wallet'
 import { requireAdmin } from '@/lib/admin/auth'
 import { hasPermission } from '@/lib/admin/rbac'
 import type { AdminRole } from '@/lib/admin/rbac'
@@ -34,7 +34,105 @@ import {
   triggerSessionSeedPoolCheck,
 } from '@/lib/services/session-seed-pool-manager'
 import { guardCypherAdminRequest } from '@/lib/admin/host-guard'
-import { reserveFunds } from '@/lib/services/ledger'
+import { releaseFunds, reserveFunds } from '@/lib/services/ledger'
+
+const WITHDRAWAL_APPROVAL_PROCESSING_STATUS = 'processing_approval'
+
+type AdminWithdrawalAction = 'approve-withdrawal' | 'reject-withdrawal'
+
+async function getWithdrawalForActionConflict(transactionId: string) {
+  return prisma.transaction.findFirst({
+    where: { id: transactionId, type: 'withdrawal' },
+    select: {
+      id: true,
+      status: true,
+      operationId: true,
+      txHash: true,
+      failReason: true,
+    },
+  })
+}
+
+function buildWithdrawalConflictResponse(
+  action: AdminWithdrawalAction,
+  transactionId: string,
+  existing: Awaited<ReturnType<typeof getWithdrawalForActionConflict>>
+) {
+  if (!existing) {
+    return NextResponse.json({ error: 'Withdrawal not found or not pending approval' }, { status: 404 })
+  }
+
+  const isApprovalCompatible =
+    action === 'approve-withdrawal' &&
+    [WITHDRAWAL_APPROVAL_PROCESSING_STATUS, 'pending', 'confirmed'].includes(existing.status)
+  const isRejectionCompatible = action === 'reject-withdrawal' && existing.status === 'failed'
+
+  if (isApprovalCompatible || isRejectionCompatible) {
+    const alreadyProcessing =
+      existing.status === WITHDRAWAL_APPROVAL_PROCESSING_STATUS ||
+      existing.status === 'pending'
+
+    return NextResponse.json({
+      success: true,
+      action,
+      transactionId,
+      status: existing.status,
+      operationId: existing.operationId,
+      txHash: existing.txHash,
+      failReason: existing.failReason,
+      alreadyProcessing,
+      alreadyProcessed: !alreadyProcessing,
+      message: alreadyProcessing
+        ? 'Withdrawal is already being processed.'
+        : 'Withdrawal was already processed.',
+    })
+  }
+
+  return NextResponse.json(
+    {
+      error: `Withdrawal is already ${existing.status} and cannot be ${action === 'approve-withdrawal' ? 'approved' : 'rejected'}.`,
+      status: existing.status,
+      transactionId,
+    },
+    { status: 409 }
+  )
+}
+
+async function buildWithdrawalNotPendingResponse(action: AdminWithdrawalAction, transactionId: string) {
+  const existing = await getWithdrawalForActionConflict(transactionId)
+  return buildWithdrawalConflictResponse(action, transactionId, existing)
+}
+
+async function failClaimedWithdrawal(
+  transaction: { id: string; sessionId: string; amount: number; fee: number },
+  reason: string,
+  statusGuard: { status: string; operationId?: string | null }
+) {
+  const refundTotal = roundZec(transaction.amount + transaction.fee)
+
+  return prisma.$transaction(async (tx) => {
+    const result = await tx.transaction.updateMany({
+      where: {
+        id: transaction.id,
+        type: 'withdrawal',
+        status: statusGuard.status,
+        ...(statusGuard.operationId ? { operationId: statusGuard.operationId } : {}),
+      },
+      data: {
+        status: 'failed',
+        failReason: reason,
+      },
+    })
+
+    if (result.count !== 1) {
+      return false
+    }
+
+    // Funds may only be released after the guarded status transition succeeds.
+    await releaseFunds(tx, transaction.sessionId, refundTotal, 'totalWithdrawn', transaction.amount)
+    return true
+  })
+}
 
 /**
  * GET /api/admin/pool - Get pool status
@@ -472,7 +570,7 @@ export async function POST(request: NextRequest) {
         })
 
         if (!txToApprove) {
-          return NextResponse.json({ error: 'Withdrawal not found or not pending approval' }, { status: 404 })
+          return buildWithdrawalNotPendingResponse('approve-withdrawal', approveId)
         }
 
         const network = DEFAULT_NETWORK
@@ -498,20 +596,72 @@ export async function POST(request: NextRequest) {
           }, { status: 400 })
         }
 
-        // Execute the withdrawal
-        try {
-          const { operationId: approveOpId } = await sendZec(
-            houseAddress,
-            txToApprove.address!,
-            txToApprove.amount,
-            txToApprove.memo || undefined,
-            network
-          )
+        const claimed = await prisma.transaction.updateMany({
+          where: { id: approveId, type: 'withdrawal', status: 'pending_approval' },
+          data: {
+            status: WITHDRAWAL_APPROVAL_PROCESSING_STATUS,
+            failReason: null,
+          },
+        })
+        if (claimed.count !== 1) {
+          return buildWithdrawalNotPendingResponse('approve-withdrawal', approveId)
+        }
 
-          await prisma.transaction.update({
-            where: { id: approveId },
+        // Execute the withdrawal only after this request has atomically claimed it.
+        try {
+          let approveOpId: string
+          try {
+            const result = await sendZec(
+              houseAddress,
+              txToApprove.address!,
+              txToApprove.amount,
+              txToApprove.memo || undefined,
+              network
+            )
+            approveOpId = result.operationId
+          } catch (rpcErr) {
+            const reason = rpcErr instanceof Error ? rpcErr.message : 'RPC call failed'
+            const refunded = await failClaimedWithdrawal(
+              txToApprove,
+              reason,
+              { status: WITHDRAWAL_APPROVAL_PROCESSING_STATUS }
+            )
+
+            await logAdminEvent({
+              request,
+              action: 'admin.pool.action',
+              success: false,
+              actor: adminCheck.session.username,
+              details: `Withdrawal approval RPC failed: ${reason}`,
+              metadata: { adminAction: action, transactionId: approveId, refunded },
+            })
+
+            return NextResponse.json({
+              error: `RPC failed: ${reason}`,
+              refunded,
+            }, { status: 500 })
+          }
+
+          const markedPending = await prisma.transaction.updateMany({
+            where: {
+              id: approveId,
+              type: 'withdrawal',
+              status: WITHDRAWAL_APPROVAL_PROCESSING_STATUS,
+            },
             data: { status: 'pending', operationId: approveOpId },
           })
+          if (markedPending.count !== 1) {
+            console.error(
+              `[Admin] Withdrawal ${approveId} submitted with opid ${approveOpId}, ` +
+              'but the processing row could not be marked pending.'
+            )
+            return NextResponse.json({
+              error: 'Withdrawal submitted but status update failed. Manual review required.',
+              action: 'approve-withdrawal',
+              transactionId: approveId,
+              operationId: approveOpId,
+            }, { status: 500 })
+          }
 
           // Poll opid briefly to catch immediate failures (e.g. insufficient funds)
           await new Promise((r) => setTimeout(r, 3000))
@@ -519,20 +669,11 @@ export async function POST(request: NextRequest) {
 
           if (opCheck.status === 'failed') {
             // Refund the user — the z_sendmany failed before hitting the blockchain
-            const refundTotal = roundZec(txToApprove.amount + WITHDRAWAL_FEE)
-            await prisma.$transaction([
-              prisma.transaction.update({
-                where: { id: approveId },
-                data: { status: 'failed', failReason: opCheck.error || 'z_sendmany failed' },
-              }),
-              prisma.session.update({
-                where: { id: txToApprove.sessionId },
-                data: {
-                  balance: { increment: refundTotal },
-                  totalWithdrawn: { decrement: txToApprove.amount },
-                },
-              }),
-            ])
+            const refunded = await failClaimedWithdrawal(
+              txToApprove,
+              opCheck.error || 'z_sendmany failed',
+              { status: 'pending', operationId: approveOpId }
+            )
 
             await logAdminEvent({
               request,
@@ -540,7 +681,7 @@ export async function POST(request: NextRequest) {
               success: false,
               actor: adminCheck.session.username,
               details: `Withdrawal approval failed: ${opCheck.error}`,
-              metadata: { adminAction: action, transactionId: approveId, operationId: approveOpId },
+              metadata: { adminAction: action, transactionId: approveId, operationId: approveOpId, refunded },
             })
 
             return NextResponse.json({
@@ -548,6 +689,7 @@ export async function POST(request: NextRequest) {
               action: 'approve-withdrawal',
               transactionId: approveId,
               operationId: approveOpId,
+              refunded,
             }, { status: 500 })
           }
 
@@ -567,9 +709,10 @@ export async function POST(request: NextRequest) {
             operationId: approveOpId,
             amount: txToApprove.amount,
           })
-        } catch (rpcErr) {
+        } catch (error) {
+          console.error('Withdrawal approval error:', error)
           return NextResponse.json({
-            error: `RPC failed: ${rpcErr instanceof Error ? rpcErr.message : 'unknown'}`,
+            error: 'Withdrawal approval failed.',
           }, { status: 500 })
         }
       }
@@ -583,38 +726,40 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: 'transactionId required' }, { status: 400 })
         }
 
-        const txToReject = await prisma.transaction.findFirst({
-          where: { id: rejectId, type: 'withdrawal', status: 'pending_approval' },
+        const finalRejectReason = typeof rejectReason === 'string' && rejectReason.trim()
+          ? rejectReason.trim()
+          : 'Rejected by admin'
+
+        const txToReject = await prisma.$transaction(async (tx) => {
+          const target = await tx.transaction.findFirst({
+            where: { id: rejectId, type: 'withdrawal', status: 'pending_approval' },
+          })
+          if (!target) return null
+
+          const rejected = await tx.transaction.updateMany({
+            where: { id: rejectId, type: 'withdrawal', status: 'pending_approval' },
+            data: {
+              status: 'failed',
+              failReason: finalRejectReason,
+            },
+          })
+          if (rejected.count !== 1) return null
+
+          const refundTotal = roundZec(target.amount + target.fee)
+          await releaseFunds(tx, target.sessionId, refundTotal, 'totalWithdrawn', target.amount)
+          return { ...target, refundTotal }
         })
 
         if (!txToReject) {
-          return NextResponse.json({ error: 'Withdrawal not found or not pending approval' }, { status: 404 })
+          return buildWithdrawalNotPendingResponse('reject-withdrawal', rejectId)
         }
-
-        // Refund the user
-        const refundTotal = roundZec(txToReject.amount + txToReject.fee)
-        await prisma.session.update({
-          where: { id: txToReject.sessionId },
-          data: {
-            balance: { increment: refundTotal },
-            totalWithdrawn: { decrement: txToReject.amount },
-          },
-        })
-
-        await prisma.transaction.update({
-          where: { id: rejectId },
-          data: {
-            status: 'failed',
-            failReason: rejectReason || 'Rejected by admin',
-          },
-        })
 
         await logAdminEvent({
           request,
           action: 'admin.pool.action',
           success: true,
           actor: adminCheck.session.username,
-          details: `Withdrawal rejected: ${txToReject.amount} ZEC — ${rejectReason || 'No reason'}`,
+          details: `Withdrawal rejected: ${txToReject.amount} ZEC — ${finalRejectReason}`,
           metadata: { adminAction: action, transactionId: rejectId },
         })
 
@@ -622,7 +767,7 @@ export async function POST(request: NextRequest) {
           success: true,
           action: 'reject-withdrawal',
           transactionId: rejectId,
-          refundedAmount: refundTotal,
+          refundedAmount: txToReject.refundTotal,
         })
       }
 

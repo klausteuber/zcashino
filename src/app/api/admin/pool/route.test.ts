@@ -1,11 +1,14 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NextRequest } from 'next/server'
 
 const mocks = vi.hoisted(() => ({
   prismaMock: {
+    $transaction: vi.fn(),
     transaction: {
       findFirst: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
+      create: vi.fn(),
     },
     session: {
       update: vi.fn(),
@@ -37,6 +40,7 @@ const mocks = vi.hoisted(() => ({
   triggerSessionSeedPoolCheckMock: vi.fn(),
   guardCypherAdminRequestMock: vi.fn(),
   reserveFundsMock: vi.fn(),
+  releaseFundsMock: vi.fn(),
   reconcilePendingWithdrawalsMock: vi.fn(),
   reconcileWithdrawalByIdMock: vi.fn(),
 }))
@@ -69,6 +73,7 @@ const {
   triggerSessionSeedPoolCheckMock,
   guardCypherAdminRequestMock,
   reserveFundsMock,
+  releaseFundsMock,
   reconcilePendingWithdrawalsMock,
   reconcileWithdrawalByIdMock,
 } = mocks
@@ -144,6 +149,7 @@ vi.mock('@/lib/admin/host-guard', () => ({
 
 vi.mock('@/lib/services/ledger', () => ({
   reserveFunds: mocks.reserveFundsMock,
+  releaseFunds: mocks.releaseFundsMock,
 }))
 
 vi.mock('@/lib/services/withdrawal-reconciliation', () => ({
@@ -159,9 +165,45 @@ function makeRequest(body: unknown): NextRequest {
   } as unknown as NextRequest
 }
 
-describe('/api/admin/pool manual-confirm-withdrawal', () => {
+function makePendingApprovalWithdrawal(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'tx-1',
+    sessionId: 'session-1',
+    type: 'withdrawal',
+    amount: 1,
+    fee: 0.0001,
+    address: 'zs1destination',
+    memo: null,
+    isShielded: true,
+    status: 'pending_approval',
+    session: {
+      wallet: {
+        network: 'mainnet',
+      },
+    },
+    ...overrides,
+  }
+}
+
+async function approveWithdrawal(transactionId = 'tx-1') {
+  return POST(makeRequest({
+    action: 'approve-withdrawal',
+    transactionId,
+  }))
+}
+
+async function rejectWithdrawal(transactionId = 'tx-1', reason?: string) {
+  return POST(makeRequest({
+    action: 'reject-withdrawal',
+    transactionId,
+    ...(reason ? { reason } : {}),
+  }))
+}
+
+describe('/api/admin/pool', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
+    vi.resetAllMocks()
+    process.env.HOUSE_ZADDR_MAINNET = 'zs1house'
     guardCypherAdminRequestMock.mockReturnValue(null)
     checkAdminRateLimitMock.mockReturnValue({ allowed: true })
     createRateLimitResponseMock.mockReturnValue(new Response('rate limited', { status: 429 }))
@@ -171,6 +213,19 @@ describe('/api/admin/pool manual-confirm-withdrawal', () => {
     })
     getProvablyFairModeMock.mockReturnValue('legacy_per_game_v1')
     logAdminEventMock.mockResolvedValue(undefined)
+    prismaMock.$transaction.mockImplementation(async (input: unknown) => {
+      if (typeof input === 'function') {
+        return (input as (tx: typeof prismaMock) => unknown)(prismaMock)
+      }
+      return Promise.all(input as Promise<unknown>[])
+    })
+    checkNodeStatusMock.mockResolvedValue({ connected: true })
+    getAddressBalanceMock.mockResolvedValue({ confirmed: 10 })
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    delete process.env.HOUSE_ZADDR_MAINNET
   })
 
   it('rejects manual confirmation without withdrawal approval permission', async () => {
@@ -216,5 +271,156 @@ describe('/api/admin/pool manual-confirm-withdrawal', () => {
       },
     })
     expect(prismaMock.session.update).not.toHaveBeenCalled()
+  })
+
+  it('claims a withdrawal before sending ZEC for approval', async () => {
+    vi.useFakeTimers()
+    hasPermissionMock.mockReturnValue(true)
+    prismaMock.transaction.findFirst.mockResolvedValue(makePendingApprovalWithdrawal())
+    prismaMock.transaction.updateMany
+      .mockResolvedValueOnce({ count: 1 })
+      .mockResolvedValueOnce({ count: 1 })
+    sendZecMock.mockResolvedValue({ operationId: 'op-1' })
+    getOperationStatusMock.mockResolvedValue({ status: 'success' })
+
+    const responsePromise = approveWithdrawal()
+    await vi.advanceTimersByTimeAsync(3000)
+    const response = await responsePromise
+    const payload = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(payload).toMatchObject({
+      success: true,
+      action: 'approve-withdrawal',
+      transactionId: 'tx-1',
+      operationId: 'op-1',
+      amount: 1,
+    })
+    expect(prismaMock.transaction.updateMany.mock.calls[0]?.[0]).toMatchObject({
+      where: { id: 'tx-1', type: 'withdrawal', status: 'pending_approval' },
+      data: { status: 'processing_approval', failReason: null },
+    })
+    expect(sendZecMock).toHaveBeenCalledTimes(1)
+    expect(prismaMock.transaction.updateMany.mock.invocationCallOrder[0]).toBeLessThan(
+      sendZecMock.mock.invocationCallOrder[0]
+    )
+    expect(prismaMock.transaction.updateMany.mock.calls[1]?.[0]).toMatchObject({
+      where: { id: 'tx-1', type: 'withdrawal', status: 'processing_approval' },
+      data: { status: 'pending', operationId: 'op-1' },
+    })
+  })
+
+  it('returns an idempotent approval response when another request already claimed it', async () => {
+    hasPermissionMock.mockReturnValue(true)
+    prismaMock.transaction.findFirst
+      .mockResolvedValueOnce(makePendingApprovalWithdrawal())
+      .mockResolvedValueOnce({
+        id: 'tx-1',
+        status: 'processing_approval',
+        operationId: null,
+        txHash: null,
+        failReason: null,
+      })
+    prismaMock.transaction.updateMany.mockResolvedValueOnce({ count: 0 })
+
+    const response = await approveWithdrawal()
+    const payload = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(payload).toMatchObject({
+      success: true,
+      action: 'approve-withdrawal',
+      transactionId: 'tx-1',
+      status: 'processing_approval',
+      alreadyProcessing: true,
+    })
+    expect(sendZecMock).not.toHaveBeenCalled()
+  })
+
+  it('refunds a claimed withdrawal exactly once when the send RPC fails', async () => {
+    hasPermissionMock.mockReturnValue(true)
+    prismaMock.transaction.findFirst.mockResolvedValue(makePendingApprovalWithdrawal())
+    prismaMock.transaction.updateMany
+      .mockResolvedValueOnce({ count: 1 })
+      .mockResolvedValueOnce({ count: 1 })
+    sendZecMock.mockRejectedValue(new Error('RPC offline'))
+
+    const response = await approveWithdrawal()
+    const payload = await response.json()
+
+    expect(response.status).toBe(500)
+    expect(payload).toMatchObject({
+      error: 'RPC failed: RPC offline',
+      refunded: true,
+    })
+    expect(prismaMock.transaction.updateMany.mock.calls[1]?.[0]).toMatchObject({
+      where: { id: 'tx-1', type: 'withdrawal', status: 'processing_approval' },
+      data: { status: 'failed', failReason: 'RPC offline' },
+    })
+    expect(releaseFundsMock).toHaveBeenCalledTimes(1)
+    expect(releaseFundsMock).toHaveBeenCalledWith(
+      prismaMock,
+      'session-1',
+      1.0001,
+      'totalWithdrawn',
+      1
+    )
+  })
+
+  it('rejects and refunds a pending approval inside one guarded transaction', async () => {
+    hasPermissionMock.mockReturnValue(true)
+    prismaMock.transaction.findFirst.mockResolvedValue(makePendingApprovalWithdrawal())
+    prismaMock.transaction.updateMany.mockResolvedValueOnce({ count: 1 })
+
+    const response = await rejectWithdrawal('tx-1', 'bad address')
+    const payload = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(payload).toMatchObject({
+      success: true,
+      action: 'reject-withdrawal',
+      transactionId: 'tx-1',
+      refundedAmount: 1.0001,
+    })
+    expect(prismaMock.$transaction).toHaveBeenCalledTimes(1)
+    expect(prismaMock.transaction.updateMany).toHaveBeenCalledWith({
+      where: { id: 'tx-1', type: 'withdrawal', status: 'pending_approval' },
+      data: { status: 'failed', failReason: 'bad address' },
+    })
+    expect(releaseFundsMock).toHaveBeenCalledTimes(1)
+    expect(releaseFundsMock).toHaveBeenCalledWith(
+      prismaMock,
+      'session-1',
+      1.0001,
+      'totalWithdrawn',
+      1
+    )
+  })
+
+  it('does not refund when another rejection already moved the withdrawal to failed', async () => {
+    hasPermissionMock.mockReturnValue(true)
+    prismaMock.transaction.findFirst
+      .mockResolvedValueOnce(makePendingApprovalWithdrawal())
+      .mockResolvedValueOnce({
+        id: 'tx-1',
+        status: 'failed',
+        operationId: null,
+        txHash: null,
+        failReason: 'Rejected by admin',
+      })
+    prismaMock.transaction.updateMany.mockResolvedValueOnce({ count: 0 })
+
+    const response = await rejectWithdrawal()
+    const payload = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(payload).toMatchObject({
+      success: true,
+      action: 'reject-withdrawal',
+      transactionId: 'tx-1',
+      status: 'failed',
+      alreadyProcessed: true,
+    })
+    expect(releaseFundsMock).not.toHaveBeenCalled()
   })
 })
