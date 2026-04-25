@@ -25,6 +25,7 @@ import { parseWithSchema, walletBodySchema } from '@/lib/validation/api-schemas'
 import { reserveFunds, releaseFunds, creditFunds } from '@/lib/services/ledger'
 import { logPlayerCounterEvent, PLAYER_COUNTER_ACTIONS } from '@/lib/telemetry/player-events'
 import { reconcileWithdrawalById } from '@/lib/services/withdrawal-reconciliation'
+import { sendPlayerDepositAlert } from '@/lib/notifications/player-activity'
 
 type DepositAddressType = 'unified' | 'transparent'
 
@@ -364,6 +365,14 @@ async function handleCheckDeposits(session: {
     address: string
     isAuthDeposit: boolean
   }> = []
+  const depositAlerts: Array<{
+    amount: number
+    txHash: string
+    confirmations: number
+    address: string
+    isAuthDeposit: boolean
+    credited: boolean
+  }> = []
   let justAuthenticated = false
   let isAuthenticatedNow = session.isAuthenticated
 
@@ -375,6 +384,7 @@ async function handleCheckDeposits(session: {
     if (!existing) {
       let authenticatedThisTx = false
       let createdTx = false
+      let creditedThisTx = false
       try {
         await prisma.$transaction(async (dbTx) => {
           await dbTx.transaction.create({
@@ -403,6 +413,7 @@ async function handleCheckDeposits(session: {
           }
 
           await creditFunds(dbTx, session.id, tx.amount, 'totalDeposited')
+          creditedThisTx = true
 
           // Authenticate on first confirmed deposit — withdrawal address not required
           // (user sets withdrawal address later when they want to withdraw)
@@ -436,6 +447,14 @@ async function handleCheckDeposits(session: {
           address: monitorAddress,
           isAuthDeposit: authenticatedThisTx,
         })
+        depositAlerts.push({
+          amount: tx.amount,
+          txHash,
+          confirmations: tx.confirmations,
+          address: monitorAddress,
+          isAuthDeposit: authenticatedThisTx,
+          credited: creditedThisTx,
+        })
       }
       continue
     }
@@ -461,6 +480,8 @@ async function handleCheckDeposits(session: {
     }
 
     let authenticatedThisTx = false
+    let promotedThisTx = false
+    let creditedThisTx = false
     await prisma.$transaction(async (dbTx) => {
       const promoted = await dbTx.transaction.updateMany({
         where: {
@@ -474,6 +495,7 @@ async function handleCheckDeposits(session: {
         },
       })
       if (promoted.count === 0 || !eligibleAmount) return
+      promotedThisTx = true
 
       // Enforce deposit limit (24h rolling)
       const withinLimit = await isDepositWithinLimit(session.id, existing.amount)
@@ -486,6 +508,7 @@ async function handleCheckDeposits(session: {
       }
 
       await creditFunds(dbTx, session.id, existing.amount, 'totalDeposited')
+      creditedThisTx = true
 
       const shouldAuthenticate = !isAuthenticatedNow && !!session.withdrawalAddress
       if (shouldAuthenticate) {
@@ -503,14 +526,29 @@ async function handleCheckDeposits(session: {
       }
     })
 
-    if (eligibleAmount) {
+    if (promotedThisTx && eligibleAmount) {
       newDeposits.push({
         amount: existing.amount,
         confirmations: tx.confirmations,
         address: monitorAddress,
         isAuthDeposit: authenticatedThisTx,
       })
+      depositAlerts.push({
+        amount: existing.amount,
+        txHash,
+        confirmations: tx.confirmations,
+        address: monitorAddress,
+        isAuthDeposit: authenticatedThisTx,
+        credited: creditedThisTx,
+      })
     }
+  }
+
+  for (const alert of depositAlerts) {
+    await sendPlayerDepositAlert({
+      sessionId: session.id,
+      ...alert,
+    })
   }
 
   await prisma.depositWallet.update({

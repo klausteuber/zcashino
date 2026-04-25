@@ -37,6 +37,7 @@ const mocks = vi.hoisted(() => ({
   reserveFundsMock: vi.fn(),
   releaseFundsMock: vi.fn(),
   creditFundsMock: vi.fn(),
+  sendPlayerDepositAlertMock: vi.fn(),
 }))
 
 const {
@@ -57,6 +58,7 @@ const {
   reserveFundsMock,
   releaseFundsMock,
   creditFundsMock,
+  sendPlayerDepositAlertMock,
 } = mocks
 
 vi.mock('@/lib/db', () => ({
@@ -123,6 +125,10 @@ vi.mock('@/lib/telemetry/player-events', () => ({
   logPlayerCounterEvent: mocks.logPlayerCounterEventMock,
 }))
 
+vi.mock('@/lib/notifications/player-activity', () => ({
+  sendPlayerDepositAlert: mocks.sendPlayerDepositAlertMock,
+}))
+
 import { GET, POST } from './route'
 
 function makeRequest(body: unknown): NextRequest {
@@ -158,6 +164,7 @@ describe('/api/wallet POST withdrawal-status transitions', () => {
     validateAddressViaRPCMock.mockResolvedValue({ isvalid: true })
     getDepositInfoMock.mockReturnValue({})
     creditFundsMock.mockResolvedValue(undefined)
+    sendPlayerDepositAlertMock.mockResolvedValue(undefined)
     createDepositWalletForSessionMock.mockResolvedValue({
       id: 'wallet-1',
       unifiedAddr: null,
@@ -557,6 +564,68 @@ describe('/api/wallet POST withdrawal-status transitions', () => {
     expect(payload.session).toEqual({
       isAuthenticated: false,
       balance: 1,
+    })
+  })
+
+  it('sends a Telegram alert for a newly confirmed deposit', async () => {
+    prismaMock.session.findUnique
+      .mockResolvedValueOnce({
+        id: 'session-1',
+        balance: 1,
+        walletAddress: 'real_wallet',
+        isAuthenticated: false,
+        withdrawalAddress: null,
+        authTxHash: null,
+        authConfirmedAt: null,
+        wallet: {
+          id: 'wallet-1',
+          unifiedAddr: 'utestUnifiedDepositAddress1234567890',
+          transparentAddr: 'tmTransparentAddress1234567890123',
+          network: 'testnet',
+        },
+      })
+      .mockResolvedValueOnce({ depositLimit: null })
+      .mockResolvedValueOnce({
+        id: 'session-1',
+        balance: 1.25,
+        isAuthenticated: true,
+        withdrawalAddress: null,
+        authTxHash: 'tx-confirmed',
+      })
+
+    getAddressBalanceMock.mockResolvedValueOnce({ confirmed: 0.25, pending: 0 })
+    listAddressTransactionsMock.mockResolvedValueOnce([
+      {
+        txid: 'tx-confirmed',
+        category: 'receive',
+        amount: 0.25,
+        confirmations: 3,
+        time: 1,
+      },
+    ])
+    prismaMock.transaction.findMany.mockResolvedValueOnce([])
+    prismaMock.transaction.count.mockResolvedValueOnce(0)
+
+    const response = await POST(makeRequest({
+      action: 'check-deposits',
+      sessionId: 'session-1',
+    }))
+
+    expect(response.status).toBe(200)
+    expect(creditFundsMock).toHaveBeenCalledWith(
+      prismaMock,
+      'session-1',
+      0.25,
+      'totalDeposited'
+    )
+    expect(sendPlayerDepositAlertMock).toHaveBeenCalledWith({
+      sessionId: 'session-1',
+      amount: 0.25,
+      txHash: 'tx-confirmed',
+      confirmations: 3,
+      address: 'utestUnifiedDepositAddress1234567890',
+      isAuthDeposit: true,
+      credited: true,
     })
   })
 })

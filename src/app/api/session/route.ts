@@ -13,6 +13,7 @@ import { parseWithSchema, sessionBodySchema } from '@/lib/validation/api-schemas
 import { getProvablyFairMode, LEGACY_PER_GAME_MODE } from '@/lib/provably-fair/mode'
 import { getPublicFairnessStateIfExists } from '@/lib/provably-fair/session-fairness'
 import { getAdminSettings } from '@/lib/admin/runtime-settings'
+import { sendPlayerSessionStartedAlert } from '@/lib/notifications/player-activity'
 
 // Demo mode: Generate a fake wallet address for testing
 function generateDemoWallet(): string {
@@ -182,6 +183,7 @@ export async function GET(request: NextRequest) {
       request.nextUrl.searchParams.get('wallet')
 
     let session = null
+    let createdNewSession = false
     let skipWalletLookup = false
 
     if (trustedSessionId) {
@@ -252,6 +254,7 @@ export async function GET(request: NextRequest) {
         },
         include: { wallet: true }
       })
+      createdNewSession = true
 
       // For real sessions, create deposit wallet immediately so user can deposit right away
       if (!isDemo && !session.wallet) {
@@ -289,6 +292,17 @@ export async function GET(request: NextRequest) {
         console.error('[SessionAPI] Failed to repair missing deposit wallet:', err)
         return createWalletCreationErrorResponse(session, err)
       }
+    }
+
+    if (createdNewSession) {
+      const { depositAddress, depositAddressType } = getPreferredDepositAddress(session.wallet)
+      await sendPlayerSessionStartedAlert({
+        sessionId: session.id,
+        walletAddress: session.walletAddress,
+        isDemo: isDemoSession(session.walletAddress),
+        depositAddress,
+        depositAddressType,
+      })
     }
 
     // Update last active timestamp

@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => ({
   getProvablyFairModeMock: vi.fn(),
   getPublicFairnessStateMock: vi.fn(),
   getAdminSettingsMock: vi.fn(),
+  sendPlayerSessionStartedAlertMock: vi.fn(),
 }))
 
 const {
@@ -37,6 +38,7 @@ const {
   getProvablyFairModeMock,
   getPublicFairnessStateMock,
   getAdminSettingsMock,
+  sendPlayerSessionStartedAlertMock,
 } = mocks
 
 vi.mock('@/lib/db', () => ({
@@ -81,6 +83,10 @@ vi.mock('@/lib/admin/runtime-settings', () => ({
   getAdminSettings: mocks.getAdminSettingsMock,
 }))
 
+vi.mock('@/lib/notifications/player-activity', () => ({
+  sendPlayerSessionStartedAlert: mocks.sendPlayerSessionStartedAlertMock,
+}))
+
 vi.mock('@/lib/telemetry/player-events', () => ({
   PLAYER_COUNTER_ACTIONS: {
     LEGACY_SESSION_FALLBACK: 'player.auth.legacy_fallback',
@@ -109,6 +115,7 @@ describe('/api/session address selection', () => {
         defaultSessionLimit: null,
       },
     })
+    sendPlayerSessionStartedAlertMock.mockResolvedValue(undefined)
     createDepositWalletForSessionMock.mockResolvedValue({
       id: 'wallet-1',
       unifiedAddr: 'utestUnifiedDepositAddress1234567890',
@@ -275,6 +282,13 @@ describe('/api/session address selection', () => {
     expect(payload.walletAddress).toBe('real_wallet_new')
     expect(payload.isDemo).toBe(false)
     expect(payload.depositAddress).toBe('utestUnifiedDepositAddress1234567890')
+    expect(sendPlayerSessionStartedAlertMock).toHaveBeenCalledWith({
+      sessionId: 'real-session',
+      walletAddress: 'real_wallet_new',
+      isDemo: false,
+      depositAddress: 'utestUnifiedDepositAddress1234567890',
+      depositAddressType: 'unified',
+    })
   })
 
   it('GET repairs a real session missing its deposit wallet', async () => {
