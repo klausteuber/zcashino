@@ -118,6 +118,42 @@ body[data-brand="21z"]::before {
   opacity: 1;
 }
 
+.buy-zec-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 7.75rem;
+  min-height: 2.65rem;
+  padding: 0.72rem 1.25rem;
+  box-shadow: 0 8px 20px rgba(13, 13, 13, 0.18);
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1;
+}
+
+.buy-zec-cta:focus-visible {
+  outline: 2px solid var(--accent-secondary);
+  outline-offset: 3px;
+}
+
+body[data-brand="21z"] .buy-zec-cta {
+  font-family: var(--font-display);
+  font-size: 0.84rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+@media (max-width: 640px) {
+  .buy-zec-cta {
+    min-width: 6.8rem;
+    min-height: 2.45rem;
+    padding: 0.65rem 1rem;
+    font-size: 0.88rem;
+  }
+}
+
 /* Card styling */
 .playing-card {
   background-color: var(--bone-white);
