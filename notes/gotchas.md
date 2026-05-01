@@ -809,3 +809,15 @@ Also ignored the user's own statement ("I thought we changed the architecture") 
 **Fix:** Pointed the `/get-zec` swap CTA directly at deposit onboarding and stabilized `useDepositPolling()` with refs for the latest status/callbacks so polling keeps one steady interval instead of rearming on every render. Added a regression test that rerenders with new callback identities and confirms polling does not restart.
 
 **Key files:** `src/app/get-zec/page.tsx`, `src/hooks/useDepositPolling.ts`, `src/hooks/useDepositPolling.test.ts`
+
+---
+
+### zcashd Docker Image Entrypoint Change (2026-05-01)
+
+**Symptom:** Production showed `zcashNode.connected=false`, real-session creation failed with "The Zcash node is temporarily offline," and the Telegram monitor repeated `NODE ERROR: Cannot reach zcash-cli (RPC unresponsive)`.
+
+**Root Cause:** The running `electriccoinco/zcashd:latest` image was still v6.11.0 and shut itself down at mainnet block height 3327100 with a deprecation error. Pulling the current image upgraded to v6.12.1, but the newer image no longer accepts raw daemon flags as the container command. It tried to execute `-par=6` as the binary. It also defaults CLI lookups to `/root/.zcash`, while production wallet data is mounted at `/srv/zcashd/.zcash`.
+
+**Fix:** Pull the current image, explicitly set `entrypoint: ["zcashd"]`, pass `-datadir=/srv/zcashd/.zcash` and `-printtoconsole` to `zcashd`, and pass the same `-datadir` to every `zcash-cli` healthcheck/monitor command.
+
+**Key files:** `docker-compose.mainnet.yml`, `scripts/check-node.sh`

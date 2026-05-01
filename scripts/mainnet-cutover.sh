@@ -15,6 +15,7 @@ COMPOSE_DIR="/opt/zcashino"
 MAINNET_COMPOSE="docker compose -p mainnet -f docker-compose.mainnet.yml"
 TESTNET_COMPOSE="docker compose"
 RPC_PASS=$(grep ZCASH_RPC_PASSWORD "$COMPOSE_DIR/.env.mainnet" | cut -d= -f2)
+ZCASH_CLI_DATADIR="${ZCASH_CLI_DATADIR:-/srv/zcashd/.zcash}"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -41,6 +42,7 @@ info "Mainnet zcashd container running"
 
 # Check sync status
 SYNC_INFO=$(docker exec mainnet-zcashd-1 zcash-cli \
+  "-datadir=$ZCASH_CLI_DATADIR" \
   -rpcuser=zcashrpc -rpcpassword="$RPC_PASS" \
   getblockchaininfo 2>/dev/null)
 
@@ -67,6 +69,7 @@ info "House z-address configured: ${HOUSE_ADDR:0:20}..."
 
 # Check house balance
 BALANCE=$(docker exec mainnet-zcashd-1 zcash-cli \
+  "-datadir=$ZCASH_CLI_DATADIR" \
   -rpcuser=zcashrpc -rpcpassword="$RPC_PASS" \
   z_gettotalbalance 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('private','0'))")
 

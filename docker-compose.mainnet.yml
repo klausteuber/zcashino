@@ -52,8 +52,11 @@ services:
         max-file: "5"
 
   zcashd:
-    image: electriccoinco/zcashd:latest  # v6.11.0 — protocol 170140 required for peer connectivity
+    image: electriccoinco/zcashd:latest  # Pull before restart when zcashd reaches network deprecation height
+    entrypoint: ["zcashd"]
     command:
+      - -datadir=/srv/zcashd/.zcash
+      - -printtoconsole
       - -par=6
       - -dbcache=2000              # 2GB UTXO cache — helps with 770+ shielded notes
       - -rpcuser=${ZCASH_RPC_USER:-zcashrpc}
@@ -76,7 +79,7 @@ services:
         reservations:
           memory: 2G
     healthcheck:
-      test: ["CMD", "zcash-cli", "-rpcuser=${ZCASH_RPC_USER:-zcashrpc}", "-rpcpassword=${ZCASH_RPC_PASSWORD}", "getblockchaininfo"]
+      test: ["CMD", "zcash-cli", "-datadir=/srv/zcashd/.zcash", "-rpcuser=${ZCASH_RPC_USER:-zcashrpc}", "-rpcpassword=${ZCASH_RPC_PASSWORD}", "getblockchaininfo"]
       interval: 60s
       timeout: 10s
       start_period: 300s    # 5 min grace for startup

@@ -9,8 +9,9 @@ set -euo pipefail
 
 COMPOSE_DIR="/opt/zcashino"
 RPC_PASS=$(grep ZCASH_RPC_PASSWORD "$COMPOSE_DIR/.env.mainnet" | cut -d= -f2)
+ZCASH_CLI_DATADIR="${ZCASH_CLI_DATADIR:-/srv/zcashd/.zcash}"
 
-CLI="docker exec mainnet-zcashd-1 zcash-cli -rpcuser=zcashrpc -rpcpassword=$RPC_PASS"
+CLI="docker exec mainnet-zcashd-1 zcash-cli -datadir=$ZCASH_CLI_DATADIR -rpcuser=zcashrpc -rpcpassword=$RPC_PASS"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'

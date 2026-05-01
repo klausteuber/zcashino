@@ -486,3 +486,8 @@ In-memory limits and remote font fetches are acceptable in dev, but must be call
 
 2. **Polling hooks should not depend directly on state they mutate or callbacks recreated by parents.**
    `useDepositPolling()` looked harmless in isolation, but when embedded in `OnboardingModal` with inline `onDeposit`/`onConfirmed` handlers it recreated its polling callback every render and re-triggered its own effect. Keeping the latest status/callbacks in refs preserves fresh data without turning the interval setup into a render loop.
+
+## zcashd Upgrade Incident Learnings (2026-05-01)
+
+1. **zcashd deprecation height requires both image and compose compatibility checks.**
+   When v6.11.0 hit its configured deprecation height, it exited cleanly and Docker restarted it forever. Pulling `electriccoinco/zcashd:latest` fixed the binary version, but v6.12.1 changed the image entrypoint behavior. The durable fix is to explicitly run `zcashd`, pass the production `-datadir`, and make every `zcash-cli` health/monitor command use that same data directory.

@@ -57,6 +57,7 @@ cd "$PROJECT_DIR"
 
 RPC_USER="${ZCASH_RPC_USER:-zcashrpc}"
 RPC_PASSWORD="${ZCASH_RPC_PASSWORD:-}"
+ZCASH_CLI_DATADIR="${ZCASH_CLI_DATADIR:-/srv/zcashd/.zcash}"
 
 if [[ -z "$RPC_PASSWORD" ]]; then
   alert "NODE ERROR: ZCASH_RPC_PASSWORD not set (cannot auth zcash-cli)"
@@ -65,6 +66,7 @@ fi
 
 zcash_cli() {
   compose exec -T zcashd zcash-cli \
+    "-datadir=${ZCASH_CLI_DATADIR}" \
     -rpcuser="$RPC_USER" \
     -rpcpassword="$RPC_PASSWORD" \
     "$@"
