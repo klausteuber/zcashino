@@ -34,7 +34,7 @@ export async function GET() {
       // 1. Database check
       prisma.session.count(),
 
-      // 2. Zcash node check (uses 5s liveness timeout internally)
+      // 2. Zcash node check (uses bounded liveness timeout internally)
       checkNodeStatus(DEFAULT_NETWORK),
 
       // 3. Seed / commitment pool check

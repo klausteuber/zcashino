@@ -61,9 +61,9 @@ export function nextFeeForUnpaidActionError(currentFee: number, errorMessage: st
   return nextFeeZats / 1e8
 }
 
-// Short timeout for liveness probes (checkNodeStatus), longer for queries
+// Bounded timeout for liveness probes (checkNodeStatus), longer for queries
 // that may block while zcashd is busy building shielded proofs.
-const RPC_LIVENESS_TIMEOUT_MS = 5_000   // 5s for getblockchaininfo
+const RPC_LIVENESS_TIMEOUT_MS = 12_000  // 12s for getblockchaininfo on mainnet
 const RPC_DEFAULT_TIMEOUT_MS = 30_000   // 30s for balance/send operations
 
 /**
