@@ -53,8 +53,12 @@ export async function GET() {
       // 4. House wallet balance — short timeout so the health endpoint
       //    responds quickly even when zcashd is overloaded.
       raceTimeout(
-        getWalletBalance(DEFAULT_NETWORK),
-        HEALTH_RPC_TIMEOUT_MS,
+        getWalletBalance(DEFAULT_NETWORK, 3, {
+          timeoutMs: HEALTH_RPC_TIMEOUT_MS,
+          includePools: false,
+          throwOnError: true,
+        }),
+        HEALTH_RPC_TIMEOUT_MS + 500,
         null
       ),
 

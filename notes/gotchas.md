@@ -818,6 +818,6 @@ Also ignored the user's own statement ("I thought we changed the architecture") 
 
 **Root Cause:** The running `electriccoinco/zcashd:latest` image was still v6.11.0 and shut itself down at mainnet block height 3327100 with a deprecation error. Pulling the current image upgraded to v6.12.1, but the newer image no longer accepts raw daemon flags as the container command. It tried to execute `-par=6` as the binary. It also defaults CLI lookups to `/root/.zcash`, while production wallet data is mounted at `/srv/zcashd/.zcash`.
 
-**Fix:** Pull the current image, explicitly set `entrypoint: ["zcashd"]`, pass `-datadir=/srv/zcashd/.zcash` and `-printtoconsole` to `zcashd`, and pass the same `-datadir` to every `zcash-cli` healthcheck/monitor command.
+**Fix:** Pull the current image, explicitly set `entrypoint: ["zcashd"]`, pass `-datadir=/srv/zcashd/.zcash` and `-printtoconsole` to `zcashd`, and pass the same `-datadir` to every `zcash-cli` healthcheck/monitor command. The app health endpoint must also use per-RPC wallet timeouts instead of only `Promise.race`, because racing a slow balance promise does not cancel the underlying RPC work.
 
-**Key files:** `docker-compose.mainnet.yml`, `scripts/check-node.sh`
+**Key files:** `docker-compose.mainnet.yml`, `scripts/check-node.sh`, `src/app/api/health/route.ts`, `src/lib/wallet/rpc.ts`

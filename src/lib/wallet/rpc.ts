@@ -373,18 +373,25 @@ export async function getAddressBalance(
  * Optionally returns the house-account-0 per-pool breakdown so the admin
  * can still see Sapling vs Orchard vs Transparent.
  */
+interface WalletBalanceOptions {
+  timeoutMs?: number
+  includePools?: boolean
+  throwOnError?: boolean
+}
+
 export async function getWalletBalance(
   network: ZcashNetwork = DEFAULT_NETWORK,
-  minConfirmations: number = 3
+  minConfirmations: number = 3,
+  options: WalletBalanceOptions = {}
 ): Promise<WalletBalance> {
   try {
     // z_gettotalbalance — sums ALL accounts, ALL pools
     const [confirmed, unconfirmed] = await Promise.all([
       rpcCall<{ transparent: string; private: string; total: string }>(
-        'z_gettotalbalance', [minConfirmations], network
+        'z_gettotalbalance', [minConfirmations], network, options.timeoutMs
       ),
       rpcCall<{ transparent: string; private: string; total: string }>(
-        'z_gettotalbalance', [0], network
+        'z_gettotalbalance', [0], network, options.timeoutMs
       ),
     ])
 
@@ -394,23 +401,25 @@ export async function getWalletBalance(
     // Also grab per-pool breakdown from house account 0 for admin visibility.
     // This is a best-effort enrichment — failures here don't break the balance.
     let pools: WalletBalance['pools']
-    try {
-      const acct0 = await rpcCall<{
-        pools: {
-          transparent?: { valueZat: number }
-          sapling?: { valueZat: number }
-          orchard?: { valueZat: number }
-        }
-      }>('z_getbalanceforaccount', [0, minConfirmations], network)
+    if (options.includePools !== false) {
+      try {
+        const acct0 = await rpcCall<{
+          pools: {
+            transparent?: { valueZat: number }
+            sapling?: { valueZat: number }
+            orchard?: { valueZat: number }
+          }
+        }>('z_getbalanceforaccount', [0, minConfirmations], network, options.timeoutMs)
 
-      const zat = (v: number) => v / 1e8
-      pools = {
-        transparent: zat(acct0.pools.transparent?.valueZat ?? 0),
-        sapling: zat(acct0.pools.sapling?.valueZat ?? 0),
-        orchard: zat(acct0.pools.orchard?.valueZat ?? 0),
+        const zat = (v: number) => v / 1e8
+        pools = {
+          transparent: zat(acct0.pools.transparent?.valueZat ?? 0),
+          sapling: zat(acct0.pools.sapling?.valueZat ?? 0),
+          orchard: zat(acct0.pools.orchard?.valueZat ?? 0),
+        }
+      } catch {
+        // Pool breakdown unavailable — non-fatal
       }
-    } catch {
-      // Pool breakdown unavailable — non-fatal
     }
 
     return {
@@ -421,6 +430,7 @@ export async function getWalletBalance(
     }
   } catch (error) {
     console.error('[RPC] getWalletBalance failed:', error)
+    if (options.throwOnError) throw error
     return { confirmed: 0, pending: 0, total: 0 }
   }
 }

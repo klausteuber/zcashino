@@ -491,3 +491,6 @@ In-memory limits and remote font fetches are acceptable in dev, but must be call
 
 1. **zcashd deprecation height requires both image and compose compatibility checks.**
    When v6.11.0 hit its configured deprecation height, it exited cleanly and Docker restarted it forever. Pulling `electriccoinco/zcashd:latest` fixed the binary version, but v6.12.1 changed the image entrypoint behavior. The durable fix is to explicitly run `zcashd`, pass the production `-datadir`, and make every `zcash-cli` health/monitor command use that same data directory.
+
+2. **Health timeouts must cancel the expensive RPC, not just stop waiting.**
+   A `Promise.race` around `getWalletBalance()` made `/api/health` return quickly, but the two `z_gettotalbalance` calls kept running after timeout and could pile up under repeated monitoring. Give the wallet RPC calls their own shorter timeout and skip optional pool breakdowns in health checks.
