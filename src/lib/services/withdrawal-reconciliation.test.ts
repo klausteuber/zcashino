@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => {
   const txContext = {
     transaction: {
       update: vi.fn(),
+      updateMany: vi.fn(),
     },
   }
 
@@ -13,6 +14,7 @@ const mocks = vi.hoisted(() => {
         findMany: vi.fn(),
         findFirst: vi.fn(),
         update: vi.fn(),
+        updateMany: vi.fn(),
       },
       $transaction: vi.fn(),
     },
@@ -90,33 +92,33 @@ describe('withdrawal reconciliation service', () => {
     vi.clearAllMocks()
     process.env.HOUSE_ZADDR_MAINNET = 'zs1housemainnetaddress1234567890'
     prismaMock.$transaction.mockImplementation(async (fn: (tx: typeof txContext) => Promise<unknown>) => fn(txContext))
+    prismaMock.transaction.updateMany.mockResolvedValue({ count: 1 })
+    txContext.transaction.updateMany.mockResolvedValue({ count: 1 })
   })
 
   it('marks pending withdrawals confirmed when the operation succeeds', async () => {
     prismaMock.transaction.findMany.mockResolvedValue([pendingWithdrawal()])
     getOperationStatusMock.mockResolvedValue({ status: 'success', txid: 'a'.repeat(64) })
-    prismaMock.transaction.update.mockResolvedValue(
-      pendingWithdrawal({
-        status: 'confirmed',
-        txHash: 'a'.repeat(64),
-        confirmedAt: new Date('2026-03-24T12:00:00Z'),
-      })
-    )
 
     const results = await reconcilePendingWithdrawals()
 
     expect(results).toHaveLength(1)
     expect(results[0]?.outcome).toBe('confirmed')
     expect(results[0]?.transaction?.txHash).toBe('a'.repeat(64))
-    expect(prismaMock.transaction.update).toHaveBeenCalledWith({
-      where: { id: 'tx-1' },
+    expect(prismaMock.transaction.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'tx-1',
+        type: 'withdrawal',
+        status: 'pending',
+        operationId: 'op-1',
+        failReason: null,
+      },
       data: {
         status: 'confirmed',
         txHash: 'a'.repeat(64),
         confirmedAt: expect.any(Date),
         failReason: null,
       },
-      select: expect.any(Object),
     })
   })
 
@@ -135,8 +137,14 @@ describe('withdrawal reconciliation service', () => {
       'totalWithdrawn',
       1.0248
     )
-    expect(txContext.transaction.update).toHaveBeenCalledWith({
-      where: { id: 'tx-1' },
+    expect(txContext.transaction.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'tx-1',
+        type: 'withdrawal',
+        status: 'pending',
+        operationId: 'op-1',
+        failReason: null,
+      },
       data: {
         status: 'failed',
         failReason: 'insufficient fee',
@@ -158,8 +166,24 @@ describe('withdrawal reconciliation service', () => {
     expect(results[0]?.outcome).toBe('pending')
     expect(results[0]?.retryAttempt).toBe(1)
     expect(results[0]?.transaction?.operationId).toBe('op-retry-1')
-    expect(prismaMock.transaction.update).toHaveBeenCalledWith({
-      where: { id: 'tx-1' },
+    expect(prismaMock.transaction.updateMany).toHaveBeenNthCalledWith(1, {
+      where: {
+        id: 'tx-1',
+        type: 'withdrawal',
+        status: 'pending',
+        operationId: 'op-1',
+        failReason: null,
+      },
+      data: { failReason: expect.stringMatching(/^reconciling:/) },
+    })
+    expect(prismaMock.transaction.updateMany).toHaveBeenNthCalledWith(2, {
+      where: {
+        id: 'tx-1',
+        type: 'withdrawal',
+        status: 'pending',
+        operationId: 'op-1',
+        failReason: expect.stringMatching(/^reconciling:/),
+      },
       data: {
         status: 'pending',
         operationId: 'op-retry-1',
@@ -179,8 +203,48 @@ describe('withdrawal reconciliation service', () => {
     expect(results[0]?.outcome).toBe('unknown')
     expect(results[0]?.transaction?.status).toBe('pending')
     expect(prismaMock.transaction.update).not.toHaveBeenCalled()
+    expect(prismaMock.transaction.updateMany).not.toHaveBeenCalled()
     expect(releaseFundsMock).not.toHaveBeenCalled()
     expect(sendZecMock).not.toHaveBeenCalled()
+  })
+
+  it('does not refund when another reconciler already claimed the row', async () => {
+    prismaMock.transaction.findMany.mockResolvedValue([pendingWithdrawal()])
+    getOperationStatusMock.mockResolvedValue({ status: 'failed', error: 'insufficient fee' })
+    txContext.transaction.updateMany.mockResolvedValue({ count: 0 })
+
+    const results = await reconcilePendingWithdrawals()
+
+    expect(results[0]?.outcome).toBe('skipped')
+    expect(releaseFundsMock).not.toHaveBeenCalled()
+  })
+
+  it('does not retry when another reconciler already claimed the row', async () => {
+    prismaMock.transaction.findMany.mockResolvedValue([pendingWithdrawal()])
+    getOperationStatusMock.mockResolvedValue({
+      status: 'failed',
+      error: 'SendTransaction: Transaction commit failed:: tx unpaid action limit exceeded: 2 action(s) exceeds limit of 0',
+    })
+    prismaMock.transaction.updateMany.mockResolvedValueOnce({ count: 0 })
+
+    const results = await reconcilePendingWithdrawals()
+
+    expect(results[0]?.outcome).toBe('skipped')
+    expect(sendZecMock).not.toHaveBeenCalled()
+    expect(releaseFundsMock).not.toHaveBeenCalled()
+  })
+
+  it('skips active reconciliation claim markers', async () => {
+    prismaMock.transaction.findMany.mockResolvedValue([
+      pendingWithdrawal({ failReason: `reconciling:${Date.now()}` }),
+    ])
+
+    const results = await reconcilePendingWithdrawals()
+
+    expect(results[0]?.outcome).toBe('skipped')
+    expect(getOperationStatusMock).not.toHaveBeenCalled()
+    expect(sendZecMock).not.toHaveBeenCalled()
+    expect(releaseFundsMock).not.toHaveBeenCalled()
   })
 
   it('can reconcile a single withdrawal by id', async () => {

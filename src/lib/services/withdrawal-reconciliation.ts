@@ -11,6 +11,8 @@ const UNPAID_ACTION_RETRY_PREFIX = 'retry_unpaid_action:'
 const MAX_UNPAID_ACTION_OPERATION_RETRIES = 3
 const ZIP317_MARGINAL_FEE_ZATS = 5000
 const DEFAULT_RECONCILE_LIMIT = 200
+const RECONCILIATION_CLAIM_PREFIX = 'reconciling:'
+const RECONCILIATION_CLAIM_STALE_MS = 10 * 60 * 1000
 
 const pendingWithdrawalSelect = {
   id: true,
@@ -97,6 +99,19 @@ function getUnpaidActionRetryCount(marker: string | null): number {
   return Number.isFinite(count) && count > 0 ? count : 0
 }
 
+function getReconciliationClaimAgeMs(marker: string | null): number | null {
+  if (!marker?.startsWith(RECONCILIATION_CLAIM_PREFIX)) {
+    return null
+  }
+
+  const claimedAt = Number.parseInt(marker.slice(RECONCILIATION_CLAIM_PREFIX.length), 10)
+  if (!Number.isFinite(claimedAt) || claimedAt <= 0) {
+    return Number.POSITIVE_INFINITY
+  }
+
+  return Math.max(0, Date.now() - claimedAt)
+}
+
 function buildUnpaidActionRetryMarker(count: number): string {
   return `${UNPAID_ACTION_RETRY_PREFIX}${count}`
 }
@@ -137,25 +152,55 @@ function toTransactionSummary(
   }
 }
 
+function pendingWithdrawalGuard(transaction: PendingWithdrawalRecord) {
+  return {
+    id: transaction.id,
+    type: 'withdrawal',
+    status: 'pending',
+    operationId: transaction.operationId,
+    failReason: transaction.failReason,
+  } satisfies Prisma.TransactionWhereInput
+}
+
 async function refundWithdrawal(transaction: PendingWithdrawalRecord, reason: string) {
   const totalAmount = roundZec(transaction.amount + transaction.fee)
+  let refunded = false
 
   await prisma.$transaction(async (tx) => {
-    await releaseFunds(tx, transaction.sessionId, totalAmount, 'totalWithdrawn', transaction.amount)
-    await tx.transaction.update({
-      where: { id: transaction.id },
+    const claimed = await tx.transaction.updateMany({
+      where: pendingWithdrawalGuard(transaction),
       data: {
         status: 'failed',
         failReason: reason,
       },
     })
+    if (claimed.count !== 1) {
+      return
+    }
+
+    await releaseFunds(tx, transaction.sessionId, totalAmount, 'totalWithdrawn', transaction.amount)
+    refunded = true
   })
+
+  if (!refunded) {
+    return null
+  }
 
   return {
     ...transaction,
     status: 'failed',
     failReason: reason,
   }
+}
+
+async function claimWithdrawalForRetry(transaction: PendingWithdrawalRecord): Promise<string | null> {
+  const claimMarker = `${RECONCILIATION_CLAIM_PREFIX}${Date.now()}`
+  const claimed = await prisma.transaction.updateMany({
+    where: pendingWithdrawalGuard(transaction),
+    data: { failReason: claimMarker },
+  })
+
+  return claimed.count === 1 ? claimMarker : null
 }
 
 async function retryUnpaidActionWithdrawal(
@@ -183,6 +228,15 @@ async function retryUnpaidActionWithdrawal(
 
   const retryAttempt = retryCount + 1
   const retryFee = estimateRetryFeeForUnpaidAction(operationError, retryCount)
+  const claimMarker = await claimWithdrawalForRetry(transaction)
+  if (!claimMarker) {
+    return {
+      id: transaction.id,
+      outcome: 'skipped',
+      transaction: toTransactionSummary(transaction),
+      message: 'Withdrawal was already claimed for reconciliation.',
+    }
+  }
 
   try {
     const { operationId } = await sendZec(
@@ -195,14 +249,34 @@ async function retryUnpaidActionWithdrawal(
       retryFee
     )
 
-    await prisma.transaction.update({
-      where: { id: transaction.id },
+    const updated = await prisma.transaction.updateMany({
+      where: {
+        id: transaction.id,
+        type: 'withdrawal',
+        status: 'pending',
+        operationId: transaction.operationId,
+        failReason: claimMarker,
+      },
       data: {
         status: 'pending',
         operationId,
         failReason: buildUnpaidActionRetryMarker(retryAttempt),
       },
     })
+
+    if (updated.count !== 1) {
+      return {
+        id: transaction.id,
+        outcome: 'unknown',
+        transaction: toTransactionSummary({
+          ...transaction,
+          failReason: claimMarker,
+        }),
+        operationStatus: { status: 'queued' },
+        retryAttempt,
+        message: 'Withdrawal retry was submitted, but the database row was not updated. Manual review required.',
+      }
+    }
 
     if (request) {
       await logPlayerCounterEvent({
@@ -235,7 +309,42 @@ async function retryUnpaidActionWithdrawal(
     }
   } catch (retryError) {
     console.error('[Withdrawal] Unpaid-action retry failed:', retryError)
-    return null
+    const reason = retryError instanceof Error
+      ? `Retry submission failed: ${retryError.message}`
+      : 'Retry submission failed'
+    const failed = await refundWithdrawal(
+      {
+        ...transaction,
+        failReason: claimMarker,
+      },
+      reason
+    )
+
+    if (!failed) {
+      return {
+        id: transaction.id,
+        outcome: 'unknown',
+        transaction: toTransactionSummary({
+          ...transaction,
+          failReason: claimMarker,
+        }),
+        operationStatus: {
+          status: 'failed',
+          error: reason,
+        },
+        message: 'Retry submission failed, but the claimed withdrawal could not be refunded. Manual review required.',
+      }
+    }
+
+    return {
+      id: transaction.id,
+      outcome: 'failed',
+      transaction: toTransactionSummary(failed),
+      operationStatus: {
+        status: 'failed',
+        error: reason,
+      },
+    }
   }
 }
 
@@ -261,27 +370,58 @@ async function reconcilePendingWithdrawal(
     }
   }
 
+  const claimAgeMs = getReconciliationClaimAgeMs(transaction.failReason)
+  if (claimAgeMs !== null) {
+    return {
+      id: transaction.id,
+      outcome: claimAgeMs > RECONCILIATION_CLAIM_STALE_MS ? 'unknown' : 'skipped',
+      transaction: toTransactionSummary(transaction),
+      message: claimAgeMs > RECONCILIATION_CLAIM_STALE_MS
+        ? 'Withdrawal reconciliation claim is stale. Manual review required before retrying or refunding.'
+        : 'Withdrawal is already being reconciled.',
+    }
+  }
+
   const network = getWithdrawalNetwork(transaction)
 
   try {
     const operationStatus = await getOperationStatus(transaction.operationId, network)
 
     if (operationStatus.status === 'success' && operationStatus.txid) {
-      const updated = await prisma.transaction.update({
-        where: { id: transaction.id },
+      const confirmedAt = new Date()
+      const updated = await prisma.transaction.updateMany({
+        where: pendingWithdrawalGuard(transaction),
         data: {
           status: 'confirmed',
           txHash: operationStatus.txid,
-          confirmedAt: new Date(),
+          confirmedAt,
           failReason: null,
         },
-        select: pendingWithdrawalSelect,
       })
+
+      if (updated.count !== 1) {
+        return {
+          id: transaction.id,
+          outcome: 'skipped',
+          transaction: toTransactionSummary(transaction),
+          operationStatus: {
+            status: 'success',
+            txid: operationStatus.txid,
+          },
+          message: 'Withdrawal was already claimed or processed.',
+        }
+      }
 
       return {
         id: transaction.id,
         outcome: 'confirmed',
-        transaction: toTransactionSummary(updated),
+        transaction: toTransactionSummary({
+          ...transaction,
+          status: 'confirmed',
+          txHash: operationStatus.txid,
+          confirmedAt,
+          failReason: null,
+        }),
         operationStatus: {
           status: 'success',
           txid: operationStatus.txid,
@@ -314,6 +454,19 @@ async function reconcilePendingWithdrawal(
       }
 
       const failed = await refundWithdrawal(transaction, operationError)
+      if (!failed) {
+        return {
+          id: transaction.id,
+          outcome: 'skipped',
+          transaction: toTransactionSummary(transaction),
+          operationStatus: {
+            status: 'failed',
+            error: operationError,
+          },
+          message: 'Withdrawal was already claimed or processed.',
+        }
+      }
+
       return {
         id: transaction.id,
         outcome: 'failed',

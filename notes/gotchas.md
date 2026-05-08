@@ -821,3 +821,15 @@ Also ignored the user's own statement ("I thought we changed the architecture") 
 **Fix:** Pull the current image, explicitly set `entrypoint: ["zcashd"]`, pass `-datadir=/srv/zcashd/.zcash` and `-printtoconsole` to `zcashd`, and pass the same `-datadir` to every `zcash-cli` healthcheck/monitor command. The app health endpoint must also use per-RPC wallet timeouts instead of only `Promise.race`, because racing a slow balance promise does not cancel the underlying RPC work.
 
 **Key files:** `docker-compose.mainnet.yml`, `scripts/check-node.sh`, `src/app/api/health/route.ts`, `src/lib/wallet/rpc.ts`
+
+---
+
+### Public health checks must not run withdrawal reconciliation (2026-05-07)
+
+**Symptom:** `/api/health` was publicly reachable and ran `reconcilePendingWithdrawals()` before reporting status, so monitoring traffic could trigger withdrawal retries or refunds.
+
+**Root Cause:** Withdrawal reconciliation had been reused as part of health reporting. The reconciliation service also updated/refunded failed rows without first atomically claiming the pending withdrawal state it had observed.
+
+**Fix:** Keep `/api/health` read-only by reporting the pending withdrawal count directly. In reconciliation, use conditional `updateMany` claims before retrying unpaid-action sends, confirming rows, or refunding failed withdrawals; skip when another worker has already claimed or processed the row.
+
+**Key files:** `src/app/api/health/route.ts`, `src/lib/services/withdrawal-reconciliation.ts`, `src/app/api/health/route.test.ts`, `src/lib/services/withdrawal-reconciliation.test.ts`

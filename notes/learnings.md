@@ -494,3 +494,13 @@ In-memory limits and remote font fetches are acceptable in dev, but must be call
 
 2. **Health timeouts must cancel the expensive RPC, not just stop waiting.**
    A `Promise.race` around `getWalletBalance()` made `/api/health` return quickly, but the two `z_gettotalbalance` calls kept running after timeout and could pile up under repeated monitoring. Give the wallet RPC calls their own shorter timeout and skip optional pool breakdowns in health checks.
+
+## Health Withdrawal Reconciliation Learnings (2026-05-07)
+
+1. **Public health checks must stay read-only.**
+   Running withdrawal reconciliation from `/api/health` meant ordinary uptime probes could retry ZEC sends or refund balances. Health endpoints should report pending withdrawal counts, not advance withdrawal state.
+
+2. **Withdrawal side effects need an atomic row claim first.**
+   Before retrying an unpaid-action send or refunding a failed withdrawal, reconciliation now wins a conditional `updateMany` on the exact pending row state it observed. If another worker already claimed or processed the row, the reconciler skips without sending or releasing funds.
+
+**Key files:** `src/app/api/health/route.ts`, `src/lib/services/withdrawal-reconciliation.ts`, `src/app/api/health/route.test.ts`, `src/lib/services/withdrawal-reconciliation.test.ts`

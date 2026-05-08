@@ -17,7 +17,6 @@ const mocks = vi.hoisted(() => ({
   isKillSwitchActiveMock: vi.fn(),
   getProvablyFairModeMock: vi.fn(),
   getSessionSeedPoolStatusMock: vi.fn(),
-  reconcilePendingWithdrawalsMock: vi.fn(),
 }))
 
 const {
@@ -27,7 +26,6 @@ const {
   isKillSwitchActiveMock,
   getProvablyFairModeMock,
   getSessionSeedPoolStatusMock,
-  reconcilePendingWithdrawalsMock,
 } = mocks
 
 vi.mock('@/lib/db', () => ({
@@ -55,16 +53,11 @@ vi.mock('@/lib/services/session-seed-pool-manager', () => ({
   getSessionSeedPoolStatus: mocks.getSessionSeedPoolStatusMock,
 }))
 
-vi.mock('@/lib/services/withdrawal-reconciliation', () => ({
-  reconcilePendingWithdrawals: mocks.reconcilePendingWithdrawalsMock,
-}))
-
 import { GET } from './route'
 
-describe('/api/health withdrawal reconciliation', () => {
+describe('/api/health', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    reconcilePendingWithdrawalsMock.mockResolvedValue([])
     prismaMock.session.count.mockResolvedValue(12)
     prismaMock.seedCommitment.count.mockResolvedValue(10)
     prismaMock.transaction.count.mockResolvedValue(0)
@@ -75,15 +68,14 @@ describe('/api/health withdrawal reconciliation', () => {
     getSessionSeedPoolStatusMock.mockResolvedValue({ available: 5 })
   })
 
-  it('reconciles pending withdrawals before computing health counts', async () => {
+  it('reports pending withdrawals without running reconciliation side effects', async () => {
     const response = await GET()
     expect(response.status).toBe(200)
 
     const payload = await response.json()
     expect(payload.pendingWithdrawals).toBe(0)
-    expect(reconcilePendingWithdrawalsMock).toHaveBeenCalledTimes(1)
-    expect(
-      reconcilePendingWithdrawalsMock.mock.invocationCallOrder[0]
-    ).toBeLessThan(prismaMock.transaction.count.mock.invocationCallOrder[0] ?? Number.MAX_SAFE_INTEGER)
+    expect(prismaMock.transaction.count).toHaveBeenCalledWith({
+      where: { type: 'withdrawal', status: { in: ['pending', 'pending_approval'] } },
+    })
   })
 })

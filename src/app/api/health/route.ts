@@ -5,7 +5,6 @@ import { DEFAULT_NETWORK } from '@/lib/wallet'
 import { isKillSwitchActive } from '@/lib/kill-switch'
 import { getProvablyFairMode } from '@/lib/provably-fair/mode'
 import { getSessionSeedPoolStatus } from '@/lib/services/session-seed-pool-manager'
-import { reconcilePendingWithdrawals } from '@/lib/services/withdrawal-reconciliation'
 
 // Severity thresholds
 const POOL_LOW_THRESHOLD = 5
@@ -19,12 +18,6 @@ const HEALTH_RPC_TIMEOUT_MS = 12_000
 export async function GET() {
   const checks: Record<string, unknown> = {}
   let severity: 'ok' | 'warning' | 'critical' = 'ok'
-
-  try {
-    await reconcilePendingWithdrawals()
-  } catch (error) {
-    console.error('[health] withdrawal reconciliation failed:', error)
-  }
 
   // Run all checks in parallel so a slow zcashd RPC doesn't block the
   // entire response.  Each check has its own error handling.
