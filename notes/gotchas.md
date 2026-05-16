@@ -857,3 +857,15 @@ Also ignored the user's own statement ("I thought we changed the architecture") 
 **Fix:** Mark admin session cookies secure when `NODE_ENV=production` or `FORCE_HTTPS=true`, while keeping local/test HTTP usable.
 
 **Key files:** `src/lib/admin/auth.ts`, `src/lib/admin/auth.test.ts`
+
+---
+
+### Treat npm audit force-fixes as suspect when they propose framework downgrades (2026-05-15)
+
+**Symptom:** `npm audit` reported high/moderate dependency advisories after the API surface hardening. Same-major updates reduced the production audit from 22 findings to 5 moderate findings, but the remaining `npm audit fix --force` suggestions wanted to downgrade core packages such as Prisma or Next.
+
+**Root Cause:** Some advisories were in transitive framework/tooling packages where npm's resolver could not find a non-breaking patched path yet, so its "force" suggestion chose an older incompatible version.
+
+**Fix:** Updated current same-major packages (`next`, `prisma`, `@prisma/client`, `@sentry/nextjs`, `postcss`) and verified tests, TypeScript, and production build. Do not run `npm audit fix --force` blindly on this app; inspect the proposed package plan first.
+
+**Key files:** `package.json`, `package-lock.json`

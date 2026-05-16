@@ -521,3 +521,10 @@ In-memory limits and remote font fetches are acceptable in dev, but must be call
    Player session cookies already use `NODE_ENV=production` as a secure-cookie signal. Admin session cookies need the same default so a missing `FORCE_HTTPS` variable does not leave privileged cookies without the `Secure` attribute in production.
 
 **Key files:** `src/lib/admin/auth.ts`, `src/lib/admin/auth.test.ts`
+
+## Dependency Audit Learnings (2026-05-15)
+
+1. **Patch current major versions before considering forced audit fixes.**
+   Updating `next`, Prisma, Sentry, and `postcss` within their current major lines removed the high-severity production audit findings. The remaining moderate findings only had force-fix plans that would downgrade/break core packages, so they need tracked follow-up instead of a blind `npm audit fix --force`.
+
+**Key files:** `package.json`, `package-lock.json`
