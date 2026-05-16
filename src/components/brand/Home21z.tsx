@@ -22,11 +22,11 @@ const PROCESS_STEPS = [
   },
 ]
 
-const HOUSE_STATS = [
-  { label: 'Hands · 24h', value: '14,287' },
-  { label: 'Total Volume', value: '4,902 ZEC' },
-  { label: 'Avg Edge', value: '0.50%' },
-  { label: 'Pool Health', value: '1,000 / 1,000' },
+const TABLE_FACTS = [
+  { label: 'Network', value: 'Zcash' },
+  { label: 'Access', value: 'No accounts' },
+  { label: 'Proof', value: 'On-chain' },
+  { label: 'Audit Trail', value: 'Public feed' },
 ]
 
 function TerminalBlock() {
@@ -205,14 +205,14 @@ export default function Home21z() {
           <StackedCardsVisual />
         </div>
 
-        {/* Live stats */}
+        {/* Table facts */}
         <div style={{ marginTop: 80 }}>
           <div className="z21-eyebrow" style={{ marginBottom: 16 }}>
             <span className="dot" />
-            Live · last 24h
+            Table facts
           </div>
           <div className="z21-grid-stats">
-            {HOUSE_STATS.map(s => (
+            {TABLE_FACTS.map(s => (
               <div key={s.label}>
                 <div className="label">{s.label}</div>
                 <div className="value">{s.value}</div>

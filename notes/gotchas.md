@@ -1,5 +1,21 @@
 # Gotchas & Bugs
 
+## Brand-Scoped UI Leaks (2026-05-16)
+
+**Symptom:** The shared blackjack hand component could render 21z result overlay and streak markup on the default CypherJester brand after a completed hand.
+
+**Root Cause:** 21z-only data props were passed into a shared game component for every brand, while the matching CSS was scoped to `body[data-brand="21z"]`. Non-21z pages received unstyled markup.
+
+**Fix:** Gate 21z-only props and effects in `BlackjackGame.tsx` with `useBrand()`, and only pass overlay/streak values when `brand.id === '21z'`.
+
+## Fake Live Homepage Metrics (2026-05-16)
+
+**Symptom:** The 21z homepage showed hardcoded numbers under a "Live · last 24h" label.
+
+**Root Cause:** Prototype stats were committed as production copy without a live data source.
+
+**Fix:** Replace fake live metrics with static product/table facts, or wire real stats before using live labels.
+
 ## React useEffect Timer Bugs
 
 ### Stale Closure in setInterval (2025-02-04)

@@ -2,6 +2,14 @@
 
 Last updated: 2026-02-18
 
+## Frontend Brand Safety (2026-05-16)
+
+1. Brand-specific visual affordances need both render-time and CSS-time scoping.
+Passing a 21z-only prop into a shared component is enough to affect CypherJester, even when the CSS selector is brand-scoped. Gate the props at the call site unless the shared component has a brand-aware API.
+
+2. Homepage metrics should either be live or plainly static.
+For gambling UX, fake "live" counters erode trust. Use factual static tiles until an API-backed metric is available.
+
 ## Launch-Critical Learnings
 
 1. Security work must start before polish work.

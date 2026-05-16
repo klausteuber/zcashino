@@ -19,6 +19,7 @@ import JesterLogo from '@/components/ui/JesterLogo'
 import { useGameSounds } from '@/hooks/useGameSounds'
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 import { useGameSession } from '@/hooks/useGameSession'
+import { useBrand } from '@/hooks/useBrand'
 import { ConfettiBurst, ChipSlide } from '@/components/game/WinCelebration'
 import type { SessionData } from '@/hooks/useGameSession'
 import { OnboardingModal } from '@/components/onboarding/OnboardingModal'
@@ -59,6 +60,9 @@ interface FairnessRevealBundle {
 }
 
 export default function BlackjackGame() {
+  const brand = useBrand()
+  const is21z = brand.id === '21z'
+
   // Session management via shared hook (auto-creates demo for first-time visitors)
   const {
     session, setSession,
@@ -66,7 +70,6 @@ export default function BlackjackGame() {
     error: sessionError, setError: setSessionError,
     showOnboarding, setShowOnboarding,
     onboardingMode,
-    restoreNotice,
     depositAddress,
     fairness, setFairness,
     handleDemoSelect,
@@ -75,9 +78,6 @@ export default function BlackjackGame() {
     handleSwitchToReal,
     handleSetWithdrawalAddress,
     handleResetDemoBalance,
-    handleCreateRecoveryKey,
-    handleRegenerateRecoveryKey,
-    handleRestoreSession,
     demoWinNudgeShown,
     demoHandCount,
   } = useGameSession()
@@ -819,7 +819,7 @@ export default function BlackjackGame() {
     if (hand.isSurrendered) return 'lose'
 
     const handValue = calculateHandValue(hand.cards)
-    const isBlackjack = handValue === 21 && hand.cards.length === 2
+    const isBlackjack = hand.isBlackjack && !hand.isSplit
     const isBust = handValue > 21
     const dealerBust = fullDealerValue > 21
 
@@ -982,8 +982,7 @@ export default function BlackjackGame() {
         } ${resultAnimation === 'win' || resultAnimation === 'blackjack' ? 'z21-win-flash' : ''
         } ${resultAnimation === 'loss' ? 'z21-loss-flash' : ''
         }`}>
-        {/* 21z scan-line — only animated under data-brand="21z" via CSS, harmless otherwise */}
-        {resultAnimation === 'blackjack' && <div className="z21-scan-line" />}
+        {is21z && resultAnimation === 'blackjack' && <div className="z21-scan-line" />}
         {/* Hand Outcome Overlay — Blackjack celebration */}
         {resultAnimation === 'blackjack' && (
           <div className="absolute inset-0 flex items-center justify-center z-30 pointer-events-none">
@@ -1115,7 +1114,7 @@ export default function BlackjackGame() {
               {gameState.playerHands.map((hand, index) => {
                 const handValue = calculateHandValue(hand.cards)
                 const isBust = handValue > 21
-                const isBlackjack = handValue === 21 && hand.cards.length === 2
+                const isBlackjack = hand.isBlackjack && !hand.isSplit
                 const isCurrentHand = index === gameState.currentHandIndex && gameState.phase === 'playerTurn'
 
                 // 21z result-overlay data: label + per-hand net delta, surfaced only on completion.
@@ -1127,7 +1126,10 @@ export default function BlackjackGame() {
                   if (handResult === 'blackjack') { z21ResultLabel = 'Blackjack'; z21Delta = bet * 1.5 }
                   else if (handResult === 'win')  { z21ResultLabel = 'Win';       z21Delta = bet }
                   else if (handResult === 'push') { z21ResultLabel = 'Push';      z21Delta = 0 }
-                  else if (handResult === 'lose') { z21ResultLabel = isBust ? 'Bust' : hand.isSurrendered ? 'Surrender' : 'Loss'; z21Delta = -bet }
+                  else if (handResult === 'lose') {
+                    z21ResultLabel = isBust ? 'Bust' : hand.isSurrendered ? 'Surrender' : 'Loss'
+                    z21Delta = hand.isSurrendered ? -(bet / 2) : -bet
+                  }
                 }
                 const isPrimaryHand = gameState.playerHands!.length === 1 || index === gameState.playerHands!.length - 1
 
@@ -1147,9 +1149,9 @@ export default function BlackjackGame() {
                       isBlackjack={isBlackjack}
                       isActive={isCurrentHand}
                       result={handResult}
-                      resultLabel={z21ResultLabel}
-                      resultDeltaZec={z21Delta}
-                      streak={isPrimaryHand ? winStreak : null}
+                      resultLabel={is21z ? z21ResultLabel : null}
+                      resultDeltaZec={is21z ? z21Delta : null}
+                      streak={is21z && isPrimaryHand ? winStreak : null}
                     />
                     {hand.bet > 0 && (
                       <div className="text-center mt-2 text-sm text-venetian-gold/60">
@@ -1837,12 +1839,7 @@ export default function BlackjackGame() {
         transparentAddress={session?.transparentAddress ?? null}
         onCreateRealSession={handleCreateRealSession}
         onSetWithdrawalAddress={handleSetWithdrawalAddress}
-        recovery={session?.recovery ?? null}
-        onCreateRecoveryKey={handleCreateRecoveryKey}
-        onRegenerateRecoveryKey={handleRegenerateRecoveryKey}
-        onRestoreSession={handleRestoreSession}
-        restoreNotice={restoreNotice}
-        initialStep={onboardingMode === 'deposit' ? 'deposit' : onboardingMode === 'restore' ? 'restore' : 'welcome'}
+        initialStep={onboardingMode === 'deposit' ? 'deposit' : 'welcome'}
       />
 
       {/* Withdrawal Modal */}
