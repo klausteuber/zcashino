@@ -296,7 +296,7 @@ export async function verifyTotpStep(
 }
 
 export function setAdminSessionCookie(response: NextResponse, token: string): void {
-  const useSecure = process.env.FORCE_HTTPS === 'true'
+  const useSecure = process.env.NODE_ENV === 'production' || process.env.FORCE_HTTPS === 'true'
   response.cookies.set({
     name: ADMIN_SESSION_COOKIE,
     value: token,

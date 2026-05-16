@@ -833,3 +833,27 @@ Also ignored the user's own statement ("I thought we changed the architecture") 
 **Fix:** Keep `/api/health` read-only by reporting the pending withdrawal count directly. In reconciliation, use conditional `updateMany` claims before retrying unpaid-action sends, confirming rows, or refunding failed withdrawals; skip when another worker has already claimed or processed the row.
 
 **Key files:** `src/app/api/health/route.ts`, `src/lib/services/withdrawal-reconciliation.ts`, `src/app/api/health/route.test.ts`, `src/lib/services/withdrawal-reconciliation.test.ts`
+
+---
+
+### GET routes can hide production side effects even when auth-protected (2026-05-15)
+
+**Symptom:** Admin dashboard GET routes still ran withdrawal reconciliation, and the public reserves GET endpoint refreshed per-wallet balance cache rows while serving transparency data.
+
+**Root Cause:** Read endpoints had accumulated convenience maintenance work. That made page refreshes, uptime checks, crawlers, or repeated public reads capable of triggering reconciliation or expensive cache-refresh writes.
+
+**Fix:** Keep admin overview/withdrawal reads observational and leave reconciliation on explicit admin/background paths. Keep `/api/reserves` read-only by returning cached wallet balances, adding a public read rate limit, and avoiding per-wallet RPC/cache writes during the request.
+
+**Key files:** `src/app/api/admin/overview/route.ts`, `src/app/api/admin/withdrawals/route.ts`, `src/app/api/reserves/route.ts`, `src/lib/admin/rate-limit.ts`
+
+---
+
+### Admin secure-cookie defaults must match production, not just FORCE_HTTPS (2026-05-15)
+
+**Symptom:** Player session cookies were marked `Secure` automatically under `NODE_ENV=production`, but admin session cookies only used `Secure` when `FORCE_HTTPS=true`.
+
+**Root Cause:** The two auth cookie helpers had drifted. Admin auth depended on an optional deployment flag instead of the standard production environment signal.
+
+**Fix:** Mark admin session cookies secure when `NODE_ENV=production` or `FORCE_HTTPS=true`, while keeping local/test HTTP usable.
+
+**Key files:** `src/lib/admin/auth.ts`, `src/lib/admin/auth.test.ts`

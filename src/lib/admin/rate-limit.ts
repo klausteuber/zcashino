@@ -3,7 +3,13 @@ import { NextResponse } from 'next/server'
 import { getClientIpAddress } from '@/lib/admin/request'
 
 export type AdminRateLimitBucket = 'auth-login' | 'admin-read' | 'admin-action' | 'admin-write'
-export type PublicRateLimitBucket = 'game-action' | 'session-create' | 'wallet-action' | 'wallet-withdraw' | 'feed-read'
+export type PublicRateLimitBucket =
+  | 'game-action'
+  | 'session-create'
+  | 'wallet-action'
+  | 'wallet-withdraw'
+  | 'feed-read'
+  | 'reserves-read'
 
 interface BucketConfig {
   maxRequests: number
@@ -56,6 +62,10 @@ const DEFAULT_BUCKET_CONFIG: Record<AdminRateLimitBucket | PublicRateLimitBucket
     windowMs: 60 * 60 * 1000,
   },
   'feed-read': {
+    maxRequests: 10,
+    windowMs: 60 * 1000,
+  },
+  'reserves-read': {
     maxRequests: 10,
     windowMs: 60 * 1000,
   },
@@ -162,4 +172,3 @@ export function checkPublicRateLimit(
 ): RateLimitResult {
   return checkAdminRateLimit(request, bucket)
 }
-

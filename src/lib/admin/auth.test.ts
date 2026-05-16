@@ -1,5 +1,13 @@
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { NextResponse } from 'next/server'
+
+vi.mock('@/lib/db', () => ({
+  default: {},
+}))
+
 import {
   createSignedAdminToken,
+  setAdminSessionCookie,
   verifySignedAdminToken,
   type AdminSessionPayload,
 } from '@/lib/admin/auth'
@@ -54,3 +62,28 @@ describe('admin auth token signing', () => {
   })
 })
 
+describe('admin session cookies', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  it('marks admin session cookies secure in production', () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('FORCE_HTTPS', 'false')
+    const response = NextResponse.json({ ok: true })
+
+    setAdminSessionCookie(response, 'signed-token')
+
+    expect(response.headers.get('set-cookie')).toContain('Secure')
+  })
+
+  it('keeps admin session cookies usable over local HTTP by default', () => {
+    vi.stubEnv('NODE_ENV', 'test')
+    vi.stubEnv('FORCE_HTTPS', 'false')
+    const response = NextResponse.json({ ok: true })
+
+    setAdminSessionCookie(response, 'signed-token')
+
+    expect(response.headers.get('set-cookie')).not.toContain('Secure')
+  })
+})

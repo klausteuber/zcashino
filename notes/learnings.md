@@ -504,3 +504,20 @@ In-memory limits and remote font fetches are acceptable in dev, but must be call
    Before retrying an unpaid-action send or refunding a failed withdrawal, reconciliation now wins a conditional `updateMany` on the exact pending row state it observed. If another worker already claimed or processed the row, the reconciler skips without sending or releasing funds.
 
 **Key files:** `src/app/api/health/route.ts`, `src/lib/services/withdrawal-reconciliation.ts`, `src/app/api/health/route.test.ts`, `src/lib/services/withdrawal-reconciliation.test.ts`
+
+## API Read Endpoint Side-Effect Learnings (2026-05-15)
+
+1. **Authenticated dashboard reads should not run money-moving maintenance.**
+   Admin overview and withdrawal list refreshes are still GET requests. Even behind admin auth, they should not retry payouts or refund balances; reconciliation belongs behind explicit operator actions or guarded background jobs.
+
+2. **Public transparency endpoints should report snapshots, not refresh caches.**
+   `/api/reserves` is public and can be called by monitors, crawlers, or attackers. It should return cached reserve balances and rate-limit reads instead of running per-wallet RPC scans and writing balance cache rows on every request.
+
+**Key files:** `src/app/api/admin/overview/route.ts`, `src/app/api/admin/withdrawals/route.ts`, `src/app/api/reserves/route.ts`, `src/app/api/reserves/route.test.ts`
+
+## Admin Cookie Hardening Learnings (2026-05-15)
+
+1. **Production auth cookies should not depend on an extra HTTPS flag.**
+   Player session cookies already use `NODE_ENV=production` as a secure-cookie signal. Admin session cookies need the same default so a missing `FORCE_HTTPS` variable does not leave privileged cookies without the `Secure` attribute in production.
+
+**Key files:** `src/lib/admin/auth.ts`, `src/lib/admin/auth.test.ts`

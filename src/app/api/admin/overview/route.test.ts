@@ -147,7 +147,7 @@ vi.mock('@/lib/services/withdrawal-reconciliation', () => ({
 
 import { GET } from './route'
 
-describe('/api/admin/overview reconciliation', () => {
+describe('/api/admin/overview', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     guardCypherAdminRequestMock.mockReturnValue(null)
@@ -224,7 +224,7 @@ describe('/api/admin/overview reconciliation', () => {
     prismaMock.adminAuditLog.findMany.mockResolvedValue([])
   })
 
-  it('reconciles before computing overview counters', async () => {
+  it('computes overview counters without running withdrawal reconciliation side effects', async () => {
     const response = await GET({
       nextUrl: { searchParams: new URLSearchParams() },
     } as unknown as NextRequest)
@@ -233,9 +233,6 @@ describe('/api/admin/overview reconciliation', () => {
     const payload = await response.json()
     expect(payload.transactions.pendingWithdrawalCount).toBe(0)
     expect(payload.pendingWithdrawals).toEqual([])
-    expect(reconcilePendingWithdrawalsMock).toHaveBeenCalledTimes(1)
-    expect(
-      reconcilePendingWithdrawalsMock.mock.invocationCallOrder[0]
-    ).toBeLessThan(prismaMock.session.aggregate.mock.invocationCallOrder[0] ?? Number.MAX_SAFE_INTEGER)
+    expect(reconcilePendingWithdrawalsMock).not.toHaveBeenCalled()
   })
 })

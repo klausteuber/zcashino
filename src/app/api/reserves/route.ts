@@ -1,20 +1,23 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import {
   DEFAULT_NETWORK,
   NETWORK_CONFIG,
 } from '@/lib/wallet'
-import {
-  checkNodeStatus,
-  getAddressBalance,
-} from '@/lib/wallet/rpc'
+import { checkNodeStatus } from '@/lib/wallet/rpc'
+import { checkPublicRateLimit, createRateLimitResponse } from '@/lib/admin/rate-limit'
 
 /**
  * GET /api/reserves
  * Public endpoint for proof of reserves
  * Returns all deposit addresses and their balances for transparency
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const rateLimit = checkPublicRateLimit(request, 'reserves-read')
+  if (!rateLimit.allowed) {
+    return createRateLimitResponse(rateLimit)
+  }
+
   try {
     const network = DEFAULT_NETWORK
     const config = NETWORK_CONFIG[network]
@@ -56,27 +59,9 @@ export async function GET() {
     }> = []
 
     for (const wallet of wallets) {
-      // Use cached balance or fetch fresh if node is connected
-      let onChainBalance = wallet.cachedBalance
-
-      if (nodeStatus.connected) {
-        try {
-          const balance = await getAddressBalance(wallet.transparentAddr, network)
-          onChainBalance = balance.confirmed
-
-          // Update cache
-          await prisma.depositWallet.update({
-            where: { id: wallet.id },
-            data: {
-              cachedBalance: onChainBalance,
-              balanceUpdatedAt: new Date(),
-            },
-          })
-        } catch (error) {
-          console.error(`Error fetching balance for ${wallet.transparentAddr}:`, error)
-          // Fall back to cached balance
-        }
-      }
+      // Public reads must not trigger per-wallet RPC scans or mutate cached balances.
+      // Balance snapshots are refreshed by wallet/deposit operational flows.
+      const onChainBalance = wallet.cachedBalance
 
       totalOnChainBalance += onChainBalance
       totalUserLiabilities += wallet.session.balance
