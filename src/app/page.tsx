@@ -6,11 +6,24 @@ import JesterLogo from '@/components/ui/JesterLogo'
 import { getBrandUrlForPath } from '@/lib/brand/config'
 import { getServerBrand } from '@/lib/brand/server'
 import SiteHeader from '@/components/layout/SiteHeader'
+import Home21z from '@/components/brand/Home21z'
 
 export default async function Home() {
   const brand = await getServerBrand()
   const homeUrl = getBrandUrlForPath(brand.id, '/')
   const is21z = brand.id === '21z'
+
+  if (is21z) {
+    return (
+      <>
+        <BreadcrumbJsonLd items={[{ name: 'Home', url: homeUrl }]} />
+        <main className="min-h-screen felt-texture">
+          <SiteHeader />
+          <Home21z />
+        </main>
+      </>
+    )
+  }
 
   return (
     <>

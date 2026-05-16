@@ -207,6 +207,10 @@ interface HandProps {
   isActive?: boolean // Whether this hand is currently active (player's turn)
   isDealerTurn?: boolean // Whether the dealer is currently drawing
   result?: HandResult // The result of this hand after game ends
+  // 21z prototype overlay extensions (only render when supplied)
+  resultLabel?: string | null // e.g. "Blackjack", "Bust", "Push"
+  resultDeltaZec?: number | null // net change for this hand (positive win, negative loss, 0 push)
+  streak?: number | null // current winning streak (only shown when >= 2)
 }
 
 export function Hand({
@@ -222,7 +226,10 @@ export function Hand({
   isBlackjack = false,
   isActive = false,
   isDealerTurn = false,
-  result = null
+  result = null,
+  resultLabel = null,
+  resultDeltaZec = null,
+  streak = null
 }: HandProps) {
   // Determine the hand highlight class based on state
   const getHandHighlightClass = () => {
@@ -249,10 +256,33 @@ export function Hand({
   const highlightClass = getHandHighlightClass()
   const overlap = overlapClasses[size]
 
+  // 21z: format a delta string, e.g. "+0.1500 ZEC", "-0.1000 ZEC", "±0.0000 ZEC"
+  const formatDelta = (delta: number): string => {
+    if (delta > 0) return `+${delta.toFixed(4)} ZEC`
+    if (delta < 0) return `−${Math.abs(delta).toFixed(4)} ZEC`
+    return '±0.0000 ZEC'
+  }
+  const showZ21Overlay = result !== null && resultLabel !== null
+
   return (
-    <div className={`flex flex-col items-center gap-2 ${className}`}>
+    <div className={`flex flex-col items-center gap-2 relative ${className}`}>
+      {/* 21z result overlay pill — positioned above the cards, scoped to 21z brand via CSS */}
+      {showZ21Overlay && (
+        <div className={`z21-result-overlay ${result}`}>
+          <div className="label">{resultLabel}</div>
+          <div className="amount">
+            {resultDeltaZec !== null ? formatDelta(resultDeltaZec) : ''}
+          </div>
+        </div>
+      )}
+
       {label && (
-        <div className="text-sm font-semibold text-venetian-gold/50">{label}</div>
+        <div className="text-sm font-semibold text-venetian-gold/50">
+          {label}
+          {streak !== null && streak >= 2 && (
+            <span className="z21-streak">{streak} streak</span>
+          )}
+        </div>
       )}
 
       <div className={`flex ${highlightClass}`}>

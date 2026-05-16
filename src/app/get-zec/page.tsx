@@ -74,7 +74,7 @@ export default async function GetZecPage() {
           { name: 'Get ZEC', url: pageUrl },
         ]}
       />
-    <main className="min-h-screen felt-texture">
+    <main className="min-h-screen felt-texture" data-page="get-zec">
       <SiteHeader />
 
       <div className="container mx-auto px-4 py-12 max-w-3xl">

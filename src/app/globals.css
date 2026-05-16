@@ -1817,3 +1817,421 @@ body[data-brand="21z"] .demo-nudge-toast>div {
 body[data-brand="21z"] .demo-depleted {
   color: #00F0FF;
 }
+
+/* ============================================================ */
+/* 21z prototype design language — utility classes scoped to 21z */
+/* Imported from Claude Design handoff (21z prototype.html)      */
+/* ============================================================ */
+
+/* eyebrow label with leading cyan dot */
+body[data-brand="21z"] .z21-eyebrow {
+  font-family: var(--font-space-mono), ui-monospace, monospace;
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+body[data-brand="21z"] .z21-eyebrow .dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  background: var(--accent-primary);
+  margin-right: 8px;
+  vertical-align: middle;
+  box-shadow: 0 0 8px rgba(0, 240, 255, 0.6);
+}
+
+/* clip-path bevel utilities */
+body[data-brand="21z"] .z21-bevel {
+  clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
+  border-radius: 0;
+}
+body[data-brand="21z"] .z21-bevel-sm {
+  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
+  border-radius: 0;
+}
+body[data-brand="21z"] .z21-bevel-tr {
+  clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 0 100%);
+  border-radius: 0;
+}
+
+/* panel surface */
+body[data-brand="21z"] .z21-panel {
+  background: linear-gradient(145deg, var(--bg-surface) 0%, var(--bg-elevated) 100%);
+  border: 1px solid var(--border-default);
+  clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px));
+  border-radius: 0;
+  position: relative;
+}
+body[data-brand="21z"] .z21-panel-flat {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+}
+
+/* corner brackets accent */
+body[data-brand="21z"] .z21-brackets {
+  position: relative;
+}
+body[data-brand="21z"] .z21-brackets::before,
+body[data-brand="21z"] .z21-brackets::after {
+  content: '';
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border: 1px solid rgba(0, 240, 255, 0.55);
+  pointer-events: none;
+}
+body[data-brand="21z"] .z21-brackets::before {
+  top: 6px;
+  left: 6px;
+  border-right: none;
+  border-bottom: none;
+}
+body[data-brand="21z"] .z21-brackets::after {
+  bottom: 6px;
+  right: 6px;
+  border-left: none;
+  border-top: none;
+}
+
+/* 21z buttons */
+body[data-brand="21z"] .z21-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 22px;
+  font-family: var(--font-orbitron), sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  cursor: pointer;
+  border: 1px solid var(--border-default);
+  background: transparent;
+  color: var(--text-primary);
+  transition: all 200ms ease-out;
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
+  border-radius: 0;
+  text-decoration: none;
+}
+body[data-brand="21z"] .z21-btn:hover {
+  border-color: rgba(0, 240, 255, 0.65);
+  background: rgba(0, 240, 255, 0.06);
+  box-shadow:
+    0 0 5px rgba(0, 240, 255, 0.25),
+    0 0 18px rgba(0, 240, 255, 0.12),
+    0 0 30px rgba(0, 240, 255, 0.05);
+}
+body[data-brand="21z"] .z21-btn-primary {
+  border-color: rgba(0, 240, 255, 0.55);
+  background: rgba(0, 240, 255, 0.08);
+  color: var(--accent-primary);
+}
+body[data-brand="21z"] .z21-btn-primary:hover {
+  background: rgba(0, 240, 255, 0.16);
+  color: #fff;
+}
+body[data-brand="21z"] .z21-btn-sm {
+  padding: 8px 14px;
+  font-size: 10px;
+  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
+}
+
+/* live status pill */
+body[data-brand="21z"] .z21-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  font-family: var(--font-space-mono), monospace;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  border: 1px solid var(--border-default);
+  color: var(--text-secondary);
+}
+body[data-brand="21z"] .z21-pill .led {
+  width: 6px;
+  height: 6px;
+  background: currentColor;
+  display: inline-block;
+}
+body[data-brand="21z"] .z21-pill.live {
+  color: var(--color-success);
+  border-color: rgba(0, 255, 179, 0.4);
+}
+body[data-brand="21z"] .z21-pill.live .led {
+  box-shadow: 0 0 6px var(--color-success);
+  animation: z21Blink 1.6s infinite;
+}
+@keyframes z21Blink {
+  0%, 80%, 100% { opacity: 1; }
+  90% { opacity: 0.3; }
+}
+
+/* stats grid */
+body[data-brand="21z"] .z21-grid-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  background: var(--border-default);
+  border: 1px solid var(--border-default);
+  clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
+  border-radius: 0;
+}
+body[data-brand="21z"] .z21-grid-stats > div {
+  background: var(--bg-surface);
+  padding: 18px 20px;
+}
+body[data-brand="21z"] .z21-grid-stats .label {
+  font-family: var(--font-space-mono), monospace;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+body[data-brand="21z"] .z21-grid-stats .value {
+  font-family: var(--font-orbitron), sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+@media (max-width: 800px) {
+  body[data-brand="21z"] .z21-grid-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* fairness strip — at the top of the table */
+body[data-brand="21z"] .z21-fairness-strip {
+  display: flex;
+  align-items: stretch;
+  gap: 1px;
+  background: var(--border-default);
+  border: 1px solid var(--border-default);
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
+  border-radius: 0;
+}
+body[data-brand="21z"] .z21-fairness-strip > div {
+  background: var(--bg-surface);
+  padding: 12px 16px;
+  flex: 1;
+  font-family: var(--font-space-mono), monospace;
+  font-size: 11px;
+}
+body[data-brand="21z"] .z21-fairness-strip .l {
+  color: var(--text-secondary);
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+body[data-brand="21z"] .z21-fairness-strip .v {
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* hand-result overlay pill (positioned above hand) */
+body[data-brand="21z"] .z21-result-overlay {
+  position: absolute;
+  left: 50%;
+  top: -54px;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 14px;
+  pointer-events: none;
+  font-family: var(--font-orbitron), sans-serif;
+  font-weight: 800;
+  z-index: 20;
+  white-space: nowrap;
+  padding: 10px 18px;
+  background: rgba(5, 5, 10, 0.85);
+  border: 1px solid var(--border-active);
+  clip-path: polygon(0 0, calc(100% - 9px) 0, 100% 9px, 100% 100%, 9px 100%, 0 calc(100% - 9px));
+  animation: z21ResultIn 420ms cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
+}
+@keyframes z21ResultIn {
+  from { opacity: 0; transform: translate(-50%, 6px) scale(0.92); filter: blur(4px); }
+  to { opacity: 1; transform: translate(-50%, 0) scale(1); filter: blur(0); }
+}
+body[data-brand="21z"] .z21-result-overlay .label {
+  font-size: 10px;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+body[data-brand="21z"] .z21-result-overlay .amount {
+  font-size: 18px;
+  letter-spacing: 0.06em;
+}
+body[data-brand="21z"] .z21-result-overlay.win { border-color: rgba(0, 255, 179, 0.55); }
+body[data-brand="21z"] .z21-result-overlay.win .amount {
+  color: var(--color-success);
+  text-shadow: 0 0 14px rgba(0, 255, 179, 0.45);
+}
+body[data-brand="21z"] .z21-result-overlay.lose { border-color: rgba(255, 46, 99, 0.5); }
+body[data-brand="21z"] .z21-result-overlay.lose .amount { color: var(--color-error); }
+body[data-brand="21z"] .z21-result-overlay.push { border-color: rgba(244, 183, 40, 0.5); }
+body[data-brand="21z"] .z21-result-overlay.push .amount { color: var(--accent-secondary); }
+body[data-brand="21z"] .z21-result-overlay.blackjack {
+  border-color: rgba(0, 240, 255, 0.7);
+  box-shadow: 0 0 24px rgba(0, 240, 255, 0.3);
+}
+body[data-brand="21z"] .z21-result-overlay.blackjack .amount {
+  color: var(--accent-primary);
+  font-size: 22px;
+  text-shadow: 0 0 18px rgba(0, 240, 255, 0.6);
+}
+
+/* floating ZEC delta — rises off the table */
+body[data-brand="21z"] .z21-delta {
+  position: absolute;
+  font-family: var(--font-orbitron), sans-serif;
+  font-weight: 700;
+  font-size: 13px;
+  pointer-events: none;
+  animation: z21DeltaRise 1400ms ease-out forwards;
+  white-space: nowrap;
+  z-index: 21;
+}
+body[data-brand="21z"] .z21-delta.up { color: var(--color-success); }
+body[data-brand="21z"] .z21-delta.down { color: var(--color-error); }
+@keyframes z21DeltaRise {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(-32px); }
+}
+
+/* table-wide flash for win/loss */
+@keyframes z21WinFlash {
+  0% { background-color: rgba(0, 255, 179, 0); }
+  30% { background-color: rgba(0, 255, 179, 0.05); }
+  100% { background-color: rgba(0, 255, 179, 0); }
+}
+@keyframes z21LossFlash {
+  0% { background-color: rgba(255, 46, 99, 0); }
+  35% { background-color: rgba(255, 46, 99, 0.07); }
+  100% { background-color: rgba(255, 46, 99, 0); }
+}
+body[data-brand="21z"] .z21-win-flash {
+  animation: z21WinFlash 900ms ease-out;
+}
+body[data-brand="21z"] .z21-loss-flash {
+  animation: z21LossFlash 800ms ease-out;
+}
+
+/* shimmer scan-line for blackjack moment */
+@keyframes z21ScanLine {
+  0% { transform: translateY(-100%); opacity: 0; }
+  20% { opacity: 1; }
+  100% { transform: translateY(2000%); opacity: 0; }
+}
+body[data-brand="21z"] .z21-scan-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--accent-primary), transparent);
+  filter: blur(0.5px);
+  animation: z21ScanLine 1200ms ease-out;
+  pointer-events: none;
+  z-index: 30;
+}
+
+/* balance ticker animation */
+@keyframes z21TickUp {
+  0% { color: var(--text-primary); }
+  35% { color: var(--color-success); transform: translateY(-1px); }
+  100% { color: var(--text-primary); }
+}
+@keyframes z21TickDown {
+  0% { color: var(--text-primary); }
+  35% { color: var(--color-error); }
+  100% { color: var(--text-primary); }
+}
+body[data-brand="21z"] .z21-balance-tick.up { animation: z21TickUp 900ms ease-out; }
+body[data-brand="21z"] .z21-balance-tick.down { animation: z21TickDown 700ms ease-out; }
+
+/* streak counter chip */
+body[data-brand="21z"] .z21-streak {
+  font-family: var(--font-space-mono), monospace;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--color-success);
+  padding: 2px 8px;
+  border: 1px solid rgba(0, 255, 179, 0.35);
+  margin-left: 8px;
+}
+
+/* feed row */
+body[data-brand="21z"] .z21-feed-row {
+  display: grid;
+  grid-template-columns: 70px 90px 1fr 100px 100px 120px;
+  gap: 16px;
+  padding: 14px 18px;
+  align-items: center;
+  border-bottom: 1px solid var(--border-default);
+  font-family: var(--font-space-mono), monospace;
+  font-size: 12px;
+  transition: background 200ms;
+}
+body[data-brand="21z"] .z21-feed-row:hover { background: rgba(0, 240, 255, 0.03); }
+body[data-brand="21z"] .z21-feed-row .time { color: var(--text-secondary); }
+body[data-brand="21z"] .z21-feed-row .game {
+  color: var(--accent-primary);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+body[data-brand="21z"] .z21-feed-row .player { color: var(--text-primary); }
+body[data-brand="21z"] .z21-feed-row .amount.up { color: var(--color-success); }
+body[data-brand="21z"] .z21-feed-row .amount.down { color: var(--color-error); }
+body[data-brand="21z"] .z21-feed-row .verify { color: var(--text-secondary); cursor: pointer; }
+body[data-brand="21z"] .z21-feed-row .verify:hover { color: var(--accent-primary); }
+@media (max-width: 800px) {
+  body[data-brand="21z"] .z21-feed-row {
+    grid-template-columns: 70px 1fr 90px;
+    gap: 10px;
+    padding: 12px;
+  }
+  body[data-brand="21z"] .z21-feed-row .time,
+  body[data-brand="21z"] .z21-feed-row .game,
+  body[data-brand="21z"] .z21-feed-row .verify {
+    display: none;
+  }
+}
+
+/* page in transition */
+@keyframes z21PageIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+body[data-brand="21z"] .z21-page-in {
+  animation: z21PageIn 300ms ease-out;
+}
+
+/* wallet panel overrides for 21z */
+body[data-brand="21z"] .wallet-shell-panel,
+body[data-brand="21z"] .wallet-balance-card {
+  background: linear-gradient(145deg, var(--bg-surface) 0%, var(--bg-elevated) 100%);
+  border: 1px solid var(--border-default);
+  clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px));
+  border-radius: 0;
+}
+
+/* 21z: retarget existing rounded cards on the get-zec page so they pick up the prototype bevel */
+body[data-brand="21z"] [data-page="get-zec"] .rounded-xl {
+  border-radius: 0;
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
+}
+body[data-brand="21z"] [data-page="get-zec"] .rounded-lg {
+  border-radius: 0;
+  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
+}
