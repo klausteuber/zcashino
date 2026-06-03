@@ -193,7 +193,7 @@ In-memory limits and remote font fetches are acceptable in dev, but must be call
 
 **Root cause:** Production was still running `electriccoinco/zcashd:latest` from an older pulled image (`/MagicBean:6.12.1/`). Docker Compose does not automatically refresh a running mutable tag, so the node missed the time-critical emergency consensus/security image and fell behind newer peers after the June 2026 soft fork.
 
-**Fix:** Pin mainnet Compose to the vetted emergency image digest (`electriccoinco/zcashd@sha256:745098bbec91b7d0ae013c44bcd2400b660b3c7ad80935396df4848af529bfc0`), pull it, and restart the `zcashd` service.
+**Fix:** Pin mainnet Compose to the vetted emergency image digest (`electriccoinco/zcashd@sha256:745098bbec91b7d0ae013c44bcd2400b660b3c7ad80935396df4848af529bfc0`), run it as root to match the existing root-owned chain/wallet volume, pull it, and restart the `zcashd` service.
 
 **Key files:** `docker-compose.mainnet.yml`, `scripts/check-node.sh`.
 

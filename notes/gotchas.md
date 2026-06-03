@@ -212,7 +212,7 @@ npm run build
 
 **Root Cause:** The mainnet compose file used `electriccoinco/zcashd:latest`, but the live container kept running the older image already present on the host. During the June 2026 Zcash emergency soft fork, that meant production stayed on `/MagicBean:6.12.1/` while upgraded peers moved ahead.
 
-**Fix:** Pin `zcashd` to the required emergency image digest (`electriccoinco/zcashd@sha256:745098bbec91b7d0ae013c44bcd2400b660b3c7ad80935396df4848af529bfc0`) and explicitly pull/recreate the service during emergency node upgrades.
+**Fix:** Pin `zcashd` to the required emergency image digest (`electriccoinco/zcashd@sha256:745098bbec91b7d0ae013c44bcd2400b660b3c7ad80935396df4848af529bfc0`) and explicitly pull/recreate the service during emergency node upgrades. The emergency image defaults to user `zcash`, so keep `user: "0:0"` unless the live chain/wallet volume has been migrated away from root ownership.
 
 **Key files:** `docker-compose.mainnet.yml`, `scripts/check-node.sh`.
 
