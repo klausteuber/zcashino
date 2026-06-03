@@ -187,6 +187,16 @@ In-memory limits and remote font fetches are acceptable in dev, but must be call
 5. Add E2E tests that run against a real testnet node.
 6. Consolidate duplicate `createWalletForSession()` into shared module.
 
+## Zcashd Emergency Upgrade Learning (2026-06-03)
+
+**Symptom:** Telegram node alerts reported `NODE SYNCING` and `NODE STALE` every 5 minutes while production `zcashd` stayed around block `3364603`.
+
+**Root cause:** Production was still running `electriccoinco/zcashd:latest` from an older pulled image (`/MagicBean:6.12.1/`). Docker Compose does not automatically refresh a running mutable tag, so the node missed the time-critical `v6.12.5` consensus/security upgrade and fell behind newer peers after the June 2026 soft fork.
+
+**Fix:** Pin mainnet Compose to `electriccoinco/zcashd:v6.12.5`, pull that explicit tag, and restart the `zcashd` service.
+
+**Key files:** `docker-compose.mainnet.yml`, `scripts/check-node.sh`.
+
 ## Frontend Reliability Learnings (2026-02-14)
 
 1. **Nested timers in effects can self-cancel on dependency changes.**

@@ -204,6 +204,20 @@ npm run build
 
 ---
 
+## Zcashd Operations
+
+### Mutable Docker Tags Can Leave Mainnet Behind (2026-06-03)
+
+**Symptom:** `check-node.sh` repeatedly sent `NODE SYNCING` and `NODE STALE` alerts even though the `zcashd` container was running and had peers.
+
+**Root Cause:** The mainnet compose file used `electriccoinco/zcashd:latest`, but the live container kept running the older image already present on the host. During the June 2026 Zcash emergency soft fork, that meant production stayed on `/MagicBean:6.12.1/` while upgraded peers moved ahead.
+
+**Fix:** Pin `zcashd` to the required release tag (`electriccoinco/zcashd:v6.12.5`) and explicitly pull/recreate the service during emergency node upgrades.
+
+**Key files:** `docker-compose.mainnet.yml`, `scripts/check-node.sh`.
+
+---
+
 ## Brand Reskin / Multi-Skin
 
 ### sed Order-Dependency for Color Class Replacement (2026-02-09)
