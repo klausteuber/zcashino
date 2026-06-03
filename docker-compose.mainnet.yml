@@ -52,7 +52,9 @@ services:
         max-file: "5"
 
   zcashd:
-    image: electriccoinco/zcashd:v6.12.5  # Pin time-critical consensus/security upgrades; do not rely on stale latest
+    # Emergency predisclosure build required after the June 2026 Zcash fork.
+    # Pin the digest instead of the mutable latest tag.
+    image: electriccoinco/zcashd@sha256:745098bbec91b7d0ae013c44bcd2400b660b3c7ad80935396df4848af529bfc0
     entrypoint: ["zcashd"]
     command:
       - -datadir=/srv/zcashd/.zcash
