@@ -1,6 +1,6 @@
 # Project Learnings
 
-Last updated: 2026-02-18
+Last updated: 2026-06-05
 
 ## Frontend Brand Safety (2026-05-16)
 
@@ -196,6 +196,16 @@ In-memory limits and remote font fetches are acceptable in dev, but must be call
 **Fix:** Pin mainnet Compose to the vetted emergency image digest (`electriccoinco/zcashd@sha256:745098bbec91b7d0ae013c44bcd2400b660b3c7ad80935396df4848af529bfc0`), run it as root to match the existing root-owned chain/wallet volume, pull it, and restart the `zcashd` service.
 
 **Key files:** `docker-compose.mainnet.yml`, `scripts/check-node.sh`.
+
+## Zcashd Wallet Rescan Repair Learning (2026-06-05)
+
+**Symptom:** Telegram alerts changed from stale/syncing to `NODE ERROR: Cannot reach zcash-cli (RPC unresponsive)` every 5 minutes after the emergency image was deployed.
+
+**Root cause:** `zcashd` was no longer only behind the fork; it was repeatedly aborting during catch-up with an Orchard wallet witness assertion. During each restart, RPC returned startup errors such as `Loading block index...` or `Rescanning...`, which the monitor treated as urgent production failures.
+
+**Fix:** Put the site in kill-switch maintenance mode, back up `wallet.dat`, run the pinned emergency `zcashd` image once with `-zapwallettxes=1` to rebuild wallet transaction/witness state, then restart normally after the rescan. The node monitor now suppresses alerts during explicit kill-switch maintenance and gives startup/rescan RPC states a bounded grace period. The wallet backup script now uses the production Compose project/env file and the actual mounted wallet path.
+
+**Key files:** `scripts/check-node.sh`, `scripts/backup-wallet.sh`, `docker-compose.mainnet.yml`.
 
 ## Frontend Reliability Learnings (2026-02-14)
 

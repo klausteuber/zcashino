@@ -26,6 +26,9 @@ fi
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.yml}"
 COMPOSE_ENV_FILE="${COMPOSE_ENV_FILE:-}"
 COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-}"
+NODE_MONITOR_PAUSE_FILE="${NODE_MONITOR_PAUSE_FILE:-${PROJECT_DIR}/.node-monitor-paused}"
+NODE_STARTUP_GRACE_SECONDS="${NODE_STARTUP_GRACE_SECONDS:-1800}"
+SUPPRESS_NODE_ALERTS_DURING_KILL_SWITCH="${SUPPRESS_NODE_ALERTS_DURING_KILL_SWITCH:-true}"
 
 # Production uses a dedicated env file + project name.
 if [[ "$COMPOSE_FILE" == "docker-compose.mainnet.yml" ]]; then
@@ -55,6 +58,16 @@ alert() {
 
 cd "$PROJECT_DIR"
 
+if [[ -f "$NODE_MONITOR_PAUSE_FILE" ]]; then
+  echo "[$(date -u)] Node check skipped: pause file present at ${NODE_MONITOR_PAUSE_FILE}"
+  exit 0
+fi
+
+if [[ "$SUPPRESS_NODE_ALERTS_DURING_KILL_SWITCH" == "true" && "${KILL_SWITCH:-}" == "true" ]]; then
+  echo "[$(date -u)] Node check skipped: KILL_SWITCH=true"
+  exit 0
+fi
+
 RPC_USER="${ZCASH_RPC_USER:-zcashrpc}"
 RPC_PASSWORD="${ZCASH_RPC_PASSWORD:-}"
 ZCASH_CLI_DATADIR="${ZCASH_CLI_DATADIR:-/srv/zcashd/.zcash}"
@@ -73,16 +86,57 @@ zcash_cli() {
 }
 
 # Check if zcashd container is running
-if ! compose ps zcashd --status running -q 2>/dev/null | grep -q .; then
+CONTAINER_ID=$(compose ps zcashd --status running -q 2>/dev/null | head -n 1 || true)
+if [[ -z "$CONTAINER_ID" ]]; then
   alert "NODE DOWN: zcashd container is not running"
   exit 1
 fi
 
-# Get blockchain info via zcash-cli inside the container
-BLOCKCHAIN_INFO=$(zcash_cli getblockchaininfo 2>/dev/null || echo "")
+container_uptime_seconds() {
+  local started_at
+  started_at=$(docker inspect --format '{{.State.StartedAt}}' "$CONTAINER_ID" 2>/dev/null || true)
+  if [[ -z "$started_at" ]]; then
+    echo "0"
+    return
+  fi
 
-if [[ -z "$BLOCKCHAIN_INFO" ]]; then
-  alert "NODE ERROR: Cannot reach zcash-cli (RPC unresponsive)"
+  local started_epoch now_epoch
+  started_epoch=$(
+    date -d "$started_at" +%s 2>/dev/null ||
+      date -j -u -f "%Y-%m-%dT%H:%M:%S" "${started_at%%.*}" +%s 2>/dev/null ||
+      echo "0"
+  )
+  now_epoch=$(date +%s)
+  if [[ "$started_epoch" -le 0 || "$now_epoch" -lt "$started_epoch" ]]; then
+    echo "0"
+    return
+  fi
+
+  echo $((now_epoch - started_epoch))
+}
+
+is_startup_rpc_error() {
+  local output="$1"
+  grep -Eiq 'Loading block index|Loading wallet|Verifying wallet|Rescanning|Importing blocks|Rewinding blocks|Verifying blocks' <<<"$output"
+}
+
+# Get blockchain info via zcash-cli inside the container
+RPC_STATUS=0
+BLOCKCHAIN_INFO=$(zcash_cli getblockchaininfo 2>&1) || RPC_STATUS=$?
+
+if [[ "$RPC_STATUS" -ne 0 || -z "$BLOCKCHAIN_INFO" ]]; then
+  UPTIME_SECONDS=$(container_uptime_seconds)
+  if is_startup_rpc_error "$BLOCKCHAIN_INFO" && [[ "$UPTIME_SECONDS" -lt "$NODE_STARTUP_GRACE_SECONDS" ]]; then
+    CLEAN_ERROR=$(printf '%s' "$BLOCKCHAIN_INFO" | tr '\n' ' ' | cut -c1-180)
+    echo "[$(date -u)] Node check skipped: zcashd still starting (${UPTIME_SECONDS}s/${NODE_STARTUP_GRACE_SECONDS}s): ${CLEAN_ERROR}"
+    exit 0
+  fi
+
+  CLEAN_ERROR=$(printf '%s' "$BLOCKCHAIN_INFO" | tr '\n' ' ' | cut -c1-180)
+  if [[ -z "$CLEAN_ERROR" ]]; then
+    CLEAN_ERROR="RPC unresponsive"
+  fi
+  alert "NODE ERROR: Cannot reach zcash-cli (${CLEAN_ERROR})"
   exit 1
 fi
 

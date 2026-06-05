@@ -218,6 +218,18 @@ npm run build
 
 ---
 
+### Wallet witness assertions can masquerade as RPC outages (2026-06-05)
+
+**Symptom:** The production Telegram monitor repeatedly reported `NODE ERROR: Cannot reach zcash-cli (RPC unresponsive)` after the emergency `zcashd` image was installed.
+
+**Root Cause:** The node was repeatedly restarting during post-fork catch-up with an Orchard wallet witness assertion, then spending most of each restart in `Loading block index...` or `Rescanning...`. The monitor discarded the real RPC startup error text and sent the generic unresponsive alert.
+
+**Fix:** Before wallet repair, enable kill-switch maintenance and take a root-only `wallet.dat` backup. Run a temporary `zcashd` startup with `-zapwallettxes=1` to rebuild wallet transaction and witness state, remove the temporary repair flag once rescan finishes, then restart normally. `check-node.sh` now reports startup/rescan states as maintenance/grace skips instead of urgent alerts, and `backup-wallet.sh` now finds the actual `mainnet_zcash-mainnet-data` wallet path.
+
+**Key files:** `scripts/check-node.sh`, `scripts/backup-wallet.sh`, `docker-compose.mainnet.yml`.
+
+---
+
 ## Brand Reskin / Multi-Skin
 
 ### sed Order-Dependency for Color Class Replacement (2026-02-09)
