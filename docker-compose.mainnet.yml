@@ -67,6 +67,8 @@ services:
       - -rpcallowip=172.16.0.0/12    # Docker internal network only
       - -rpcbind=0.0.0.0
       - -rpcport=8232
+      - -rpcthreads=16
+      - -rpcworkqueue=64
       - -experimentalfeatures=1
       - -txindex=1
       - -i-am-aware-zcashd-will-be-replaced-by-zebrad-and-zallet-in-2025=1
