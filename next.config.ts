@@ -8,9 +8,13 @@ const nextConfig: NextConfig = {
   // Output standalone build for Docker deployment
   output: 'standalone',
 
-  // geoip-lite reads its country database (.dat files) from disk at runtime.
-  // Next's tracer can't see these non-JS files, so include them explicitly for
-  // the routes that perform geo lookups, or the standalone build crashes on load.
+  // geoip-lite loads its database (.dat files) relative to its own module dir.
+  // Keep it OUT of the webpack bundle so __dirname resolves to node_modules at
+  // build- and run-time (otherwise the build fails collecting /api/session).
+  serverExternalPackages: ['geoip-lite'],
+
+  // Belt-and-suspenders: ensure the .dat database ships in the standalone output
+  // for the route that performs geo lookups.
   outputFileTracingIncludes: {
     '/api/session': ['./node_modules/geoip-lite/data/**/*'],
   },
