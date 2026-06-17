@@ -436,6 +436,76 @@ export async function getWalletBalance(
 }
 
 /**
+ * Cached, single-flight wrapper around getWalletBalance().
+ *
+ * z_gettotalbalance holds zcashd's wallet lock for 10-20s on a wallet with
+ * many shielded notes.  Because that lock also serializes the cheap
+ * getblockchaininfo liveness probe, firing a fresh balance scan on every
+ * /api/health (Docker healthcheck hits it every 30s) and /api/admin/overview
+ * request kept a scan permanently in flight — which made the node look
+ * "Disconnected" on the dashboard even though it was healthy and synced.
+ *
+ * This wrapper computes the balance at most once per TTL and coalesces
+ * concurrent callers onto a single in-flight scan, so the wallet lock is
+ * released and cheap RPC stays fast.  On refresh failure it serves the last
+ * known value instead of flickering to zero.
+ *
+ * Display-only — withdrawal reserve checks use their own balance path, so a
+ * slightly stale cached value here can never affect funds movement.
+ *
+ * NOTE: single-slot cache — every caller uses mainnet + minConfirmations=3.
+ */
+const BALANCE_CACHE_TTL_MS = Number(process.env.HOUSE_BALANCE_CACHE_TTL_MS) || 90_000
+const BALANCE_REFRESH_TIMEOUT_MS = 30_000
+
+let cachedWalletBalance: { value: WalletBalance; fetchedAt: number } | null = null
+let walletBalanceInFlight: Promise<WalletBalance> | null = null
+
+export async function getWalletBalanceCached(
+  network: ZcashNetwork = DEFAULT_NETWORK,
+  minConfirmations: number = 3,
+  options: WalletBalanceOptions = {}
+): Promise<WalletBalance> {
+  // Fresh cache hit — return immediately, no RPC.
+  if (cachedWalletBalance && Date.now() - cachedWalletBalance.fetchedAt < BALANCE_CACHE_TTL_MS) {
+    return cachedWalletBalance.value
+  }
+
+  // Coalesce concurrent callers onto a single scan.
+  if (!walletBalanceInFlight) {
+    walletBalanceInFlight = (async () => {
+      try {
+        const value = await getWalletBalance(network, minConfirmations, {
+          // Always include pools so the admin per-pool view stays populated,
+          // and use a generous timeout because this runs at most once per TTL.
+          includePools: true,
+          timeoutMs: BALANCE_REFRESH_TIMEOUT_MS,
+          throwOnError: true,
+        })
+        cachedWalletBalance = { value, fetchedAt: Date.now() }
+        return value
+      } finally {
+        walletBalanceInFlight = null
+      }
+    })()
+  }
+
+  try {
+    return await walletBalanceInFlight
+  } catch (error) {
+    if (cachedWalletBalance) {
+      console.warn(
+        '[RPC] balance refresh failed; serving cached value:',
+        error instanceof Error ? error.message : String(error)
+      )
+      return cachedWalletBalance.value
+    }
+    if (options.throwOnError) throw error
+    return { confirmed: 0, pending: 0, total: 0 }
+  }
+}
+
+/**
  * List transactions for a specific address
  */
 export async function listAddressTransactions(

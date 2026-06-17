@@ -90,6 +90,7 @@ vi.mock('@/lib/notifications/player-activity', () => ({
 vi.mock('@/lib/telemetry/player-events', () => ({
   PLAYER_COUNTER_ACTIONS: {
     LEGACY_SESSION_FALLBACK: 'player.auth.legacy_fallback',
+    SESSION_CREATED: 'player.session.created',
   },
   logPlayerCounterEvent: mocks.logPlayerCounterEventMock,
 }))

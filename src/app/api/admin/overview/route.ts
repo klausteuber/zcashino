@@ -3,7 +3,7 @@ import prisma from '@/lib/db'
 import { requireAdmin } from '@/lib/admin/auth'
 import { REAL_SESSIONS_WHERE, REAL_SESSION_RELATION } from '@/lib/admin/query-filters'
 import { getPoolStatus } from '@/lib/provably-fair/commitment-pool'
-import { checkNodeStatus, getWalletBalance } from '@/lib/wallet/rpc'
+import { checkNodeStatus, getWalletBalanceCached } from '@/lib/wallet/rpc'
 import { DEFAULT_NETWORK } from '@/lib/wallet'
 import {
   checkAdminRateLimit,
@@ -278,7 +278,7 @@ export async function GET(request: NextRequest) {
       // deposits would otherwise be invisible.
       (async () => {
         try {
-          return await getWalletBalance(DEFAULT_NETWORK)
+          return await getWalletBalanceCached(DEFAULT_NETWORK)
         } catch {
           return null
         }

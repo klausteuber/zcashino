@@ -14,6 +14,7 @@ import { getProvablyFairMode, LEGACY_PER_GAME_MODE } from '@/lib/provably-fair/m
 import { getPublicFairnessStateIfExists } from '@/lib/provably-fair/session-fairness'
 import { getAdminSettings } from '@/lib/admin/runtime-settings'
 import { sendPlayerSessionStartedAlert } from '@/lib/notifications/player-activity'
+import { logPlayerCounterEvent, PLAYER_COUNTER_ACTIONS } from '@/lib/telemetry/player-events'
 
 // Demo mode: Generate a fake wallet address for testing
 function generateDemoWallet(): string {
@@ -303,6 +304,22 @@ export async function GET(request: NextRequest) {
         depositAddress,
         depositAddressType,
       })
+
+      // Capture the origin IP for real-money sessions so funded sessions are
+      // traceable. Demo sessions are skipped (no funds, high churn).
+      if (!isDemoSession(session.walletAddress)) {
+        await logPlayerCounterEvent({
+          request,
+          action: PLAYER_COUNTER_ACTIONS.SESSION_CREATED,
+          details: session.id,
+          metadata: {
+            sessionId: session.id,
+            walletAddress: session.walletAddress,
+            depositAddress,
+            depositAddressType,
+          },
+        })
+      }
     }
 
     // Update last active timestamp

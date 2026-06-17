@@ -11,6 +11,12 @@ export const PLAYER_COUNTER_ACTIONS = {
   VIDEO_POKER_RESERVE_REJECTED: 'player.video_poker.reserve_rejected',
   VIDEO_POKER_DUPLICATE_COMPLETION: 'player.video_poker.duplicate_completion_blocked',
   LEGACY_SESSION_FALLBACK: 'player.auth.legacy_fallback',
+  // Records the client IP + session id when a real-money session is created,
+  // so funded sessions are traceable to an origin IP. Query with:
+  //   SELECT ipAddress, details, metadata, createdAt FROM AdminAuditLog
+  //   WHERE action = 'player.session.created' ORDER BY createdAt DESC;
+  // (details holds the sessionId; metadata holds wallet + deposit address.)
+  SESSION_CREATED: 'player.session.created',
 } as const
 
 type PlayerCounterAction =

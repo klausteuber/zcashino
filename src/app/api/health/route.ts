@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
-import { checkNodeStatus, getWalletBalance } from '@/lib/wallet/rpc'
+import { checkNodeStatus, getWalletBalanceCached } from '@/lib/wallet/rpc'
 import { DEFAULT_NETWORK } from '@/lib/wallet'
 import { isKillSwitchActive } from '@/lib/kill-switch'
 import { getProvablyFairMode } from '@/lib/provably-fair/mode'
@@ -46,7 +46,7 @@ export async function GET() {
       // 4. House wallet balance — short timeout so the health endpoint
       //    responds quickly even when zcashd is overloaded.
       raceTimeout(
-        getWalletBalance(DEFAULT_NETWORK, 3, {
+        getWalletBalanceCached(DEFAULT_NETWORK, 3, {
           timeoutMs: HEALTH_RPC_TIMEOUT_MS,
           includePools: false,
           throwOnError: true,

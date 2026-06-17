@@ -35,6 +35,7 @@ vi.mock('@/lib/db', () => ({
 vi.mock('@/lib/wallet/rpc', () => ({
   checkNodeStatus: mocks.checkNodeStatusMock,
   getWalletBalance: mocks.getWalletBalanceMock,
+  getWalletBalanceCached: mocks.getWalletBalanceMock,
 }))
 
 vi.mock('@/lib/wallet', () => ({
