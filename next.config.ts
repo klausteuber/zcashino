@@ -8,6 +8,13 @@ const nextConfig: NextConfig = {
   // Output standalone build for Docker deployment
   output: 'standalone',
 
+  // geoip-lite reads its country database (.dat files) from disk at runtime.
+  // Next's tracer can't see these non-JS files, so include them explicitly for
+  // the routes that perform geo lookups, or the standalone build crashes on load.
+  outputFileTracingIncludes: {
+    '/api/session': ['./node_modules/geoip-lite/data/**/*'],
+  },
+
   // Avoid Turbopack choosing the wrong monorepo root when multiple lockfiles exist.
   turbopack: {
     root: process.cwd(),

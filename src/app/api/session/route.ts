@@ -15,6 +15,7 @@ import { getPublicFairnessStateIfExists } from '@/lib/provably-fair/session-fair
 import { getAdminSettings } from '@/lib/admin/runtime-settings'
 import { sendPlayerSessionStartedAlert } from '@/lib/notifications/player-activity'
 import { logPlayerCounterEvent, PLAYER_COUNTER_ACTIONS } from '@/lib/telemetry/player-events'
+import { getGeoDecision, recordGeoCheck, GEO_BLOCK_MESSAGE } from '@/lib/geo/geo-block'
 
 // Demo mode: Generate a fake wallet address for testing
 function generateDemoWallet(): string {
@@ -242,6 +243,20 @@ export async function GET(request: NextRequest) {
       // Create new session
       // Demo sessions get instant balance, real sessions need to deposit
       const isDemo = isDemoSession(address)
+
+      // Geo-block real-money play from restricted jurisdictions (US + territories).
+      // Demo/free play is exempt; withdrawals are never blocked (see geo-block.ts).
+      if (!isDemo) {
+        const geo = getGeoDecision(request)
+        await recordGeoCheck(geo)
+        if (!geo.allowed) {
+          return NextResponse.json(
+            { error: GEO_BLOCK_MESSAGE, errorCode: 'geo_blocked', country: geo.country },
+            { status: 451 }
+          )
+        }
+      }
+
       session = await prisma.session.create({
         data: {
           walletAddress: address,

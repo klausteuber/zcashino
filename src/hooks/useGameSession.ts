@@ -156,6 +156,17 @@ export function useGameSession(): UseGameSessionReturn {
           walletErrorMessage: `Too many attempts. Please wait ${retryAfter} seconds and try again.`,
         } as { sessionId: string; depositAddress: string | null; transparentAddress?: string | null; walletError?: string; walletErrorMessage?: string }
       }
+      if (res.status === 451) {
+        // Geo-blocked (restricted jurisdiction) — surface the reason to the user.
+        const data = await res.json().catch(() => ({}))
+        return {
+          sessionId: '',
+          depositAddress: null,
+          transparentAddress: null,
+          walletError: 'geo_blocked',
+          walletErrorMessage: data.error || 'Real-money play is not available in your region.',
+        } as { sessionId: string; depositAddress: string | null; transparentAddress?: string | null; walletError?: string; walletErrorMessage?: string }
+      }
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
         throw new Error(data.error || 'Failed to create session')
