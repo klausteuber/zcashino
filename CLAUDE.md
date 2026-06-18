@@ -168,6 +168,27 @@ setInterval(() => {
 ### [2026-02-18] Deposit Addresses Are Unified (u...), Not Transparent (t...)
 **Correction:** Users see the unified address (`u1...`) for deposits, NOT transparent. The system generates both via `z_getaddressforaccount` + `z_listunifiedreceivers`, stores both in `DepositWallet`, but displays the unified address in UI. The transparent companion is used internally by deposit sweep only.
 
+### [2026-06-17] Uncached House-Balance Scan Made the Node Look "Disconnected"
+**Problem:** Admin dashboard showed Node **Disconnected** / Blockchain Commitments **Unavailable** and Deposit Sweep + Alert Generator **Stopped** — while `zcashd` was actually healthy, synced, and reachable (`zcash-cli getblockchaininfo` returned instantly).
+**Root Cause:** `getWalletBalance()` runs `z_gettotalbalance` (×2) + `z_getbalanceforaccount`, each ~10-20s on a wallet with 770+ shielded notes, and it holds zcashd's wallet lock. `/api/health` (hit every **30s** by the Docker healthcheck) and `/api/admin/overview` called it **uncached**, so a balance scan was almost always in flight — and that lock also serializes the cheap `getblockchaininfo` liveness probe (12s timeout in `rpc.ts`). The probe kept timing out → the app declared the node dead.
+**Fix:** `getWalletBalanceCached()` in `src/lib/wallet/rpc.ts` — single-flight + TTL (default 90s, `HOUSE_BALANCE_CACHE_TTL_MS`), serves stale on refresh failure. `/api/health` and `/api/admin/overview` now use it. Display-only; withdrawal reserve checks use a separate path so a stale value can't affect funds. Also bumped zcashd `-rpcthreads=16 -rpcworkqueue=64` in `docker-compose.mainnet.yml` for headroom.
+**Rule:** Never call an expensive, lock-holding wallet RPC on a hot/polled path uncached. A slow wallet op can starve the node liveness probe and make a healthy node look offline. To diagnose: time `z_gettotalbalance` vs `getblockcount` via `zcash-cli` — if the cheap call is fast but the app reports "disconnected", it's contention, not a dead node.
+
+## Geo-Blocking & Compliance (real-money play)
+Real-money play is geo-blocked for restricted jurisdictions. Implemented in `src/lib/geo/geo-block.ts` using `geoip-lite` (bundles its own country DB — no API key, no external calls).
+- **Enforced at** real (non-demo) session creation in `/api/session` → HTTP **451** + `errorCode: 'geo_blocked'`. **Demo play and withdrawals are never blocked** (so anyone who already deposited can cash out).
+- **Uses the un-spoofable `X-Real-IP`** (set by nginx to the true peer), NOT `X-Forwarded-For` (a client can prepend a forged entry). Fails **open** for unknown/private IPs so internal traffic is never blocked.
+- **Audit:** every decision is written to the `GeoCheck` table (`SELECT ... FROM GeoCheck ORDER BY createdAt DESC`).
+- **Env knobs (in `.env.mainnet` on the VPS — `env_file` feeds the app container):**
+  - `GEO_BLOCK_ENABLED=false` — kill switch (default ON)
+  - `GEO_BLOCKED_COUNTRIES=US,PR,GU,VI,AS,MP,UM` — ISO codes (default = US + territories)
+  - `GEO_ALLOWLIST_IPS=` — comma-separated IPs that always bypass (e.g. ops testing real play from the US)
+- **Build note:** `geoip-lite` MUST stay in `serverExternalPackages` (next.config.ts) — if Next bundles it, its `__dirname`-relative `.dat` loading breaks and the build fails at "collect page data for /api/session".
+- **Limitation:** IP geo-blocking is a compliance baseline — VPNs/proxies bypass it. Real VPN/anonymizer detection needs a paid service (e.g. MaxMind Anonymous-IP, IPQualityScore).
+
+### Player IP capture
+Real-money session creation logs the origin IP to `AdminAuditLog` (action `player.session.created`; IP in `ipAddress`, sessionId in `details`, wallet + deposit address in `metadata`). Sessions/Transactions themselves have no IP column. Query: `SELECT ipAddress, details, metadata, createdAt FROM AdminAuditLog WHERE action='player.session.created' ORDER BY createdAt DESC`.
+
 ## Code Patterns
 
 ### Auto-bet Feature Pattern
