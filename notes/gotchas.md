@@ -911,3 +911,15 @@ Also ignored the user's own statement ("I thought we changed the architecture") 
 **Fix:** Updated current same-major packages (`next`, `prisma`, `@prisma/client`, `@sentry/nextjs`, `postcss`) and verified tests, TypeScript, and production build. Do not run `npm audit fix --force` blindly on this app; inspect the proposed package plan first.
 
 **Key files:** `package.json`, `package-lock.json`
+
+---
+
+### Green health does not mean clean ops logs (2026-07-05)
+
+**Symptom:** Public health, cron checks, and Telegram were quiet, but production app logs contained repeated sweep errors, Next.js image-cache `EACCES` errors, and `/api/reserves` reported a scary false underfunded state.
+
+**Root Cause:** Four old deposit wallets were missing `unifiedAddr`; two had enough cached t-address balance to make the sweep service attempt `z_sendmany` with a bare transparent receiver every 10 minutes. The Docker runtime user did not own `.next/cache`. The reserves endpoint mixed demo-linked wallets and transparent snapshots into the reserve ratio instead of using real-money liabilities and the full wallet balance.
+
+**Fix:** Skip legacy no-UA sweep rows without counting them as sweep errors, chown `.next` for the `nextjs` runtime user, filter demo sessions from reserves, calculate reserve coverage from wallet balance, and auto-dismiss resolved stale alerts when their owning checks prove recovery.
+
+**Key files:** `src/lib/services/deposit-sweep.ts`, `src/app/api/reserves/route.ts`, `src/app/reserves/page.tsx`, `src/lib/admin/alerts.ts`, `Dockerfile`

@@ -4,8 +4,9 @@ import {
   DEFAULT_NETWORK,
   NETWORK_CONFIG,
 } from '@/lib/wallet'
-import { checkNodeStatus } from '@/lib/wallet/rpc'
+import { checkNodeStatus, getWalletBalanceCached } from '@/lib/wallet/rpc'
 import { checkPublicRateLimit, createRateLimitResponse } from '@/lib/admin/rate-limit'
+import { REAL_SESSIONS_WHERE } from '@/lib/admin/query-filters'
 
 /**
  * GET /api/reserves
@@ -22,10 +23,12 @@ export async function GET(request: NextRequest) {
     const network = DEFAULT_NETWORK
     const config = NETWORK_CONFIG[network]
 
-    // Get all deposit wallets with their sessions
+    // Get real-money deposit wallets with their sessions.
+    // Demo sessions receive synthetic balances and should never count as liabilities.
     const wallets = await prisma.depositWallet.findMany({
       where: {
         network,
+        session: REAL_SESSIONS_WHERE,
       },
       include: {
         session: {
@@ -42,11 +45,17 @@ export async function GET(request: NextRequest) {
     })
 
     // Check node status
-    const nodeStatus = await checkNodeStatus(network)
+    const [nodeStatus, walletBalance] = await Promise.all([
+      checkNodeStatus(network),
+      getWalletBalanceCached(network, 3, {
+        includePools: false,
+        timeoutMs: 12_000,
+        throwOnError: false,
+      }),
+    ])
 
     // Calculate totals
-    let totalOnChainBalance = 0
-    let totalUserLiabilities = 0
+    let totalTransparentBalance = 0
 
     // Build address list with balances
     const addresses: Array<{
@@ -63,8 +72,7 @@ export async function GET(request: NextRequest) {
       // Balance snapshots are refreshed by wallet/deposit operational flows.
       const onChainBalance = wallet.cachedBalance
 
-      totalOnChainBalance += onChainBalance
-      totalUserLiabilities += wallet.session.balance
+      totalTransparentBalance += onChainBalance
 
       addresses.push({
         address: wallet.transparentAddr,
@@ -76,13 +84,9 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    // Calculate reserve ratio
-    const reserveRatio = totalUserLiabilities > 0
-      ? totalOnChainBalance / totalUserLiabilities
-      : 1
-
-    // Get aggregate stats
+    // Get aggregate stats for real-money sessions only.
     const stats = await prisma.session.aggregate({
+      where: REAL_SESSIONS_WHERE,
       _sum: {
         balance: true,
         totalDeposited: true,
@@ -92,6 +96,17 @@ export async function GET(request: NextRequest) {
       },
       _count: true,
     })
+
+    const totalUserLiabilities = stats._sum.balance || 0
+    const totalWalletBalance = walletBalance.confirmed + walletBalance.pending
+    const totalOnChainBalance = totalWalletBalance > 0
+      ? totalWalletBalance
+      : totalTransparentBalance
+
+    // Calculate reserve ratio
+    const reserveRatio = totalUserLiabilities > 0
+      ? totalOnChainBalance / totalUserLiabilities
+      : 1
 
     // Get sweep totals (funds consolidated to house wallet)
     const sweepStats = await prisma.sweepLog.aggregate({
@@ -109,6 +124,12 @@ export async function GET(request: NextRequest) {
         totalUserLiabilities,
         reserveRatio,
         isFullyBacked: reserveRatio >= 1,
+        transparentAddressBalance: totalTransparentBalance,
+        walletBalance: {
+          confirmed: walletBalance.confirmed,
+          pending: walletBalance.pending,
+          total: walletBalance.total,
+        },
         // Swept funds are held in house shielded address (not publicly verifiable)
         totalSweptToHouseWallet: totalSwept,
         sweepCount: sweepStats._count,

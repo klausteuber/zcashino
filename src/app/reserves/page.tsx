@@ -12,6 +12,12 @@ interface ReservesData {
     totalUserLiabilities: number
     reserveRatio: number
     isFullyBacked: boolean
+    transparentAddressBalance?: number
+    walletBalance?: {
+      confirmed: number
+      pending: number
+      total: number
+    }
   }
   stats: {
     totalSessions: number
@@ -89,8 +95,8 @@ export default function ReservesPage() {
           </button>
         </div>
         <p className="text-venetian-gold/60 mb-8">
-          Track visible on-chain reserves against platform liabilities. Balances shown here are
-          from transparent addresses only and do not include shielded receiver balances.
+          Track real-money wallet reserves against platform liabilities. Transparent deposit
+          address balances are shown separately for audit visibility.
         </p>
 
         {/* Error State */}
@@ -133,20 +139,20 @@ export default function ReservesPage() {
                 <div>
                   <h2 className="text-2xl font-bold text-bone-white">
                     {data.reserves.isFullyBacked
-                      ? 'Visible Reserves Cover Liabilities'
-                      : 'Visible Reserves Below Liabilities'}
+                      ? 'Platform Reserves Cover Liabilities'
+                      : 'Platform Reserves Below Liabilities'}
                   </h2>
                   <p className="text-venetian-gold/60">
-                    Visible reserve ratio: {(data.reserves.reserveRatio * 100).toFixed(2)}%
+                    Reserve ratio: {(data.reserves.reserveRatio * 100).toFixed(2)}%
                   </p>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <StatCard
-                  label="On-Chain Balance"
+                  label="Wallet Balance"
                   value={`${data.reserves.totalOnChainBalance.toFixed(8)} ZEC`}
-                  description="Transparent balances tracked by this page"
+                  description="Confirmed + pending wallet funds"
                 />
                 <StatCard
                   label="User Liabilities"
@@ -156,7 +162,7 @@ export default function ReservesPage() {
                 <StatCard
                   label="Reserve Ratio"
                   value={`${(data.reserves.reserveRatio * 100).toFixed(2)}%`}
-                  description="Visible on-chain / Liabilities"
+                  description="Wallet Balance / Liabilities"
                   highlight={data.reserves.isFullyBacked}
                 />
               </div>

@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   checkNodeStatusMock: vi.fn(),
   checkPublicRateLimitMock: vi.fn(),
   createRateLimitResponseMock: vi.fn(),
+  getWalletBalanceCachedMock: vi.fn(),
 }))
 
 const {
@@ -24,6 +25,7 @@ const {
   checkNodeStatusMock,
   checkPublicRateLimitMock,
   createRateLimitResponseMock,
+  getWalletBalanceCachedMock,
 } = mocks
 
 vi.mock('@/lib/db', () => ({
@@ -41,6 +43,7 @@ vi.mock('@/lib/wallet', () => ({
 
 vi.mock('@/lib/wallet/rpc', () => ({
   checkNodeStatus: mocks.checkNodeStatusMock,
+  getWalletBalanceCached: mocks.getWalletBalanceCachedMock,
 }))
 
 vi.mock('@/lib/admin/rate-limit', () => ({
@@ -56,6 +59,7 @@ describe('/api/reserves', () => {
     checkPublicRateLimitMock.mockReturnValue({ allowed: true })
     createRateLimitResponseMock.mockReturnValue(new Response('rate limited', { status: 429 }))
     checkNodeStatusMock.mockResolvedValue({ connected: true, synced: true })
+    getWalletBalanceCachedMock.mockResolvedValue({ confirmed: 2, pending: 0.25, total: 2.25 })
     prismaMock.depositWallet.findMany.mockResolvedValue([
       {
         id: 'wallet-1',
@@ -91,8 +95,31 @@ describe('/api/reserves', () => {
 
     expect(response.status).toBe(200)
     const payload = await response.json()
-    expect(payload.reserves.totalOnChainBalance).toBe(1.25)
+    expect(payload.reserves.totalOnChainBalance).toBe(2.25)
+    expect(payload.reserves.transparentAddressBalance).toBe(1.25)
+    expect(payload.reserves.walletBalance).toEqual({ confirmed: 2, pending: 0.25, total: 2.25 })
     expect(payload.addresses[0].cachedBalance).toBe(1.25)
+    expect(prismaMock.depositWallet.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          network: 'mainnet',
+          session: expect.objectContaining({
+            walletAddress: expect.objectContaining({
+              not: expect.objectContaining({ startsWith: 'demo_' }),
+            }),
+          }),
+        }),
+      })
+    )
+    expect(prismaMock.session.aggregate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          walletAddress: expect.objectContaining({
+            not: expect.objectContaining({ startsWith: 'demo_' }),
+          }),
+        }),
+      })
+    )
     expect(checkPublicRateLimitMock).toHaveBeenCalledWith(expect.anything(), 'reserves-read')
     expect(prismaMock.depositWallet.update).not.toHaveBeenCalled()
   })

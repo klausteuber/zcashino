@@ -4,6 +4,7 @@ import { isKillSwitchActive, getKillSwitchStatus } from '@/lib/kill-switch'
 import { getProvablyFairMode, SESSION_NONCE_MODE } from '@/lib/provably-fair/mode'
 import { sendTelegramMessage } from '@/lib/notifications/telegram'
 import { REAL_SESSIONS_WHERE, REAL_SESSION_RELATION } from '@/lib/admin/query-filters'
+import { getWalletBalanceCached } from '@/lib/wallet/rpc'
 
 /**
  * Alert generation functions for the admin dashboard.
@@ -65,6 +66,20 @@ async function createAlertIfNew(alert: AlertInput): Promise<boolean> {
   }
 
   return true
+}
+
+async function dismissResolvedAlerts(type: string, reason: string): Promise<void> {
+  const result = await prisma.adminAlert.updateMany({
+    where: { type, dismissed: false },
+    data: {
+      dismissed: true,
+      dismissedBy: 'system',
+      dismissedAt: new Date(),
+    },
+  })
+  if (result.count > 0) {
+    console.log(`[alert-generator] Auto-dismissed ${result.count} ${type} alert(s): ${reason}`)
+  }
 }
 
 /**
@@ -259,7 +274,10 @@ export async function checkWithdrawalVelocity(since: Date): Promise<number> {
  * Check if the kill switch is active (platform maintenance mode).
  */
 export async function checkKillSwitchAlert(): Promise<number> {
-  if (!isKillSwitchActive()) return 0
+  if (!isKillSwitchActive()) {
+    await dismissResolvedAlerts('kill_switch_active', 'kill switch inactive')
+    return 0
+  }
 
   const status = getKillSwitchStatus()
   const wasCreated = await createAlertIfNew({
@@ -289,7 +307,10 @@ export async function checkFailedWithdrawalsBacklog(): Promise<number> {
     select: { id: true, createdAt: true, failReason: true },
   })
 
-  if (failed.length === 0) return 0
+  if (failed.length === 0) {
+    await dismissResolvedAlerts('withdrawals_failed_backlog', 'no recent failed withdrawals')
+    return 0
+  }
 
   const oldest = failed[0]?.createdAt ?? new Date()
   const ageMs = Date.now() - oldest.getTime()
@@ -327,7 +348,10 @@ export async function checkPendingWithdrawalsStuck(): Promise<number> {
     select: { createdAt: true },
   })
 
-  if (!oldest) return 0
+  if (!oldest) {
+    await dismissResolvedAlerts('withdrawals_pending_stuck', 'no pending withdrawals')
+    return 0
+  }
 
   const ageMs = Date.now() - oldest.createdAt.getTime()
   const warningMs = 60 * 60 * 1000
@@ -368,7 +392,10 @@ export async function checkPoolHealth(): Promise<number> {
         where: { status: 'available', expiresAt: { gt: now } },
       })
 
-  if (available >= threshold) return 0
+  if (available >= threshold) {
+    await dismissResolvedAlerts('pool_critical', 'pool above healthy threshold')
+    return 0
+  }
 
   const wasCreated = await createAlertIfNew({
     type: 'pool_critical',
@@ -390,18 +417,15 @@ export async function checkPoolHealth(): Promise<number> {
  * Alerts when coverage ratio drops below 1.5x (warning) or 1.0x (critical).
  */
 export async function checkLowHouseBalance(): Promise<number> {
-  const houseAddress = process.env.ZCASH_NETWORK === 'mainnet' || !process.env.ZCASH_NETWORK
-    ? process.env.HOUSE_ZADDR_MAINNET
-    : process.env.HOUSE_ZADDR_TESTNET
-
-  if (!houseAddress) return 0
-
-  const { getAddressBalance } = await import('@/lib/wallet/rpc')
   const network = (process.env.ZCASH_NETWORK || 'mainnet') as 'mainnet' | 'testnet'
 
   let houseBalance: { confirmed: number }
   try {
-    houseBalance = await getAddressBalance(houseAddress, network, 1)
+    houseBalance = await getWalletBalanceCached(network, 3, {
+      includePools: false,
+      timeoutMs: 12_000,
+      throwOnError: true,
+    })
   } catch {
     return 0 // Can't check if node is down — other alerts will fire for that
   }
@@ -412,11 +436,17 @@ export async function checkLowHouseBalance(): Promise<number> {
   })
 
   const totalLiabilities = liabilities._sum.balance ?? 0
-  if (totalLiabilities === 0) return 0
+  if (totalLiabilities === 0) {
+    await dismissResolvedAlerts('low_house_balance', 'no player liabilities')
+    return 0
+  }
 
   const coverage = houseBalance.confirmed / totalLiabilities
 
-  if (coverage >= 1.5) return 0
+  if (coverage >= 1.5) {
+    await dismissResolvedAlerts('low_house_balance', 'coverage above healthy threshold')
+    return 0
+  }
 
   const severity: 'warning' | 'critical' = coverage < 1.0 ? 'critical' : 'warning'
 

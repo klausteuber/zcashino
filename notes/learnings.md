@@ -556,3 +556,19 @@ In-memory limits and remote font fetches are acceptable in dev, but must be call
    Updating `next`, Prisma, Sentry, and `postcss` within their current major lines removed the high-severity production audit findings. The remaining moderate findings only had force-fix plans that would downgrade/break core packages, so they need tracked follow-up instead of a blind `npm audit fix --force`.
 
 **Key files:** `package.json`, `package-lock.json`
+
+## Production Ops Quiet-Alert Learnings (2026-07-05)
+
+1. **Alert silence still needs log-level follow-up.**
+   The public health checks and cron monitor were green, but app logs were still filling with non-alert sweep and cache errors. Treat "no Telegram alerts" as a starting signal, not the entire status readout.
+
+2. **Legacy t-only deposit wallets must not be retried forever.**
+   zcashd v6 rejects a bare transparent receiver when the wallet expects the full unified address. If an old `DepositWallet` row has no stored `unifiedAddr`, the safe automatic behavior is to skip it and surface a manual/backfill task rather than spam `z_sendmany` errors every sweep interval.
+
+3. **Reserve coverage must use real-money liabilities and total wallet balance.**
+   Demo sessions and old demo-linked wallets can make public reserve math look insolvent. Filter demo sessions from liabilities, and use the node-reported wallet balance for coverage while keeping transparent deposit-address snapshots as audit detail.
+
+4. **Container filesystem ownership matters after switching to non-root runtime users.**
+   Next.js writes image cache files under `.next/cache`. If `.next` is copied from the builder as root-owned and then the app runs as `nextjs`, image optimization can work but throw repeated permission errors.
+
+**Key files:** `src/lib/services/deposit-sweep.ts`, `src/app/api/reserves/route.ts`, `src/app/reserves/page.tsx`, `src/lib/admin/alerts.ts`, `Dockerfile`

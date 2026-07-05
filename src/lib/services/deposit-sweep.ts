@@ -117,12 +117,21 @@ export async function sweepDeposits(
         continue
       }
 
+      if (!wallet.unifiedAddr) {
+        skipped++
+        details.push({
+          address: wallet.transparentAddr,
+          amount: sweepAmount,
+          status: 'legacy-missing-unified-address',
+        })
+        continue
+      }
+
       // Send from deposit address → house z-address.
       // zcashd v6 requires the full UA as fromAddress — bare transparent
       // receivers are rejected with "Invalid from address".
-      const fromAddress = wallet.unifiedAddr || wallet.transparentAddr
       const { operationId } = await sendZec(
-        fromAddress,
+        wallet.unifiedAddr,
         houseAddress,
         sweepAmount,
         undefined,
