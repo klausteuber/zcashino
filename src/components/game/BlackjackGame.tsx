@@ -28,6 +28,11 @@ import { DemoWinNudge } from '@/components/onboarding/DemoWinNudge'
 import { DemoDepletedPrompt } from '@/components/onboarding/DemoDepletedPrompt'
 import { DepositWidget, DepositWidgetCompact } from '@/components/wallet/DepositWidget'
 import { WithdrawalModal } from '@/components/wallet/WithdrawalModal'
+import {
+  generateClientSeedHex,
+  type FairnessRevealBundle,
+} from '@/lib/game/client-fairness'
+import { GameSessionStats } from '@/components/game/GameSessionStats'
 
 const CHIP_VALUES = [0.01, 0.05, 0.1, 0.25, 0.5, 1]
 
@@ -36,27 +41,6 @@ const PERFECT_PAIRS_INFO = {
   perfect: { name: 'Perfect Pair', multiplier: '25:1', description: 'Same rank & suit' },
   colored: { name: 'Colored Pair', multiplier: '12:1', description: 'Same rank & color' },
   mixed: { name: 'Mixed Pair', multiplier: '6:1', description: 'Same rank, different color' }
-}
-
-function generateClientSeedHex(bytes: number = 16): string {
-  const cryptoApi = globalThis.crypto
-  if (!cryptoApi?.getRandomValues) {
-    return `${Date.now().toString(16)}${Math.random().toString(16).slice(2)}`
-  }
-  const random = new Uint8Array(bytes)
-  cryptoApi.getRandomValues(random)
-  return Array.from(random).map((value) => value.toString(16).padStart(2, '0')).join('')
-}
-
-interface FairnessRevealBundle {
-  mode: 'session_nonce_v1'
-  serverSeed: string
-  serverSeedHash: string
-  clientSeed: string
-  lastNonceUsed: number | null
-  txHash: string
-  blockHeight: number | null
-  blockTimestamp: string | Date | null
 }
 
 export default function BlackjackGame() {
@@ -374,7 +358,7 @@ export default function BlackjackGame() {
     } catch {
       // Non-blocking; gameplay should continue even if fairness refresh fails.
     }
-  }, [session?.id])
+  }, [session?.id, setFairness])
 
   const persistClientSeedIfEditable = useCallback(async () => {
     if (!session?.id || !isSessionFairnessMode || !canEditSessionClientSeed) return
@@ -398,7 +382,7 @@ export default function BlackjackGame() {
     } catch {
       // Ignore; seed can still be applied on next game start.
     }
-  }, [canEditSessionClientSeed, clientSeedInput, isSessionFairnessMode, session?.id])
+  }, [canEditSessionClientSeed, clientSeedInput, isSessionFairnessMode, session?.id, setFairness])
 
   const handleRotateSeed = useCallback(async () => {
     if (!session?.id || !isSessionFairnessMode || isLoading) return
@@ -435,7 +419,7 @@ export default function BlackjackGame() {
     } finally {
       setIsLoading(false)
     }
-  }, [isLoading, isSessionFairnessMode, refreshFairnessState, session?.id])
+  }, [isLoading, isSessionFairnessMode, refreshFairnessState, session?.id, setFairness])
 
   const handlePlaceBet = useCallback(async () => {
     if (!session || isLoading) return
@@ -481,7 +465,7 @@ export default function BlackjackGame() {
     } finally {
       setIsLoading(false)
     }
-  }, [session, selectedBet, perfectPairsBet, clientSeedInput, isLoading, canEditSessionClientSeed])
+  }, [session, selectedBet, perfectPairsBet, clientSeedInput, isLoading, canEditSessionClientSeed, setFairness, setSession])
 
   const handleAction = useCallback(async (action: BlackjackAction) => {
     if (!session || !gameId || isLoading) return
@@ -518,7 +502,7 @@ export default function BlackjackGame() {
     } finally {
       setIsLoading(false)
     }
-  }, [session, gameId, isLoading])
+  }, [session, gameId, isLoading, setSession])
 
   const handleNewRound = useCallback(() => {
     // Cancel any pending auto-bet
@@ -653,7 +637,7 @@ export default function BlackjackGame() {
     } finally {
       setIsLoading(false)
     }
-  }, [session, gameId, isLoading])
+  }, [session, gameId, isLoading, setSession])
 
   // Auto-bet effect: automatically place bet and deal when game completes
   useEffect(() => {
@@ -793,7 +777,9 @@ export default function BlackjackGame() {
     isAutoBetEnabled,
     gameState?.phase,
     isLoading,
-    canEditSessionClientSeed
+    canEditSessionClientSeed,
+    setFairness,
+    setSession,
   ])
 
   // Calculate available actions
@@ -1802,23 +1788,7 @@ export default function BlackjackGame() {
         </div>
 
         {/* Session Stats */}
-        {session && (
-          <div className="mt-8 text-center">
-            <div className="bg-midnight-black/30 inline-block rounded-lg px-6 py-3 border border-masque-gold/10">
-              <div className="text-xs text-venetian-gold/40 mb-1 uppercase tracking-wide">Session Stats</div>
-              <div className="flex gap-6 text-sm">
-                <div>
-                  <span className="text-venetian-gold/60">Wagered: </span>
-                  <span className="text-bone-white">{session.totalWagered.toFixed(4)} ZEC</span>
-                </div>
-                <div>
-                  <span className="text-venetian-gold/60">Won: </span>
-                  <span className="text-masque-gold">{session.totalWon.toFixed(4)} ZEC</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+        {session && <GameSessionStats session={session} />}
 
         {/* Hand History */}
         {handHistory.length > 0 && (

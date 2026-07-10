@@ -7,7 +7,7 @@ import SiteHeader from '@/components/layout/SiteHeader'
 
 export async function generateMetadata(): Promise<Metadata> {
   const brand = await getServerBrand()
-  const brandTitle = brand.id === '21z' ? '21z' : 'CypherJester'
+  const brandTitle = brand.config.name
   const brandUrl = getBrandUrlForPath(brand.id, '/why-zcash')
   const canonicalUrl = getCanonicalUrlForPath(brand.id, '/why-zcash')
 

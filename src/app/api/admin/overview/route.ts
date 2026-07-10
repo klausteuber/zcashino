@@ -18,6 +18,7 @@ import { getSweepServiceStatus } from '@/lib/services/deposit-sweep'
 import { getManagerStatus } from '@/lib/services/commitment-pool-manager'
 import { getSessionSeedPoolManagerStatus, getSessionSeedPoolStatus } from '@/lib/services/session-seed-pool-manager'
 import { getProvablyFairMode, SESSION_NONCE_MODE } from '@/lib/provably-fair/mode'
+import { getVeilstoneOperationalSummary } from '@/lib/veilstone/admin'
 
 /**
  * GET /api/admin/overview
@@ -52,6 +53,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000)
+    const since30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
     const fairnessMode = getProvablyFairMode()
     const isSessionMode = fairnessMode === SESSION_NONCE_MODE
     const raceRejectionActions = [
@@ -66,6 +68,7 @@ export async function GET(request: NextRequest) {
       sessionTotals,
       totalSessions,
       authenticatedSessions,
+      wageringPlayers30d,
       activeGames,
       pendingWithdrawalCount,
       failedWithdrawalCount,
@@ -92,6 +95,7 @@ export async function GET(request: NextRequest) {
       recentWithdrawals,
       recentAuditLogs,
       houseBalance,
+      veilstoneSummary,
     ] = await Promise.all([
       prisma.session.aggregate({
         where: REAL_SESSIONS_WHERE,
@@ -105,6 +109,27 @@ export async function GET(request: NextRequest) {
       }),
       prisma.session.count({ where: REAL_SESSIONS_WHERE }),
       prisma.session.count({ where: { isAuthenticated: true, ...REAL_SESSIONS_WHERE } }),
+      prisma.session.count({
+        where: {
+          ...REAL_SESSIONS_WHERE,
+          OR: [
+            {
+              games: {
+                some: {
+                  createdAt: { gte: since30d },
+                },
+              },
+            },
+            {
+              videoPokerGames: {
+                some: {
+                  createdAt: { gte: since30d },
+                },
+              },
+            },
+          ],
+        },
+      }),
       prisma.blackjackGame.count({ where: { status: 'active', ...REAL_SESSION_RELATION } }),
       prisma.transaction.count({
         where: { type: 'withdrawal', status: { in: ['pending', 'pending_approval'] }, ...REAL_SESSION_RELATION },
@@ -283,6 +308,7 @@ export async function GET(request: NextRequest) {
           return null
         }
       })(),
+      getVeilstoneOperationalSummary(),
     ])
 
     const liabilities = sessionTotals._sum.balance || 0
@@ -321,6 +347,7 @@ export async function GET(request: NextRequest) {
       platform: {
         totalSessions,
         authenticatedSessions,
+        wageringPlayers30d,
         activeGames,
         liabilities,
         totalDeposited,
@@ -408,6 +435,7 @@ export async function GET(request: NextRequest) {
         commitmentPoolManager: getManagerStatus(),
         sessionSeedPoolManager: getSessionSeedPoolManagerStatus(),
       },
+      veilstone: veilstoneSummary,
       treasury: {
         houseBalance: houseBalance ? {
           confirmed: houseBalance.confirmed,

@@ -2,6 +2,12 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import type { SessionFairnessSummary } from '@/types'
+import { generateClientSeedHex } from '@/lib/game/client-fairness'
+
+export interface SessionRecoveryState {
+  enabled: boolean
+  lastUsedAt: string | null
+}
 
 export interface SessionData {
   id: string
@@ -16,6 +22,7 @@ export interface SessionData {
   transparentAddress?: string | null
   withdrawalAddress?: string | null
   maintenanceMode?: boolean
+  recovery?: SessionRecoveryState | null
 }
 
 export interface UseGameSessionReturn {
@@ -28,7 +35,8 @@ export interface UseGameSessionReturn {
   // Onboarding / modal
   showOnboarding: boolean
   setShowOnboarding: (show: boolean) => void
-  onboardingMode: 'deposit' | 'deposit-more' | null
+  onboardingMode: 'deposit' | 'deposit-more' | 'restore' | null
+  restoreNotice: string | null
 
   // Deposit
   depositAddress: string | null
@@ -44,6 +52,9 @@ export interface UseGameSessionReturn {
   handleSwitchToReal: () => void
   handleSetWithdrawalAddress: (address: string) => Promise<boolean>
   handleResetDemoBalance: () => Promise<void>
+  handleCreateRecoveryKey: () => Promise<{ recoveryKey: string; recovery: SessionRecoveryState } | null>
+  handleRegenerateRecoveryKey: () => Promise<{ recoveryKey: string; recovery: SessionRecoveryState } | null>
+  handleRestoreSession: (recoveryKey: string) => Promise<{ success: boolean; error?: string }>
 
   // Demo nudge tracking
   demoWinNudgeShown: React.MutableRefObject<boolean>
@@ -63,9 +74,10 @@ export function useGameSession(): UseGameSessionReturn {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showOnboarding, setShowOnboarding] = useState(false)
-  const [onboardingMode, setOnboardingMode] = useState<'deposit' | 'deposit-more' | null>(null)
+  const [onboardingMode, setOnboardingMode] = useState<'deposit' | 'deposit-more' | 'restore' | null>(null)
   const [depositAddress, setDepositAddress] = useState<string | null>(null)
   const [fairness, setFairness] = useState<SessionFairnessSummary | null>(null)
+  const [restoreNotice, setRestoreNotice] = useState<string | null>(null)
 
   // Demo nudge tracking (refs — reset each page load, no localStorage)
   const demoWinNudgeShown = useRef(false)
@@ -74,6 +86,26 @@ export function useGameSession(): UseGameSessionReturn {
   // Prevent double init in strict mode
   const initStarted = useRef(false)
 
+  const applySessionData = useCallback((data: SessionData) => {
+    setSession(data)
+    setFairness(data.fairness || null)
+    setDepositAddress(data.depositAddress || null)
+
+    if (data.id) {
+      localStorage.setItem('zcashino_session_id', data.id)
+      localStorage.setItem('zcashino_onboarding_seen', 'true')
+    }
+  }, [])
+
+  const initializeFreshSession = useCallback(async () => {
+    const res = await fetch('/api/session')
+    if (!res.ok) throw new Error('Failed to get session')
+    const data = await res.json()
+    if (data.error) throw new Error(data.error)
+    applySessionData(data)
+    return data
+  }, [applySessionData])
+
   const initSession = useCallback(async (existingSessionId?: string) => {
     try {
       setIsLoading(true)
@@ -81,18 +113,25 @@ export function useGameSession(): UseGameSessionReturn {
         ? `/api/session?sessionId=${existingSessionId}`
         : '/api/session'
       const res = await fetch(url)
-      if (!res.ok) throw new Error('Failed to get session')
-      const data = await res.json()
-      if (data.error) throw new Error(data.error)
-      setSession(data)
-      setFairness(data.fairness || null)
-      setDepositAddress(data.depositAddress || null)
+      const data = await res.json().catch(() => null)
 
-      if (data.id) {
-        localStorage.setItem('zcashino_session_id', data.id)
-        // Mark onboarding as seen for backward compat
-        localStorage.setItem('zcashino_onboarding_seen', 'true')
+      if (!res.ok || data?.error) {
+        if (existingSessionId && res.status === 401) {
+          localStorage.removeItem('zcashino_session_id')
+          await initializeFreshSession()
+          setRestoreNotice('Your browser session expired. Use your recovery key to restore your real-money session.')
+          setOnboardingMode('restore')
+          setShowOnboarding(true)
+          setError(null)
+          return
+        }
+
+        throw new Error(data?.error || 'Failed to get session')
       }
+
+      applySessionData(data)
+      setRestoreNotice(null)
+      setError(null)
     } catch (err) {
       console.error('Session init failed:', err)
       localStorage.removeItem('zcashino_session_id')
@@ -104,7 +143,7 @@ export function useGameSession(): UseGameSessionReturn {
     } finally {
       setIsLoading(false)
     }
-  }, [])
+  }, [applySessionData, initializeFreshSession])
 
   // Initialize session on mount
   useEffect(() => {
@@ -128,22 +167,20 @@ export function useGameSession(): UseGameSessionReturn {
       const res = await fetch('/api/session')
       if (!res.ok) throw new Error('Failed to create demo session')
       const data = await res.json()
-      setSession(data)
-      setFairness(data.fairness || null)
-      localStorage.setItem('zcashino_session_id', data.id)
-      localStorage.setItem('zcashino_onboarding_seen', 'true')
+      applySessionData(data)
+      setRestoreNotice(null)
     } catch (err) {
       setError('Failed to create demo session')
       console.error(err)
     } finally {
       setIsLoading(false)
     }
-  }, [])
+  }, [applySessionData])
 
   // Create real session (non-demo)
   const handleCreateRealSession = useCallback(async () => {
     try {
-      const walletId = `real_${Date.now()}_${Math.random().toString(36).slice(2)}`
+      const walletId = `real_${Date.now()}_${generateClientSeedHex(12)}`
       const res = await fetch(`/api/session?wallet=${walletId}`)
       if (res.status === 429) {
         const data = await res.json()
@@ -173,11 +210,8 @@ export function useGameSession(): UseGameSessionReturn {
       }
       const data = await res.json()
       if (data.error) throw new Error(data.error)
-      setSession(data)
-      setFairness(data.fairness || null)
-      if (data.id) {
-        localStorage.setItem('zcashino_session_id', data.id)
-      }
+      applySessionData(data)
+      setRestoreNotice(null)
       // Pass through wallet error fields if present (session created but wallet failed)
       return {
         sessionId: data.id,
@@ -190,7 +224,7 @@ export function useGameSession(): UseGameSessionReturn {
       console.error('Failed to create real session:', err)
       return null
     }
-  }, [])
+  }, [applySessionData])
 
   // Set withdrawal address
   const handleSetWithdrawalAddress = useCallback(async (address: string) => {
@@ -216,6 +250,7 @@ export function useGameSession(): UseGameSessionReturn {
               ...prev,
               withdrawalAddress: data.withdrawalAddress ?? address,
               depositAddress: data.depositAddress ?? prev.depositAddress,
+              recovery: data.recovery ?? prev.recovery,
             }
           : prev
       )
@@ -241,6 +276,7 @@ export function useGameSession(): UseGameSessionReturn {
 
   // Switch from demo to real ZEC — opens modal at deposit step
   const handleSwitchToReal = useCallback(() => {
+    setRestoreNotice(null)
     setOnboardingMode('deposit')
     setShowOnboarding(true)
   }, [])
@@ -271,6 +307,106 @@ export function useGameSession(): UseGameSessionReturn {
     }
   }, [session])
 
+  const handleCreateRecoveryKey = useCallback(async () => {
+    if (!session || session.isDemo) return null
+
+    try {
+      const res = await fetch('/api/session/recovery', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'create' }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to create recovery key')
+      }
+
+      setSession(prev =>
+        prev
+          ? {
+              ...prev,
+              recovery: data.recovery,
+            }
+          : prev
+      )
+
+      return {
+        recoveryKey: data.recoveryKey,
+        recovery: data.recovery as SessionRecoveryState,
+      }
+    } catch (err) {
+      console.error('Failed to create recovery key:', err)
+      return null
+    }
+  }, [session])
+
+  const handleRegenerateRecoveryKey = useCallback(async () => {
+    if (!session || session.isDemo) return null
+
+    try {
+      const res = await fetch('/api/session/recovery', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'regenerate' }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to regenerate recovery key')
+      }
+
+      setSession(prev =>
+        prev
+          ? {
+              ...prev,
+              recovery: data.recovery,
+            }
+          : prev
+      )
+
+      return {
+        recoveryKey: data.recoveryKey,
+        recovery: data.recovery as SessionRecoveryState,
+      }
+    } catch (err) {
+      console.error('Failed to regenerate recovery key:', err)
+      return null
+    }
+  }, [session])
+
+  const handleRestoreSession = useCallback(async (recoveryKey: string) => {
+    try {
+      const res = await fetch('/api/session/recovery', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'restore',
+          recoveryKey,
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || data.error) {
+        return {
+          success: false,
+          error: data.error || 'Failed to restore session',
+        }
+      }
+
+      applySessionData(data)
+      setRestoreNotice(null)
+      setError(null)
+      setOnboardingMode(null)
+      setShowOnboarding(false)
+
+      return { success: true }
+    } catch (err) {
+      console.error('Failed to restore session:', err)
+      return {
+        success: false,
+        error: 'Failed to restore session',
+      }
+    }
+  }, [applySessionData])
+
   return {
     session,
     setSession,
@@ -281,6 +417,7 @@ export function useGameSession(): UseGameSessionReturn {
     showOnboarding,
     setShowOnboarding,
     onboardingMode,
+    restoreNotice,
 
     depositAddress,
 
@@ -293,6 +430,9 @@ export function useGameSession(): UseGameSessionReturn {
     handleSwitchToReal,
     handleSetWithdrawalAddress,
     handleResetDemoBalance,
+    handleCreateRecoveryKey,
+    handleRegenerateRecoveryKey,
+    handleRestoreSession,
 
     demoWinNudgeShown,
     demoHandCount,

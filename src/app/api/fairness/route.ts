@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(parsed.payload, { status: 400 })
   }
 
-  const playerSession = requirePlayerSession(request, parsed.data.sessionId)
+  const playerSession = await requirePlayerSession(request, parsed.data.sessionId)
   if (!playerSession.ok) {
     return playerSession.response
   }
@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
   }
 
   const payload = parsed.data
-  const playerSession = requirePlayerSession(request, payload.sessionId)
+  const playerSession = await requirePlayerSession(request, payload.sessionId)
   if (!playerSession.ok) {
     return playerSession.response
   }

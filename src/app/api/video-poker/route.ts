@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
     const payload = parsed.data
     const sessionId = payload.sessionId
 
-    const playerSession = requirePlayerSession(request, sessionId)
+    const playerSession = await requirePlayerSession(request, sessionId)
     if (!playerSession.ok) return playerSession.response
     if (playerSession.legacyFallback) {
       await logPlayerCounterEvent({
@@ -659,7 +659,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Session ID required' }, { status: 400 })
   }
 
-  const playerSession = requirePlayerSession(request, sessionId)
+  const playerSession = await requirePlayerSession(request, sessionId)
   if (!playerSession.ok) return playerSession.response
   if (playerSession.legacyFallback) {
     return NextResponse.json(

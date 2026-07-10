@@ -3,6 +3,9 @@ import Image from 'next/image'
 interface JesterLogoProps {
   className?: string
   size?: 'sm' | 'md' | 'lg'
+  brand?: 'cypher' | '21z'
+  decorative?: boolean
+  preload?: boolean
 }
 
 const sizeDimensions = {
@@ -15,24 +18,36 @@ const sizeDimensions = {
  * Historical component name kept intentionally to avoid large import churn.
  * It now renders both Cypher and 21z marks, with CSS selecting by body[data-brand].
  */
-export default function JesterLogo({ className = '', size = 'md' }: JesterLogoProps) {
+export default function JesterLogo({
+  className = '',
+  size = 'md',
+  brand,
+  decorative = false,
+  preload = false,
+}: JesterLogoProps) {
   const dims = sizeDimensions[size]
   return (
     <span className={`brand-logo inline-flex items-center justify-center ${className}`} data-size={size}>
-      <Image
-        src="/images/jester-logo.png"
-        alt="CypherJester"
-        width={dims.width}
-        height={dims.height}
-        className="brand-logo-cypher"
-      />
-      <Image
-        src="/images/21z-logo.png"
-        alt="21z"
-        width={dims.width}
-        height={dims.height}
-        className="brand-logo-21z"
-      />
+      {brand !== '21z' && (
+        <Image
+          src="/images/jester-logo.png"
+          alt={decorative ? '' : 'CypherJester'}
+          width={dims.width}
+          height={dims.height}
+          className="brand-logo-cypher"
+          preload={preload}
+        />
+      )}
+      {brand !== 'cypher' && (
+        <Image
+          src="/images/21z-logo.png"
+          alt={decorative ? '' : '21z'}
+          width={dims.width}
+          height={dims.height}
+          className="brand-logo-21z"
+          preload={preload}
+        />
+      )}
     </span>
   )
 }

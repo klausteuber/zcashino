@@ -166,7 +166,7 @@ export function useDepositPolling(
             ...prev,
             status: 'confirmed',
             confirmations: REQUIRED_CONFIRMATIONS,
-            amount: confirmedAmount
+            amount: confirmedAmount,
           }
         })
         callbacksRef.current.onConfirmed?.(confirmedAmount)

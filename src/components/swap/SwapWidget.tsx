@@ -380,7 +380,9 @@ export function SwapWidget({ depositAddress, transparentAddress }: SwapWidgetPro
               </p>
             </div>
             <span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${STATUS_TONE[currentStatus]}`}>
-              {STATUS_COPY[currentStatus]}
+              {currentStatus === 'PENDING_DEPOSIT'
+                ? `Waiting for your ${quote.rail.symbol} deposit`
+                : STATUS_COPY[currentStatus]}
             </span>
           </div>
 

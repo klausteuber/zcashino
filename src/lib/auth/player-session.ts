@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from 'crypto'
 import { NextRequest, NextResponse } from 'next/server'
+import prisma from '@/lib/db'
 
 export const PLAYER_SESSION_COOKIE = 'zcashino_player_session'
 const PLAYER_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000 // 30 days
@@ -10,6 +11,7 @@ export interface PlayerSessionPayload {
   sessionId: string
   walletAddress: string
   exp: number
+  authVersion: number
 }
 
 type PlayerSessionAuthResult =
@@ -76,7 +78,15 @@ export function verifyPlayerSessionToken(token: string): PlayerSessionPayload | 
     if (typeof payload.sessionId !== 'string' || payload.sessionId.length === 0) return null
     if (typeof payload.walletAddress !== 'string' || payload.walletAddress.length === 0) return null
     if (typeof payload.exp !== 'number' || payload.exp <= Date.now()) return null
-    return payload
+    const authVersion = typeof (payload as { authVersion?: unknown }).authVersion === 'number'
+      ? (payload as { authVersion: number }).authVersion
+      : 1
+    if (!Number.isInteger(authVersion) || authVersion < 1) return null
+
+    return {
+      ...payload,
+      authVersion,
+    }
   } catch {
     return null
   }
@@ -92,7 +102,8 @@ export function parsePlayerSessionFromRequest(request: NextRequest): PlayerSessi
 export function setPlayerSessionCookie(
   response: NextResponse,
   sessionId: string,
-  walletAddress: string
+  walletAddress: string,
+  authVersion: number = 1
 ): void {
   let token: string
   try {
@@ -100,6 +111,7 @@ export function setPlayerSessionCookie(
       sessionId,
       walletAddress,
       exp: Date.now() + PLAYER_SESSION_TTL_MS,
+      authVersion,
     })
   } catch (error) {
     console.error('[PlayerSession] Unable to set cookie:', error)
@@ -132,14 +144,38 @@ export function clearPlayerSessionCookie(response: NextResponse): void {
  * - compat: valid cookie preferred; if absent, legacy sessionId body/query is allowed
  * - strict: valid cookie required; sessionId must match cookie if provided
  */
-export function requirePlayerSession(
+async function loadCurrentSessionAuthState(sessionId: string) {
+  return prisma.session.findUnique({
+    where: { id: sessionId },
+    select: {
+      id: true,
+      walletAddress: true,
+      playerAuthVersion: true,
+    },
+  })
+}
+
+export async function requirePlayerSession(
   request: NextRequest,
   requestedSessionId?: string
-): PlayerSessionAuthResult {
+): Promise<PlayerSessionAuthResult> {
   const mode = getPlayerSessionAuthMode()
   const cookieSession = parsePlayerSessionFromRequest(request)
 
   if (cookieSession) {
+    const currentSession = await loadCurrentSessionAuthState(cookieSession.sessionId)
+    const isCookieCurrent =
+      !!currentSession &&
+      currentSession.walletAddress === cookieSession.walletAddress &&
+      currentSession.playerAuthVersion === cookieSession.authVersion
+
+    if (!isCookieCurrent) {
+      return {
+        ok: false,
+        response: unauthorizedResponse('Player session expired. Please refresh your session.'),
+      }
+    }
+
     if (requestedSessionId && requestedSessionId !== cookieSession.sessionId) {
       return {
         ok: false,
@@ -167,6 +203,7 @@ export function requirePlayerSession(
         sessionId: requestedSessionId,
         walletAddress: 'legacy',
         exp: Date.now() + 60_000,
+        authVersion: 1,
       },
       legacyFallback: true,
     }

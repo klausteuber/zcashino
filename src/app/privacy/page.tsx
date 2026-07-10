@@ -10,7 +10,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const brand = await getServerBrand()
   const brandUrl = getBrandUrlForPath(brand.id, '/privacy')
   const canonicalUrl = getCanonicalUrlForPath(brand.id, '/privacy')
-  const brandTitle = brand.id === '21z' ? '21z' : 'CypherJester'
+  const brandTitle = brand.config.name
 
   return {
     title: 'Privacy Policy',
@@ -84,7 +84,7 @@ export default async function PrivacyPage() {
 
           <section>
             <h2 className="text-2xl font-display font-semibold text-bone-white mb-3">Cookies & Local Storage</h2>
-            <p>We use browser local storage to remember your session ID so you can resume your session. We do not use third-party tracking cookies. Admin sessions use HTTP-only secure cookies for authentication.</p>
+            <p>We use browser local storage plus a signed first-party HTTP-only session cookie to remember your current player session in the same browser so you can resume play. We do not use third-party tracking cookies. Admin sessions also use secure HTTP-only cookies for authentication.</p>
           </section>
 
           <section>

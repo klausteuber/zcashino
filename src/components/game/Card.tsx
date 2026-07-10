@@ -47,6 +47,22 @@ const cornerSuitSize: Record<string, string> = {
   xl: 'text-lg',
 }
 
+const rankNames: Record<CardType['rank'], string> = {
+  A: 'Ace',
+  '2': 'Two',
+  '3': 'Three',
+  '4': 'Four',
+  '5': 'Five',
+  '6': 'Six',
+  '7': 'Seven',
+  '8': 'Eight',
+  '9': 'Nine',
+  '10': 'Ten',
+  J: 'Jack',
+  Q: 'Queen',
+  K: 'King',
+}
+
 export default function Card({ card, size = 'md', className = '', dealDelay = 0, isNew = false, dealFromShoe = true }: CardProps) {
   const cSuit = centerSuitSize[size]
   const crSuit = cornerSuitSize[size]
@@ -166,8 +182,12 @@ export default function Card({ card, size = 'md', className = '', dealDelay = 0,
       <div
         className={`${sizeClasses[size]} playing-card-back bg-gradient-to-br from-jester-purple-dark via-jester-purple to-jester-purple-dark rounded-lg shadow-lg flex items-center justify-center border-2 border-masque-gold/40 ${transitionClass} ${dealAnimationClass} ${flipAnimationClass} ${className}`}
         style={{ transformStyle: 'preserve-3d' }}
+        role="img"
+        aria-label="Face-down card"
       >
-        {renderCardBack()}
+        <div className="contents" aria-hidden="true">
+          {renderCardBack()}
+        </div>
       </div>
     )
   }
@@ -177,8 +197,12 @@ export default function Card({ card, size = 'md', className = '', dealDelay = 0,
     <div
       className={`${sizeClasses[size]} playing-card card-face-up rounded-lg shadow-lg flex flex-col justify-between p-1.5 overflow-hidden border border-venetian-gold/50 ${transitionClass} ${dealAnimationClass} ${flipAnimationClass} ${className}`}
       style={{ transformStyle: 'preserve-3d' }}
+      role="img"
+      aria-label={`${rankNames[card.rank]} of ${card.suit}`}
     >
-      {renderCardFace()}
+      <div className="contents" aria-hidden="true">
+        {renderCardFace()}
+      </div>
     </div>
   )
 }
@@ -265,10 +289,14 @@ export function Hand({
   const showZ21Overlay = result !== null && resultLabel !== null
 
   return (
-    <div className={`flex flex-col items-center gap-2 relative ${className}`}>
+    <div
+      className={`flex flex-col items-center gap-2 relative ${className}`}
+      role="group"
+      aria-label={label ? `${label} hand` : 'Card hand'}
+    >
       {/* 21z result overlay pill — positioned above the cards, scoped to 21z brand via CSS */}
       {showZ21Overlay && (
-        <div className={`z21-result-overlay ${result}`}>
+        <div className={`z21-result-overlay ${result}`} role="status" aria-live="polite" aria-atomic="true">
           <div className="label">{resultLabel}</div>
           <div className="amount">
             {resultDeltaZec !== null ? formatDelta(resultDeltaZec) : ''}

@@ -126,6 +126,19 @@ export const sessionBodySchema = z.object({
   excludeDuration: z.enum(['24h', '1w', '1m', '6m', '1y', 'permanent']).optional(),
 }).strict()
 
+export const sessionRecoveryBodySchema = z.discriminatedUnion('action', [
+  z.object({
+    action: z.literal('create'),
+  }).strict(),
+  z.object({
+    action: z.literal('regenerate'),
+  }).strict(),
+  z.object({
+    action: z.literal('restore'),
+    recoveryKey: z.string().trim().min(1).max(256),
+  }).strict(),
+])
+
 export const verifyPostSchema = z.union([
   z.object({
     gameId: nonEmptyString,
@@ -173,6 +186,7 @@ export type VideoPokerBody = z.infer<typeof videoPokerBodySchema>
 export type WalletBody = z.infer<typeof walletBodySchema>
 export type SwapBody = z.infer<typeof swapBodySchema>
 export type SessionBody = z.infer<typeof sessionBodySchema>
+export type SessionRecoveryBody = z.infer<typeof sessionRecoveryBodySchema>
 export type VerifyPostBody = z.infer<typeof verifyPostSchema>
 export type FairnessPostBody = z.infer<typeof fairnessPostSchema>
 

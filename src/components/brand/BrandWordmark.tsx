@@ -17,6 +17,10 @@ export function BrandWordmark({
         <span className="font-bold text-accent-primary glitch-text">21</span>
         <sub className="relative -bottom-0.5 ml-0.5 text-[0.55em] font-normal text-accent-secondary/70">z</sub>
       </span>
+      <span className="brand-wordmark-veilstone font-display font-semibold tracking-tight">
+        <span className="text-accent-secondary">Veil</span>
+        <span className="text-accent-primary">stone</span>
+      </span>
     </span>
   )
 }

@@ -1,8 +1,11 @@
-export function BreadcrumbJsonLd({
+import { headers } from 'next/headers'
+
+export async function BreadcrumbJsonLd({
   items,
 }: {
   items: { name: string; url: string }[]
 }) {
+  const nonce = (await headers()).get('x-nonce') ?? undefined
   const schema = {
     '@context': 'https://schema.org',
     '@type': 'BreadcrumbList',
@@ -17,16 +20,18 @@ export function BreadcrumbJsonLd({
   return (
     <script
       type="application/ld+json"
+      nonce={nonce}
       dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
     />
   )
 }
 
-export function FAQJsonLd({
+export async function FAQJsonLd({
   questions,
 }: {
   questions: { question: string; answer: string }[]
 }) {
+  const nonce = (await headers()).get('x-nonce') ?? undefined
   const schema = {
     '@context': 'https://schema.org',
     '@type': 'FAQPage',
@@ -43,6 +48,7 @@ export function FAQJsonLd({
   return (
     <script
       type="application/ld+json"
+      nonce={nonce}
       dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
     />
   )

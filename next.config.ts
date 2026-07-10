@@ -1,9 +1,13 @@
 import type { NextConfig } from 'next'
 import { withSentryConfig } from '@sentry/nextjs'
 
+const isDevelopment = process.env.NODE_ENV !== 'production'
+
 const nextConfig: NextConfig = {
   // Enable React strict mode for better development experience
   reactStrictMode: true,
+  poweredByHeader: false,
+  allowedDevOrigins: isDevelopment ? ['localhost', '127.0.0.1'] : undefined,
 
   // Output standalone build for Docker deployment
   output: 'standalone',
@@ -19,15 +23,34 @@ const nextConfig: NextConfig = {
     '/api/session': ['./node_modules/geoip-lite/data/**/*'],
   },
 
+  // A standalone server must contain only compiled runtime files. These are a
+  // second line of defense; the release validator below is the enforcement
+  // boundary and catches regressions in Next's tracing behavior.
+  outputFileTracingExcludes: {
+    '/*': [
+      './.env*',
+      './**/.env*',
+      './**/*.db',
+      './**/*.db-*',
+      './**/*.sqlite',
+      './**/*.sqlite-*',
+      './**/*.sqlite3',
+      './**/*.sqlite3-*',
+      './**/*.log',
+      './src/**/*',
+      './tests/**/*',
+      './test/**/*',
+      './notes/**/*',
+      './reports/**/*',
+      './scripts/**/*',
+      './prisma/**/*',
+      './*.md',
+    ],
+  },
+
   // Avoid Turbopack choosing the wrong monorepo root when multiple lockfiles exist.
   turbopack: {
     root: process.cwd(),
-  },
-
-  // Skip type-checking during build — already validated in CI/local dev.
-  // Prevents false positives from devDependency-only files (e.g. playwright.config.ts).
-  typescript: {
-    ignoreBuildErrors: true,
   },
 
   // Security headers
@@ -51,10 +74,6 @@ const nextConfig: NextConfig = {
           {
             key: 'Strict-Transport-Security',
             value: 'max-age=31536000; includeSubDomains',
-          },
-          {
-            key: 'Content-Security-Policy',
-            value: "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://*.sentry.io; frame-src 'self' https://changenow.io",
           },
           {
             key: 'Permissions-Policy',

@@ -37,6 +37,10 @@ type SessionDepositWallet = {
   unifiedAddr: string | null
 } | null
 
+type SessionRecoveryCredential = {
+  lastUsedAt: Date | string | null
+} | null
+
 function getPreferredDepositAddress(wallet: SessionDepositWallet) {
   const depositAddress = wallet?.unifiedAddr ?? wallet?.transparentAddr ?? null
   const depositAddressType = wallet?.unifiedAddr ? 'unified' : wallet ? 'transparent' : null
@@ -74,6 +78,7 @@ function createWalletCreationErrorResponse(
 async function createSessionResponse(session: {
   id: string
   walletAddress: string
+  playerAuthVersion?: number
   balance: number
   totalWagered: number
   totalWon: number
@@ -84,9 +89,11 @@ async function createSessionResponse(session: {
   withdrawalAddress: string | null
   authTxHash: string | null
   wallet: SessionDepositWallet
+  recoveryCredential?: SessionRecoveryCredential
 }) {
   const { depositAddress, depositAddressType, transparentAddress } = getPreferredDepositAddress(session.wallet)
   const fairnessMode = getProvablyFairMode()
+  const isDemo = isDemoSession(session.walletAddress)
 
   let fairness: {
     mode: string
@@ -158,12 +165,18 @@ async function createSessionResponse(session: {
     depositAddress,
     depositAddressType,
     transparentAddress,
-    isDemo: isDemoSession(session.walletAddress),
+    isDemo,
     maintenanceMode: isKillSwitchActive(),
+    recovery: isDemo
+      ? null
+      : {
+          enabled: !!session.recoveryCredential,
+          lastUsedAt: session.recoveryCredential?.lastUsedAt ?? null,
+        },
     fairness,
   })
 
-  setPlayerSessionCookie(response, session.id, session.walletAddress)
+  setPlayerSessionCookie(response, session.id, session.walletAddress, session.playerAuthVersion ?? 1)
   return response
 }
 
@@ -176,7 +189,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const cookieSession = parsePlayerSessionFromRequest(request)
-    let trustedSessionId: string | null = cookieSession?.sessionId ?? null
+    let trustedSessionId: string | null = null
 
     // Legacy localStorage session restore hint (accepted only when it matches a valid signed cookie)
     const requestedSessionId = request.nextUrl.searchParams.get('sessionId')
@@ -185,25 +198,30 @@ export async function GET(request: NextRequest) {
       request.nextUrl.searchParams.get('wallet')
 
     let session = null
-    let createdNewSession = false
     let skipWalletLookup = false
+    let createdNewSession = false
 
-    if (trustedSessionId) {
+    if (cookieSession) {
       const currentCookieSession = await prisma.session.findUnique({
-        where: { id: trustedSessionId },
-        include: { wallet: true }
+        where: { id: cookieSession.sessionId },
+        include: { wallet: true, recoveryCredential: true }
       })
 
-      if (currentCookieSession) {
+      if (
+        currentCookieSession &&
+        currentCookieSession.walletAddress === cookieSession.walletAddress &&
+        currentCookieSession.playerAuthVersion === cookieSession.authVersion
+      ) {
         const upgradingDemoToReal =
           !!walletAddress &&
           walletAddress !== currentCookieSession.walletAddress &&
           isDemoSession(currentCookieSession.walletAddress)
 
         if (upgradingDemoToReal) {
-          trustedSessionId = null
+          // A demo cookie should not block the explicit "create real session" flow.
           skipWalletLookup = true
         } else {
+          trustedSessionId = currentCookieSession.id
           session = currentCookieSession
         }
       }
@@ -221,7 +239,7 @@ export async function GET(request: NextRequest) {
     if (!session && walletAddress && !skipWalletLookup) {
       const walletSession = await prisma.session.findUnique({
         where: { walletAddress },
-        include: { wallet: true }
+        include: { wallet: true, recoveryCredential: true }
       })
 
       if (walletSession) {
@@ -260,6 +278,7 @@ export async function GET(request: NextRequest) {
       session = await prisma.session.create({
         data: {
           walletAddress: address,
+          playerAuthVersion: 1,
           balance: isDemo ? 10 : 0, // Demo gets 10 ZEC, real starts at 0
           totalDeposited: isDemo ? 10 : 0,
           isAuthenticated: isDemo, // Demo sessions are auto-authenticated
@@ -268,7 +287,7 @@ export async function GET(request: NextRequest) {
           lossLimit: isDemo ? null : settings.rg.defaultLossLimit,
           sessionLimit: isDemo ? null : settings.rg.defaultSessionLimit,
         },
-        include: { wallet: true }
+        include: { wallet: true, recoveryCredential: true }
       })
       createdNewSession = true
 
@@ -279,7 +298,7 @@ export async function GET(request: NextRequest) {
           // Re-fetch to include the wallet relation
           session = await prisma.session.findUnique({
             where: { id: session.id },
-            include: { wallet: true }
+            include: { wallet: true, recoveryCredential: true }
           }) ?? session
           // If re-fetch failed, manually attach wallet for response
           if (!session.wallet && wallet) {
@@ -298,7 +317,7 @@ export async function GET(request: NextRequest) {
         const wallet = await createDepositWalletForSession(session.id)
         session = await prisma.session.findUnique({
           where: { id: session.id },
-          include: { wallet: true }
+          include: { wallet: true, recoveryCredential: true }
         }) ?? session
 
         if (!session.wallet && wallet) {
@@ -404,7 +423,7 @@ export async function POST(request: NextRequest) {
       excludeDuration,
     } = parsed.data
 
-    const playerSession = requirePlayerSession(request, sessionId)
+    const playerSession = await requirePlayerSession(request, sessionId)
     if (!playerSession.ok) {
       return playerSession.response
     }
@@ -412,7 +431,7 @@ export async function POST(request: NextRequest) {
     // Get current session
     const session = await prisma.session.findUnique({
       where: { id: sessionId },
-      include: { wallet: true }
+      include: { wallet: true, recoveryCredential: true }
     })
 
     if (!session) {

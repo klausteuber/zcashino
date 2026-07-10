@@ -5,6 +5,10 @@ node_modules
 
 # Testing
 coverage
+playwright-report/
+test-results/
+.playwright-cli/
+.e2e-smoke.db*
 
 # Next.js
 .next/

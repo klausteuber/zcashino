@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import Link from 'next/link'
+import { BrandWordmark } from '@/components/brand/BrandWordmark'
 import JesterLogo from '@/components/ui/JesterLogo'
 import { useBrand } from '@/hooks/useBrand'
 import { useZecPrice } from '@/hooks/useZecPrice'
@@ -18,6 +19,7 @@ interface AdminOverview {
   platform: {
     totalSessions: number
     authenticatedSessions: number
+    wageringPlayers30d: number
     activeGames: number
     liabilities: number
     totalDeposited: number
@@ -121,6 +123,22 @@ interface AdminOverview {
     sweep?: { isRunning: boolean; lastSweep: string | null; lastStatusCheck: string | null; pendingSweeps: number }
     commitmentPoolManager?: { isRunning: boolean; lastCheck: string | null; lastCleanup: string | null }
     sessionSeedPoolManager?: { isRunning: boolean; lastCheck: string | null }
+  }
+  veilstone?: {
+    engineVersion: string
+    waitingTables: number
+    activeTables: number
+    activeMatches: number
+    completedMatches24h: number
+    stuckMatchCount: number
+    ledgerInvariantStatus: string
+    recentEvent: {
+      eventId: string
+      matchId: string
+      type: string
+      stateVersion: string
+      createdAt: string
+    } | null
   }
   recentWithdrawals: Array<{
     id: string
@@ -527,9 +545,9 @@ export default function AdminPage() {
       <main className="min-h-screen felt-texture flex items-center justify-center px-4">
         <div className="w-full max-w-xl bg-midnight-black/70 border border-masque-gold/25 rounded-xl p-6">
           <div className="flex items-center gap-3 mb-4">
-            <JesterLogo size="sm" className="text-jester-purple-light" />
+            <BrandWordmark sizeClassName="text-lg" />
             <h1 className="text-2xl font-display font-bold text-bone-white">
-              Admin Disabled On 21z
+              Admin Disabled On {brand.config.name}
             </h1>
           </div>
           <p className="text-venetian-gold/70 mb-4">
@@ -825,6 +843,18 @@ export default function AdminPage() {
                 value={String(overview.platform.activeGames)}
                 detail={`Total wagers ${formatZecWithUsd(overview.platform.totalWagered)}`}
               />
+              {overview.veilstone && (
+                <MetricCard
+                  label="Veilstone Matches"
+                  value={String(overview.veilstone.activeMatches)}
+                  detail={`${overview.veilstone.waitingTables} waiting tables · ${overview.veilstone.completedMatches24h} completed in 24h`}
+                />
+              )}
+              <MetricCard
+                label="Wagering Players (30d)"
+                value={String(overview.platform.wageringPlayers30d)}
+                detail="Distinct real sessions with any blackjack or video poker wager in the last 30 days"
+              />
               <MetricCard
                 label="Failed Logins (24h)"
                 value={String(overview.security.failedLoginAttempts24h)}
@@ -943,6 +973,24 @@ export default function AdminPage() {
                     <div className="text-blood-ruby text-xs mt-2">
                       Node error: {overview.nodeStatus.error}
                     </div>
+                  )}
+                  {overview.veilstone && (
+                    <>
+                      <StatusRow
+                        label="Veilstone Engine"
+                        value={overview.veilstone.engineVersion}
+                        positive={overview.veilstone.ledgerInvariantStatus === 'ok'}
+                      />
+                      <StatusRow
+                        label="Veilstone Ledger"
+                        value={
+                          overview.veilstone.ledgerInvariantStatus === 'ok'
+                            ? 'Invariant OK'
+                            : `${overview.veilstone.ledgerInvariantStatus} (${overview.veilstone.stuckMatchCount} stuck)`
+                        }
+                        positive={overview.veilstone.ledgerInvariantStatus === 'ok' && overview.veilstone.stuckMatchCount === 0}
+                      />
+                    </>
                   )}
                 </div>
               </div>

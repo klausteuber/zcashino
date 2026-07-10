@@ -11,7 +11,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const brand = await getServerBrand()
   const brandUrl = getBrandUrlForPath(brand.id, '/responsible-gambling')
   const canonicalUrl = getCanonicalUrlForPath(brand.id, '/responsible-gambling')
-  const brandTitle = brand.id === '21z' ? '21z' : 'CypherJester'
+  const brandTitle = brand.config.name
 
   return {
     title: 'Responsible Gambling',

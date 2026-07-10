@@ -35,6 +35,20 @@ describe('Card', () => {
     expect(root).toHaveClass('transition-all')
   })
 
+  it('describes a face-down card without exposing its rank or suit', () => {
+    render(<Card card={faceDownCard} />)
+
+    expect(screen.getByRole('img', { name: 'Face-down card' })).toBeInTheDocument()
+    expect(screen.queryByRole('img', { name: 'Ace of spades' })).not.toBeInTheDocument()
+    expect(screen.queryByText('A')).not.toBeInTheDocument()
+  })
+
+  it('gives a face-up card one concise accessible name', () => {
+    render(<Card card={{ ...faceDownCard, faceUp: true }} />)
+
+    expect(screen.getByRole('img', { name: 'Ace of spades' })).toBeInTheDocument()
+  })
+
   it('reveals card face halfway through flip animation', () => {
     vi.useFakeTimers()
 

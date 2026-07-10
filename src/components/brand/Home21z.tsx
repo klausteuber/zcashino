@@ -1,71 +1,61 @@
-'use client'
-
-import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import VerifiedHandsFeed from '@/components/feed/VerifiedHandsFeed'
 
 const PROCESS_STEPS = [
   {
     n: '01',
-    t: 'Pre-commit',
-    d: 'The house publishes a hash of the next seed to the Zcash chain before you bet. The outcome is locked in before the deal.',
+    t: 'Commit the session',
+    d: 'Before betting begins, the house anchors a hash of the seed session to Zcash. One confirmed commitment can cover multiple hands.',
   },
   {
     n: '02',
-    t: 'Play',
-    d: 'Hit, stand, double, split. Every action is signed against the committed seed and your client nonce.',
+    t: 'Derive each hand',
+    d: 'The committed server seed, your client seed, and an incrementing hand nonce deterministically produce a fresh deck.',
   },
   {
     n: '03',
     t: 'Verify',
-    d: 'After the round, reveal the seed. Re-derive every card yourself. The math either checks or it doesn’t.',
+    d: 'When the seed session rotates, the server seed is revealed. Re-derive any hand and compare every card yourself.',
   },
 ]
 
 const TABLE_FACTS = [
   { label: 'Network', value: 'Zcash' },
   { label: 'Access', value: 'No accounts' },
-  { label: 'Proof', value: 'On-chain' },
+  { label: 'Proof', value: 'Session anchored' },
   { label: 'Audit Trail', value: 'Public feed' },
 ]
 
 function TerminalBlock() {
-  const [time, setTime] = useState<string>('--:--:--')
-  useEffect(() => {
-    const tick = () => setTime(new Date().toISOString().slice(11, 19))
-    tick()
-    const t = setInterval(tick, 1000)
-    return () => clearInterval(t)
-  }, [])
   return (
-    <div className="z21-panel mt-14 p-5 max-w-[540px]">
-      <div className="flex justify-between items-center mb-2.5">
+    <figure className="z21-panel mt-14 p-5 max-w-[540px]">
+      <figcaption className="flex justify-between items-center mb-2.5">
         <span className="z21-eyebrow text-[9px]">
-          <span className="dot" />
+          <span className="dot" aria-hidden="true" />
           seed.commit
         </span>
-        <span className="font-mono text-[10px] text-[var(--text-muted)]">
-          {time} UTC
+        <span className="font-mono text-[10px] text-[var(--text-muted)] uppercase tracking-wider">
+          Example only · not live
         </span>
-      </div>
+      </figcaption>
       <div className="font-mono text-[11px] leading-[1.7] text-[var(--text-secondary)]">
         <div>
-          <span className="text-[var(--accent-primary)]">$</span> commit --hand 412 887
+          <span className="text-[var(--accent-primary)]">$</span> commit --seed-session 042
         </div>
         <div className="text-[var(--text-muted)]">  hash sha256:7a3f...e91d</div>
-        <div className="text-[var(--text-muted)]">  block 2,441,082 · confirmed</div>
+        <div className="text-[var(--text-muted)]">  example block · confirmed</div>
         <div>
-          <span className="text-[var(--accent-primary)]">$</span> reveal --post-hand
+          <span className="text-[var(--accent-primary)]">$</span> derive --hand-nonce 017
         </div>
-        <div className="text-[var(--color-success)]">  ✓ verified</div>
+        <div className="text-[var(--color-success)]">  ✓ replay matched</div>
       </div>
-    </div>
+    </figure>
   )
 }
 
 function StackedCardsVisual() {
   return (
-    <div className="hidden md:flex flex-1 justify-center md:justify-end">
+    <div className="hidden md:flex flex-1 justify-center md:justify-end" aria-hidden="true">
       <div className="relative w-full max-w-[460px]">
         <div className="relative h-[420px]">
           {/* Ace of spades, tilted left */}
@@ -157,13 +147,14 @@ export default function Home21z() {
     <div className="z21-page-in" style={{ padding: '48px 24px' }}>
       <div className="max-w-[1280px] mx-auto">
         {/* Hero */}
-        <div className="grid grid-cols-1 md:grid-cols-[1.2fr_1fr] gap-8 md:gap-16 items-center min-h-[70vh]">
+        <section className="grid grid-cols-1 md:grid-cols-[1.2fr_1fr] gap-8 md:gap-16 items-center min-h-[70vh]" aria-labelledby="home-hero-title">
           <div>
             <div className="z21-eyebrow">
-              <span className="dot" />
+              <span className="dot" aria-hidden="true" />
               Provably fair · Zcash mainnet · No accounts
             </div>
             <h1
+              id="home-hero-title"
               className="font-display"
               style={{
                 fontSize: 'clamp(48px, 7vw, 96px)',
@@ -189,8 +180,9 @@ export default function Home21z() {
                 marginBottom: 36,
               }}
             >
-              A quiet table for serious play. Every hand commits on-chain before you bet.
-              Every outcome is verifiable. Your address never leaves your wallet.
+              A quiet table for serious play. Before play, the house anchors a seed-session
+              commitment to Zcash. Each hand is derived from that seed, your client seed,
+              and a unique nonce. No username or email required.
             </p>
             <div className="flex flex-wrap gap-3.5">
               <Link href="/blackjack" className="z21-btn z21-btn-primary">
@@ -203,63 +195,66 @@ export default function Home21z() {
             <TerminalBlock />
           </div>
           <StackedCardsVisual />
-        </div>
+        </section>
 
         {/* Table facts */}
-        <div style={{ marginTop: 80 }}>
-          <div className="z21-eyebrow" style={{ marginBottom: 16 }}>
-            <span className="dot" />
+        <section style={{ marginTop: 80 }} aria-labelledby="table-facts-title">
+          <h2 id="table-facts-title" className="z21-eyebrow" style={{ marginBottom: 16 }}>
+            <span className="dot" aria-hidden="true" />
             Table facts
-          </div>
-          <div className="z21-grid-stats">
+          </h2>
+          <dl className="z21-grid-stats">
             {TABLE_FACTS.map(s => (
               <div key={s.label}>
-                <div className="label">{s.label}</div>
-                <div className="value">{s.value}</div>
+                <dt className="label">{s.label}</dt>
+                <dd className="value">{s.value}</dd>
               </div>
             ))}
-          </div>
-        </div>
+          </dl>
+        </section>
 
         {/* Three-step process */}
-        <div
-          style={{
-            marginTop: 64,
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-            gap: 24,
-          }}
-        >
-          {PROCESS_STEPS.map(c => (
-            <div key={c.n} className="z21-panel z21-brackets" style={{ padding: 28 }}>
-              <div
-                className="font-mono"
-                style={{
-                  fontSize: 11,
-                  color: 'var(--accent-primary)',
-                  letterSpacing: '0.18em',
-                  marginBottom: 12,
-                }}
-              >
-                {c.n}
-              </div>
-              <div className="font-display" style={{ fontSize: 20, fontWeight: 700, marginBottom: 8, color: 'var(--text-primary)' }}>
-                {c.t}
-              </div>
-              <div style={{ color: 'var(--text-secondary)', fontSize: 14, lineHeight: 1.55 }}>
-                {c.d}
-              </div>
-            </div>
-          ))}
-        </div>
+        <section aria-labelledby="verification-process-title">
+          <h2 id="verification-process-title" className="sr-only">How hand verification works</h2>
+          <ol
+            style={{
+              marginTop: 64,
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+              gap: 24,
+            }}
+          >
+            {PROCESS_STEPS.map(c => (
+              <li key={c.n} className="z21-panel z21-brackets" style={{ padding: 28 }}>
+                <div
+                  className="font-mono"
+                  style={{
+                    fontSize: 11,
+                    color: 'var(--accent-primary)',
+                    letterSpacing: '0.18em',
+                    marginBottom: 12,
+                  }}
+                >
+                  {c.n}
+                </div>
+                <h3 className="font-display" style={{ fontSize: 20, fontWeight: 700, marginBottom: 8, color: 'var(--text-primary)' }}>
+                  {c.t}
+                </h3>
+                <p style={{ color: 'var(--text-secondary)', fontSize: 14, lineHeight: 1.55 }}>
+                  {c.d}
+                </p>
+              </li>
+            ))}
+          </ol>
+        </section>
 
         {/* Verified hands feed (compact) */}
-        <div className="z21-panel" style={{ marginTop: 64, padding: 28 }}>
+        <section className="z21-panel" style={{ marginTop: 64, padding: 28 }} aria-labelledby="recent-hands-title">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 16 }}>
-            <div className="z21-eyebrow">
-              <span className="dot" />
+            <h2 id="recent-hands-title" className="z21-eyebrow">
+              <span className="dot" aria-hidden="true" />
               Recent verified hands
-            </div>
+            </h2>
             <Link
               href="/feed"
               className="font-mono"
@@ -275,10 +270,10 @@ export default function Home21z() {
             </Link>
           </div>
           <VerifiedHandsFeed limit={5} compact />
-        </div>
+        </section>
 
         {/* Footer */}
-        <div
+        <footer
           style={{
             marginTop: 96,
             paddingTop: 32,
@@ -292,7 +287,7 @@ export default function Home21z() {
           <div className="font-mono" style={{ fontSize: 11, color: 'var(--text-muted)' }}>
             21z.cash · play 18+ · gambling can be addictive
           </div>
-          <div style={{ display: 'flex', gap: 24 }}>
+          <nav aria-label="Footer" style={{ display: 'flex', gap: 24 }}>
             {[
               { label: 'Provably Fair', href: '/provably-fair' },
               { label: 'Reserves', href: '/reserves' },
@@ -312,8 +307,8 @@ export default function Home21z() {
                 {l.label}
               </Link>
             ))}
-          </div>
-        </div>
+          </nav>
+        </footer>
       </div>
     </div>
   )

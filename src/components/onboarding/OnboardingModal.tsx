@@ -6,7 +6,17 @@ import { useDepositPolling, DepositStatus } from '@/hooks/useDepositPolling'
 import { useBrand } from '@/hooks/useBrand'
 import { SwapWidget } from '@/components/swap/SwapWidget'
 
-type OnboardingStep = 'welcome' | 'setup' | 'deposit' | 'confirming' | 'ready' | 'error'
+type OnboardingStep = 'welcome' | 'setup' | 'deposit' | 'restore' | 'confirming' | 'ready' | 'error'
+
+interface RecoveryState {
+  enabled: boolean
+  lastUsedAt: string | null
+}
+
+interface RecoveryResult {
+  recoveryKey: string
+  recovery: RecoveryState
+}
 
 interface OnboardingModalProps {
   isOpen: boolean
@@ -18,8 +28,13 @@ interface OnboardingModalProps {
   transparentAddress?: string | null
   onCreateRealSession: () => Promise<{ sessionId: string; depositAddress: string | null; transparentAddress?: string | null; walletError?: string; walletErrorMessage?: string } | null>
   onSetWithdrawalAddress?: (address: string) => Promise<boolean>
+  recovery?: RecoveryState | null
+  onCreateRecoveryKey?: () => Promise<RecoveryResult | null>
+  onRegenerateRecoveryKey?: () => Promise<RecoveryResult | null>
+  onRestoreSession?: (recoveryKey: string) => Promise<{ success: boolean; error?: string }>
+  restoreNotice?: string | null
   /** Skip welcome screen and go directly to deposit flow */
-  initialStep?: 'welcome' | 'deposit'
+  initialStep?: 'welcome' | 'deposit' | 'restore'
 }
 
 export function OnboardingModal({
@@ -32,6 +47,11 @@ export function OnboardingModal({
   transparentAddress = null,
   onCreateRealSession,
   onSetWithdrawalAddress,
+  recovery = null,
+  onCreateRecoveryKey,
+  onRegenerateRecoveryKey,
+  onRestoreSession,
+  restoreNotice = null,
   initialStep = 'welcome'
 }: OnboardingModalProps) {
   const brand = useBrand()
@@ -42,7 +62,14 @@ export function OnboardingModal({
   const [localDepositAddress, setLocalDepositAddress] = useState<string | null>(depositAddress)
   const [localTransparentAddress, setLocalTransparentAddress] = useState<string | null>(transparentAddress)
   const [localSessionId, setLocalSessionId] = useState<string | null>(sessionId)
+  const [localRecovery, setLocalRecovery] = useState<RecoveryState | null>(recovery)
+  const [recoveryKeyValue, setRecoveryKeyValue] = useState<string | null>(null)
+  const [recoveryActionError, setRecoveryActionError] = useState<string | null>(null)
+  const [restoreKeyInput, setRestoreKeyInput] = useState('')
+  const [restoreError, setRestoreError] = useState<string | null>(null)
+  const [isRecoveryBusy, setIsRecoveryBusy] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [recoverySaved, setRecoverySaved] = useState(false)
 
   // Deposit polling
   const depositStatus = useDepositPolling(
@@ -68,12 +95,24 @@ export function OnboardingModal({
     setLocalDepositAddress(depositAddress)
     setLocalTransparentAddress(transparentAddress)
     setLocalSessionId(sessionId)
-  }, [depositAddress, transparentAddress, sessionId])
+    setLocalRecovery(recovery)
+  }, [depositAddress, transparentAddress, sessionId, recovery])
+
+  useEffect(() => {
+    if (!sessionId) {
+      setRecoverySaved(false)
+      return
+    }
+
+    setRecoverySaved(localStorage.getItem(getRecoverySavedStorageKey(sessionId)) === 'true')
+  }, [sessionId])
 
   // Handle modal open/close and initialStep
   useEffect(() => {
     if (isOpen) {
-      if (depositAddress && sessionId) {
+      if (initialStep === 'restore') {
+        setStep('restore')
+      } else if (depositAddress && sessionId) {
         // Already have a real session with deposit address — go straight to deposit
         setLocalDepositAddress(depositAddress)
         setLocalTransparentAddress(transparentAddress)
@@ -89,6 +128,9 @@ export function OnboardingModal({
       // Reset to welcome when modal closes so next open starts fresh
       setStep('welcome')
       setErrorMessage(null)
+      setRecoveryActionError(null)
+      setRestoreError(null)
+      setRestoreKeyInput('')
     }
   }, [isOpen, depositAddress, sessionId, initialStep]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -97,6 +139,11 @@ export function OnboardingModal({
     onDemoSelect()
     onClose()
   }, [onDemoSelect, onClose])
+
+  const handleRestoreSelect = useCallback(() => {
+    setRestoreError(null)
+    setStep('restore')
+  }, [])
 
   // Handle real ZEC selection — skip setup, go straight to deposit
   const handleRealSelect = useCallback(async () => {
@@ -188,6 +235,103 @@ export function OnboardingModal({
     }
   }, [withdrawalAddress, onSetWithdrawalAddress])
 
+  const handleCreateRecoveryKeyClick = useCallback(async () => {
+    if (!onCreateRecoveryKey) return
+
+    setIsRecoveryBusy(true)
+    setRecoveryActionError(null)
+
+    try {
+      const result = await onCreateRecoveryKey()
+      if (!result) {
+        setRecoveryActionError('Failed to create recovery key.')
+        return
+      }
+
+      setRecoveryKeyValue(result.recoveryKey)
+      setLocalRecovery(result.recovery)
+      setRecoverySaved(false)
+      if (localSessionId) {
+        localStorage.removeItem(getRecoverySavedStorageKey(localSessionId))
+      }
+    } finally {
+      setIsRecoveryBusy(false)
+    }
+  }, [localSessionId, onCreateRecoveryKey])
+
+  const handleRegenerateRecoveryKeyClick = useCallback(async () => {
+    if (!onRegenerateRecoveryKey) return
+
+    setIsRecoveryBusy(true)
+    setRecoveryActionError(null)
+
+    try {
+      const result = await onRegenerateRecoveryKey()
+      if (!result) {
+        setRecoveryActionError('Failed to regenerate recovery key.')
+        return
+      }
+
+      setRecoveryKeyValue(result.recoveryKey)
+      setLocalRecovery(result.recovery)
+      setRecoverySaved(false)
+      if (localSessionId) {
+        localStorage.removeItem(getRecoverySavedStorageKey(localSessionId))
+      }
+    } finally {
+      setIsRecoveryBusy(false)
+    }
+  }, [localSessionId, onRegenerateRecoveryKey])
+
+  const handleMarkRecoverySaved = useCallback(() => {
+    if (!localSessionId) return
+    localStorage.setItem(getRecoverySavedStorageKey(localSessionId), 'true')
+    setRecoverySaved(true)
+  }, [localSessionId])
+
+  const handleDownloadRecoveryKey = useCallback(() => {
+    if (!recoveryKeyValue) return
+
+    const contents = [
+      `${brand.config.name} Session Recovery Key`,
+      '',
+      `Session ID: ${localSessionId ?? 'unknown'}`,
+      `Recovery Key: ${recoveryKeyValue}`,
+      '',
+      'Keep this key private. Anyone with this key can restore your session.',
+    ].join('\n')
+
+    const blob = new Blob([contents], { type: 'text/plain;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `${brand.config.shortName.toLowerCase()}-session-recovery.txt`
+    link.click()
+    URL.revokeObjectURL(url)
+  }, [brand.config.name, brand.config.shortName, localSessionId, recoveryKeyValue])
+
+  const handleRestoreSubmit = useCallback(async () => {
+    if (!onRestoreSession) return
+
+    const trimmedKey = restoreKeyInput.trim()
+    if (!trimmedKey) {
+      setRestoreError('Enter your recovery key to restore this session.')
+      return
+    }
+
+    setIsLoading(true)
+    setRestoreError(null)
+
+    try {
+      const result = await onRestoreSession(trimmedKey)
+      if (!result.success) {
+        setRestoreError(result.error || 'Recovery key invalid or expired.')
+      }
+    } finally {
+      setIsLoading(false)
+    }
+  }, [onRestoreSession, restoreKeyInput])
+
   if (!isOpen) return null
 
   return (
@@ -198,9 +342,11 @@ export function OnboardingModal({
           <WelcomeScreen
             onDemoSelect={handleDemoSelect}
             onRealSelect={handleRealSelect}
+            onRestoreSelect={handleRestoreSelect}
             isLoading={isLoading}
             brandName={brand.config.name}
             tagline={brand.config.tagline}
+            restoreNotice={restoreNotice}
           />
         )}
 
@@ -224,6 +370,27 @@ export function OnboardingModal({
             withdrawalAddress={withdrawalAddress || null}
             onBack={() => setStep('welcome')}
             depositStatus={depositStatus}
+            recovery={localRecovery}
+            recoveryKeyValue={recoveryKeyValue}
+            recoverySaved={recoverySaved}
+            recoveryActionError={recoveryActionError}
+            isRecoveryBusy={isRecoveryBusy}
+            onCreateRecoveryKey={handleCreateRecoveryKeyClick}
+            onRegenerateRecoveryKey={handleRegenerateRecoveryKeyClick}
+            onDownloadRecoveryKey={handleDownloadRecoveryKey}
+            onMarkRecoverySaved={handleMarkRecoverySaved}
+          />
+        )}
+
+        {step === 'restore' && (
+          <RestoreScreen
+            recoveryKey={restoreKeyInput}
+            onRecoveryKeyChange={setRestoreKeyInput}
+            onSubmit={handleRestoreSubmit}
+            onBack={() => setStep('welcome')}
+            error={restoreError}
+            isLoading={isLoading}
+            restoreNotice={restoreNotice}
           />
         )}
 
@@ -274,20 +441,30 @@ export function OnboardingModal({
 function WelcomeScreen({
   onDemoSelect,
   onRealSelect,
+  onRestoreSelect,
   isLoading,
   brandName,
   tagline,
+  restoreNotice,
 }: {
   onDemoSelect: () => void
   onRealSelect: () => void
+  onRestoreSelect: () => void
   isLoading: boolean
   brandName: string
   tagline: string
+  restoreNotice: string | null
 }) {
   return (
     <div className="p-8 text-center">
       <h1 className="text-3xl font-display font-bold text-bone-white mb-2">Welcome to {brandName}</h1>
       <p className="text-venetian-gold/50 mb-8">{tagline}</p>
+
+      {restoreNotice && (
+        <div className="mb-6 rounded-lg border border-masque-gold/30 bg-masque-gold/10 px-4 py-3 text-left">
+          <p className="text-sm text-venetian-gold">{restoreNotice}</p>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-4 mb-6">
         {/* Demo Mode Card */}
@@ -322,12 +499,18 @@ function WelcomeScreen({
         </button>
       </div>
 
-      <p className="text-xs text-venetian-gold/50">
-        Already have a session?{' '}
-        <button className="text-masque-gold hover:text-venetian-gold underline">
-          Restore
+      <div className="space-y-3">
+        <p className="text-xs text-venetian-gold/50 leading-relaxed">
+          Closed your tab? Reopen {brandName} in the same browser and device and your session should
+          restore automatically for up to 30 days.
+        </p>
+        <button
+          onClick={onRestoreSelect}
+          className="text-sm text-masque-gold hover:text-venetian-gold underline"
+        >
+          Restore with recovery key
         </button>
-      </p>
+      </div>
     </div>
   )
 }
@@ -410,13 +593,31 @@ function DepositScreen({
   transparentAddress,
   withdrawalAddress,
   onBack,
-  depositStatus
+  depositStatus,
+  recovery,
+  recoveryKeyValue,
+  recoverySaved,
+  recoveryActionError,
+  isRecoveryBusy,
+  onCreateRecoveryKey,
+  onRegenerateRecoveryKey,
+  onDownloadRecoveryKey,
+  onMarkRecoverySaved,
 }: {
   depositAddress: string
   transparentAddress: string | null
   withdrawalAddress: string | null
   onBack: () => void
   depositStatus: DepositStatus
+  recovery: RecoveryState | null
+  recoveryKeyValue: string | null
+  recoverySaved: boolean
+  recoveryActionError: string | null
+  isRecoveryBusy: boolean
+  onCreateRecoveryKey: () => void
+  onRegenerateRecoveryKey: () => void
+  onDownloadRecoveryKey: () => void
+  onMarkRecoverySaved: () => void
 }) {
   const [activeTab, setActiveTab] = useState<DepositTab>('have-zec')
   const truncatedAddress = withdrawalAddress && withdrawalAddress.length > 20
@@ -507,6 +708,86 @@ function DepositScreen({
               <span>Network: {networkLabel}</span>
             </div>
           </div>
+
+          <div className="rounded-lg border border-masque-gold/20 bg-midnight-black/60 p-4 cyber-panel">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-sm font-semibold text-bone-white">Protect This Session</h3>
+                <p className="mt-1 text-xs text-venetian-gold/60">
+                  Save a recovery key if you want to restore this real-money session on another browser
+                  or device later.
+                </p>
+              </div>
+              <span className={`rounded-full px-2 py-1 text-xs font-medium ${
+                recovery?.enabled
+                  ? 'bg-jester-purple/15 text-jester-purple-light'
+                  : 'bg-masque-gold/15 text-masque-gold'
+              }`}>
+                {recovery?.enabled ? 'Protected' : 'Optional'}
+              </span>
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              {!recovery?.enabled ? (
+                <button
+                  onClick={onCreateRecoveryKey}
+                  disabled={isRecoveryBusy}
+                  className="rounded-lg bg-masque-gold px-3 py-2 text-sm font-semibold text-midnight-black disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {isRecoveryBusy ? 'Creating...' : 'Create Recovery Key'}
+                </button>
+              ) : (
+                <button
+                  onClick={onRegenerateRecoveryKey}
+                  disabled={isRecoveryBusy}
+                  className="rounded-lg border border-masque-gold/30 px-3 py-2 text-sm font-semibold text-venetian-gold hover:bg-masque-gold/10 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {isRecoveryBusy ? 'Regenerating...' : 'Regenerate Key'}
+                </button>
+              )}
+            </div>
+
+            {recoveryActionError && (
+              <p className="mt-3 text-sm text-blood-ruby">{recoveryActionError}</p>
+            )}
+
+            {recoveryKeyValue && (
+              <div className="mt-4 rounded-lg border border-jester-purple/20 bg-midnight-black/70 p-3">
+                <div className="mb-2 text-xs text-venetian-gold/60">Save this key now. It will not be shown again.</div>
+                <div className="flex items-center gap-2 rounded-lg border border-masque-gold/15 bg-midnight-black/80 p-3">
+                  <code className="flex-1 break-all text-xs text-bone-white">{recoveryKeyValue}</code>
+                  <CopyButton text={recoveryKeyValue} />
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    onClick={onDownloadRecoveryKey}
+                    className="rounded-lg border border-masque-gold/30 px-3 py-2 text-sm font-medium text-venetian-gold hover:bg-masque-gold/10"
+                  >
+                    Download Key
+                  </button>
+                  <button
+                    onClick={onMarkRecoverySaved}
+                    className="rounded-lg bg-jester-purple px-3 py-2 text-sm font-medium text-bone-white"
+                  >
+                    I Saved It
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {recovery?.enabled && !recoveryKeyValue && (
+              <p className="mt-3 text-xs text-venetian-gold/60">
+                A recovery key already exists for this session. The original plaintext key cannot be shown
+                again. Regenerate it if you need a new one.
+              </p>
+            )}
+
+            {recoverySaved && (
+              <p className="mt-3 text-xs text-jester-purple-light">
+                Recovery key saved on this browser.
+              </p>
+            )}
+          </div>
         </>
       )}
 
@@ -531,6 +812,75 @@ function DepositScreen({
       </div>
     </div>
   )
+}
+
+function RestoreScreen({
+  recoveryKey,
+  onRecoveryKeyChange,
+  onSubmit,
+  onBack,
+  error,
+  isLoading,
+  restoreNotice,
+}: {
+  recoveryKey: string
+  onRecoveryKeyChange: (value: string) => void
+  onSubmit: () => void
+  onBack: () => void
+  error: string | null
+  isLoading: boolean
+  restoreNotice: string | null
+}) {
+  return (
+    <div className="p-6">
+      <button
+        onClick={onBack}
+        className="mb-4 flex items-center gap-2 text-venetian-gold/50 transition-colors hover:text-bone-white"
+      >
+        <span>←</span>
+        <span>Back</span>
+      </button>
+
+      <h2 className="text-xl font-display font-bold text-bone-white mb-2">Restore Session</h2>
+      <p className="text-sm text-venetian-gold/50 mb-4">
+        Paste the recovery key you saved for this real-money session.
+      </p>
+
+      {restoreNotice && (
+        <div className="mb-4 rounded-lg border border-masque-gold/30 bg-masque-gold/10 px-4 py-3 text-sm text-venetian-gold">
+          {restoreNotice}
+        </div>
+      )}
+
+      <textarea
+        value={recoveryKey}
+        onChange={(event) => onRecoveryKeyChange(event.target.value)}
+        rows={4}
+        placeholder="zrec_..."
+        className="w-full rounded-lg border border-masque-gold/20 bg-midnight-black/60 px-4 py-3 font-mono text-sm text-bone-white placeholder:text-venetian-gold/30 focus:outline-none focus:ring-2 focus:ring-masque-gold/50"
+      />
+
+      <p className="mt-2 text-xs text-venetian-gold/50">
+        Anyone with this key can restore your session, so keep it private.
+      </p>
+
+      {error && (
+        <p className="mt-3 text-sm text-blood-ruby">{error}</p>
+      )}
+
+      <button
+        onClick={onSubmit}
+        disabled={isLoading}
+        className="mt-4 w-full rounded-lg btn-gold-shimmer py-3 font-semibold text-midnight-black disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {isLoading ? 'Restoring...' : 'Restore Session'}
+      </button>
+    </div>
+  )
+}
+
+function getRecoverySavedStorageKey(sessionId: string): string {
+  return `zcashino_recovery_saved:${sessionId}`
 }
 
 function getAddressNetworkLabel(address: string): 'mainnet' | 'testnet' | 'unknown' {

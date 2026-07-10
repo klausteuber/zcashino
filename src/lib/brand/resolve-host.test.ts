@@ -20,7 +20,7 @@ describe('brand host resolution', () => {
     expect(normalizeHost(undefined)).toBeNull()
   })
 
-  it('prefers x-forwarded-host when reading headers', () => {
+  it('ignores an untrusted x-forwarded-host when reading headers', () => {
     const headers = {
       get(name: string) {
         if (name === 'x-forwarded-host') return 'www.21z.cash:443'
@@ -29,7 +29,23 @@ describe('brand host resolution', () => {
       },
     }
 
-    expect(readHostFromHeaders(headers)).toBe('www.21z.cash')
+    expect(readHostFromHeaders(headers)).toBe('cypherjester.com')
+  })
+
+  it('uses x-forwarded-host only when a trusted proxy is explicitly configured', () => {
+    const headers = {
+      get(name: string) {
+        if (name === 'x-forwarded-host') return 'www.21z.cash:443'
+        if (name === 'host') return 'cypherjester.com'
+        return null
+      },
+    }
+
+    expect(
+      readHostFromHeaders(headers, {
+        TRUST_PROXY_HOST_HEADER: 'true',
+      } as NodeJS.ProcessEnv)
+    ).toBe('www.21z.cash')
   })
 
   it('uses FORCE_BRAND over host mapping', () => {
@@ -72,7 +88,10 @@ describe('brand host resolution', () => {
       },
     }
 
-    const resolved = resolveBrandFromHeaders(headers, multiBrandEnv)
+    const resolved = resolveBrandFromHeaders(headers, {
+      ...multiBrandEnv,
+      TRUST_PROXY_HOST_HEADER: 'true',
+    })
     expect(resolved.id).toBe('21z')
     expect(resolved.config.name).toBe('21z')
   })

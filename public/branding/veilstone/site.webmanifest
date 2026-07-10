@@ -1,0 +1,16 @@
+{
+  "name": "Veilstone",
+  "short_name": "Veilstone",
+  "description": "A Play-ZEC economic strategy game of public trust and shielded capital",
+  "start_url": "/veilstone",
+  "display": "standalone",
+  "background_color": "#10151A",
+  "theme_color": "#D8B46A",
+  "icons": [
+    {
+      "src": "/branding/veilstone/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

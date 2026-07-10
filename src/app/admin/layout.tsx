@@ -4,7 +4,7 @@ import AdminLayoutClient from '@/components/admin/AdminLayoutClient'
 
 export async function generateMetadata(): Promise<Metadata> {
   const brand = await getServerBrand()
-  const title = brand.id === '21z' ? 'Admin Unavailable' : 'Admin'
+  const title = brand.config.adminEnabled ? 'Admin' : 'Admin Unavailable'
 
   return {
     title,

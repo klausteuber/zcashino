@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   isKillSwitchActiveMock: vi.fn(),
   getProvablyFairModeMock: vi.fn(),
   getSessionSeedPoolStatusMock: vi.fn(),
+  getVeilstoneOperationalSummaryMock: vi.fn(),
 }))
 
 const {
@@ -26,6 +27,7 @@ const {
   isKillSwitchActiveMock,
   getProvablyFairModeMock,
   getSessionSeedPoolStatusMock,
+  getVeilstoneOperationalSummaryMock,
 } = mocks
 
 vi.mock('@/lib/db', () => ({
@@ -54,6 +56,14 @@ vi.mock('@/lib/services/session-seed-pool-manager', () => ({
   getSessionSeedPoolStatus: mocks.getSessionSeedPoolStatusMock,
 }))
 
+vi.mock('@/lib/veilstone/engine', () => ({
+  VEILSTONE_ENGINE_VERSION: 'veilstone_mvp_zero_v1',
+}))
+
+vi.mock('@/lib/veilstone/admin', () => ({
+  getVeilstoneOperationalSummary: mocks.getVeilstoneOperationalSummaryMock,
+}))
+
 import { GET } from './route'
 
 describe('/api/health', () => {
@@ -67,6 +77,12 @@ describe('/api/health', () => {
     isKillSwitchActiveMock.mockReturnValue(false)
     getProvablyFairModeMock.mockReturnValue('legacy_per_game_v1')
     getSessionSeedPoolStatusMock.mockResolvedValue({ available: 5 })
+    getVeilstoneOperationalSummaryMock.mockResolvedValue({
+      activeMatches: 0,
+      waitingTables: 0,
+      stuckMatchCount: 0,
+      ledgerInvariantStatus: 'ok',
+    })
   })
 
   it('reports pending withdrawals without running reconciliation side effects', async () => {
@@ -77,6 +93,13 @@ describe('/api/health', () => {
     expect(payload.pendingWithdrawals).toBe(0)
     expect(prismaMock.transaction.count).toHaveBeenCalledWith({
       where: { type: 'withdrawal', status: { in: ['pending', 'pending_approval'] } },
+    })
+    expect(payload.veilstone).toEqual({
+      engineVersion: 'veilstone_mvp_zero_v1',
+      activeMatchCount: 0,
+      waitingTableCount: 0,
+      stuckMatchCount: 0,
+      ledgerInvariantStatus: 'ok',
     })
   })
 })

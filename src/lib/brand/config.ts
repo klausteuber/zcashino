@@ -15,7 +15,7 @@ export const BRAND_CONFIGS: Record<BrandId, BrandConfig> = {
     backgroundColor: '#0D0D0D',
     adminEnabled: true,
     seo: {
-      canonicalOrigin: 'https://21z.cash',
+      canonicalOrigin: 'https://cypherjester.com',
       robotsIndex: true,
     },
   },
@@ -34,6 +34,24 @@ export const BRAND_CONFIGS: Record<BrandId, BrandConfig> = {
     adminEnabled: false,
     seo: {
       canonicalOrigin: 'https://21z.cash',
+      robotsIndex: true,
+    },
+  },
+  veilstone: {
+    id: 'veilstone',
+    name: 'Veilstone',
+    shortName: 'Veilstone',
+    tagline: 'Public trust earns credit. Shielded capital wins showdowns.',
+    origin: 'https://veilstone.game',
+    description:
+      'A Play-ZEC economic strategy game of AI city-states, public trust, and shielded capital.',
+    ogImagePath: '/branding/veilstone/og-image.svg',
+    logoPath: '/branding/veilstone/icon.svg',
+    themeColor: '#D8B46A',
+    backgroundColor: '#10151A',
+    adminEnabled: false,
+    seo: {
+      canonicalOrigin: 'https://veilstone.game',
       robotsIndex: true,
     },
   },

@@ -1,4 +1,4 @@
-import { randomBytes, timingSafeEqual } from 'crypto'
+import { createHash, randomBytes, timingSafeEqual } from 'crypto'
 import { NextRequest, NextResponse } from 'next/server'
 
 import { ADMIN_SESSION_COOKIE, createAdminSessionToken, getAdminConfigStatus } from '@/lib/admin/auth'
@@ -193,6 +193,12 @@ function deletePendingAction(token: string): void {
   pending.delete(token)
 }
 
+function telegramChatRateLimitIp(chatId: string): string {
+  const digest = createHash('sha256').update(chatId).digest('hex').slice(0, 16)
+  const groups = digest.match(/.{1,4}/g) ?? []
+  return `fd00:${groups.join(':')}::1`
+}
+
 function buildInternalAdminRequest(opts: {
   chatId: string
   method: 'GET' | 'POST'
@@ -204,8 +210,9 @@ function buildInternalAdminRequest(opts: {
   const headers: Record<string, string> = {
     host: 'localhost',
     'user-agent': 'zcashino-telegram-admin-bot',
-    // Rate-limit and audit-log per Telegram chat.
-    'x-forwarded-for': `tg:${opts.chatId}`,
+    // Internal requests use a deterministic, non-identifying ULA so each chat
+    // keeps an independent rate-limit bucket without exposing the Telegram ID.
+    'x-real-ip': telegramChatRateLimitIp(opts.chatId),
     cookie: `${ADMIN_SESSION_COOKIE}=${token}`,
   }
 

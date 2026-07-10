@@ -8,6 +8,11 @@ const DEFAULT_CYPHER_HOSTS = [
   '127.0.0.1',
 ]
 const DEFAULT_21Z_HOSTS = ['21z.cash', 'www.21z.cash']
+const DEFAULT_VEILSTONE_HOSTS = [
+  'veilstone.game',
+  'www.veilstone.game',
+  'play.veilstone.game',
+]
 
 function parseCsvHosts(value: string | undefined, fallback: string[]): Set<string> {
   if (!value || value.trim().length === 0) return new Set(fallback)
@@ -34,14 +39,19 @@ export function normalizeHost(value: string | null | undefined): string | null {
   return first.replace(/:\d+$/, '')
 }
 
-export function readHostFromHeaders(headersLike: { get(name: string): string | null }): string | null {
-  const forwarded = headersLike.get('x-forwarded-host')
+export function readHostFromHeaders(
+  headersLike: { get(name: string): string | null },
+  env: NodeJS.ProcessEnv = process.env
+): string | null {
   const host = headersLike.get('host')
-  return normalizeHost(forwarded || host)
+  if (env.TRUST_PROXY_HOST_HEADER === 'true') {
+    return normalizeHost(headersLike.get('x-forwarded-host') || host)
+  }
+  return normalizeHost(host)
 }
 
 export function isKnownBrandId(value: string | undefined): value is BrandId {
-  return value === 'cypher' || value === '21z'
+  return value === 'cypher' || value === '21z' || value === 'veilstone'
 }
 
 export function resolveBrandIdFromHost(
@@ -70,6 +80,15 @@ export function resolveBrandIdFromHost(
 
   const cypherHosts = parseCsvHosts(env.CYPHER_HOSTS, DEFAULT_CYPHER_HOSTS)
   const hosts21z = parseCsvHosts(env.BRAND_21Z_HOSTS, DEFAULT_21Z_HOSTS)
+  const veilstoneHosts = parseCsvHosts(env.VEILSTONE_HOSTS, DEFAULT_VEILSTONE_HOSTS)
+
+  if (normalizedHost && veilstoneHosts.has(normalizedHost)) {
+    return {
+      id: 'veilstone',
+      source: 'mapped',
+      host: normalizedHost,
+    }
+  }
 
   if (normalizedHost && hosts21z.has(normalizedHost)) {
     return {
@@ -109,7 +128,7 @@ export function resolveBrandFromHeaders(
   headersLike: { get(name: string): string | null },
   env: NodeJS.ProcessEnv = process.env
 ): ResolvedBrand {
-  return resolveBrandFromHost(readHostFromHeaders(headersLike), env)
+  return resolveBrandFromHost(readHostFromHeaders(headersLike, env), env)
 }
 
 export function isAdminHost(brandId: BrandId): boolean {

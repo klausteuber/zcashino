@@ -27,12 +27,15 @@ services:
       - NODE_ENV=production
       - DATABASE_URL=file:/app/data/zcashino.db
       - ZCASH_RPC_URL=http://zcashd:8232
+      - TRUST_PROXY_HEADERS=true
     volumes:
       - app-data:/app/data
     restart: unless-stopped
     depends_on:
       zcashd:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     deploy:
       resources:
         limits:
@@ -105,10 +108,8 @@ services:
       - DATABASE_URL=file:/app/data/zcashino.db
     volumes:
       - app-data:/app/data
-    command: ["sh", "-lc", "npx prisma migrate deploy"]
+    command: ["node", "scripts/migrate-safe.js"]
     restart: "no"
-    profiles:
-      - tools    # Only runs when explicitly invoked via: docker compose run --rm migrate
 
 volumes:
   app-data:

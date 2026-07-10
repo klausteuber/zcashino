@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback, useEffect, useRef } from 'react'
+import { generateClientSeedHex } from '@/lib/game/client-fairness'
 
 type WithdrawalStep = 'set-address' | 'form' | 'confirm' | 'processing' | 'pending_approval' | 'success' | 'error'
 
@@ -150,7 +151,7 @@ export function WithdrawalModal({
     setError(null)
 
     try {
-      const idempotencyKey = `wd-${sessionId}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+      const idempotencyKey = `wd-${sessionId}-${Date.now()}-${generateClientSeedHex(8)}`
       const res = await fetch('/api/wallet', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

@@ -41,6 +41,7 @@ const mocks = vi.hoisted(() => ({
   getSessionSeedPoolStatusMock: vi.fn(),
   getProvablyFairModeMock: vi.fn(),
   reconcilePendingWithdrawalsMock: vi.fn(),
+  getVeilstoneOperationalSummaryMock: vi.fn(),
 }))
 
 const {
@@ -61,6 +62,7 @@ const {
   getSessionSeedPoolStatusMock,
   getProvablyFairModeMock,
   reconcilePendingWithdrawalsMock,
+  getVeilstoneOperationalSummaryMock,
 } = mocks
 
 vi.mock('@/lib/db', () => ({
@@ -146,6 +148,10 @@ vi.mock('@/lib/services/withdrawal-reconciliation', () => ({
   reconcilePendingWithdrawals: mocks.reconcilePendingWithdrawalsMock,
 }))
 
+vi.mock('@/lib/veilstone/admin', () => ({
+  getVeilstoneOperationalSummary: mocks.getVeilstoneOperationalSummaryMock,
+}))
+
 import { GET } from './route'
 
 describe('/api/admin/overview', () => {
@@ -176,6 +182,18 @@ describe('/api/admin/overview', () => {
     getManagerStatusMock.mockReturnValue({ isRunning: true, lastCheck: null, lastCleanup: null })
     getSessionSeedPoolManagerStatusMock.mockReturnValue({ isRunning: true, lastCheck: null })
     getSessionSeedPoolStatusMock.mockResolvedValue({ available: 10 })
+    getVeilstoneOperationalSummaryMock.mockResolvedValue({
+      engineVersion: 'veilstone_mvp_zero_v1',
+      waitingTables: 0,
+      activeTables: 0,
+      activeMatches: 0,
+      completedMatches24h: 0,
+      stuckMatchCount: 0,
+      stuckMatches: [],
+      ledgerInvariantStatus: 'ok',
+      ledgerInvariantFailures: [],
+      recentEvent: null,
+    })
     logAdminEventMock.mockResolvedValue(undefined)
 
     prismaMock.session.aggregate.mockResolvedValue({
@@ -234,6 +252,8 @@ describe('/api/admin/overview', () => {
     const payload = await response.json()
     expect(payload.transactions.pendingWithdrawalCount).toBe(0)
     expect(payload.pendingWithdrawals).toEqual([])
+    expect(payload.veilstone.engineVersion).toBe('veilstone_mvp_zero_v1')
+    expect(payload.veilstone.ledgerInvariantStatus).toBe('ok')
     expect(reconcilePendingWithdrawalsMock).not.toHaveBeenCalled()
   })
 })

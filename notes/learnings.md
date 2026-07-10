@@ -206,6 +206,10 @@ In-memory limits and remote font fetches are acceptable in dev, but must be call
 **Fix:** Put the site in kill-switch maintenance mode, back up `wallet.dat`, run the pinned emergency `zcashd` image once with `-zapwallettxes=1` to rebuild wallet transaction/witness state, then restart normally after the rescan. The node monitor now suppresses alerts during explicit kill-switch maintenance and gives startup/rescan RPC states a bounded grace period. The wallet backup script now uses the production Compose project/env file and the actual mounted wallet path.
 
 **Key files:** `scripts/check-node.sh`, `scripts/backup-wallet.sh`, `docker-compose.mainnet.yml`.
+## Incident Learning (2026-05-01)
+
+1. **zcashd deprecation height requires both image and compose compatibility checks.**
+   When v6.11.0 hit its configured deprecation height, it exited cleanly and Docker restarted it forever. Pulling `electriccoinco/zcashd:latest` fixed the binary version, but v6.12.1 changed the image entrypoint behavior. The durable fix is to explicitly run `zcashd`, pass the production `-datadir`, and make every `zcash-cli` health/monitor command use that same data directory.
 
 ## Frontend Reliability Learnings (2026-02-14)
 
@@ -515,6 +519,16 @@ In-memory limits and remote font fetches are acceptable in dev, but must be call
 2. **Polling hooks should not depend directly on state they mutate or callbacks recreated by parents.**
    `useDepositPolling()` looked harmless in isolation, but when embedded in `OnboardingModal` with inline `onDeposit`/`onConfirmed` handlers it recreated its polling callback every render and re-triggered its own effect. Keeping the latest status/callbacks in refs preserves fresh data without turning the interval setup into a render loop.
 
+## Player Activity Telegram Alerts (2026-04-24)
+
+1. **Session and deposit alerts should live at state transitions, not UI actions.**
+   New-session alerts are sent only after `prisma.session.create(...)` succeeds, so refreshes/restores do not spam Telegram. Deposit alerts are sent when a chain transaction is newly confirmed or promoted to confirmed, so repeated polling does not create duplicate alerts.
+
+2. **Keep alert formatting in a small notification helper.**
+   `src/lib/notifications/player-activity.ts` owns Telegram message shape for player sessions and deposits. Route handlers should pass facts from the state transition and avoid duplicating Telegram text.
+
+**Key files:** `src/lib/notifications/player-activity.ts`, `src/app/api/session/route.ts`, `src/app/api/wallet/route.ts`
+
 ## zcashd Upgrade Incident Learnings (2026-05-01)
 
 1. **zcashd deprecation height requires both image and compose compatibility checks.**
@@ -572,3 +586,12 @@ In-memory limits and remote font fetches are acceptable in dev, but must be call
    Next.js writes image cache files under `.next/cache`. If `.next` is copied from the builder as root-owned and then the app runs as `nextjs`, image optimization can work but throw repeated permission errors.
 
 **Key files:** `src/lib/services/deposit-sweep.ts`, `src/app/api/reserves/route.ts`, `src/app/reserves/page.tsx`, `src/lib/admin/alerts.ts`, `Dockerfile`
+## Comprehensive Site Remediation Learnings (2026-07-09)
+
+1. **Marketing language must match the exact fairness lifecycle.** `session_nonce_v1` anchors a seed-session commitment that can cover multiple nonce-derived hands; it is not a per-hand precommit/reveal system.
+2. **Forwarding headers are transport metadata, not authority by default.** Brand routing may use an explicitly trusted forwarded host in controlled tests or behind a proxy that overwrites it, but admin authorization must reject spoofed and fallback hosts.
+3. **A strict CSP is an application-wide inventory exercise.** Next framework scripts and every JSON-LD script need the same per-request nonce; checking only the root layout leaves secondary pages broken.
+4. **Standalone verification must mirror the real runtime layout.** The server needs copied public/static assets and an absolute shared SQLite URL in CI because it changes its working directory.
+5. **Migration tests need three states.** Verify empty bootstrap, an existing complete history, and rejection of non-empty untracked databases. Production's historical state remains a separate pre-deploy inspection.
+6. **Persisted Blackjack replay ordering is part of game correctness.** Restore insurance before replaying action history; insurance decisions reconstruct only the initial deal.
+7. **Rate-limit cleanup must use the longest bucket window.** A global cleanup interval based on a shorter bucket can silently erase long-window withdrawal limits.

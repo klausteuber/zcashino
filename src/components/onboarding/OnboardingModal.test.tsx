@@ -36,8 +36,18 @@ describe('OnboardingModal', () => {
     onDepositComplete: vi.fn(),
     sessionId: null,
     depositAddress: null,
+    transparentAddress: null,
     onCreateRealSession: vi.fn().mockResolvedValue({ sessionId: 'session-123', depositAddress: 'tm123...' }),
     onSetWithdrawalAddress: vi.fn().mockResolvedValue(true),
+    onCreateRecoveryKey: vi.fn().mockResolvedValue({
+      recoveryKey: 'zrec_1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcd',
+      recovery: { enabled: true, lastUsedAt: null },
+    }),
+    onRegenerateRecoveryKey: vi.fn().mockResolvedValue({
+      recoveryKey: 'zrec_feedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeed',
+      recovery: { enabled: true, lastUsedAt: null },
+    }),
+    onRestoreSession: vi.fn().mockResolvedValue({ success: true }),
   }
 
   beforeEach(() => {
@@ -107,6 +117,16 @@ describe('OnboardingModal', () => {
       await waitFor(() => {
         expect(defaultProps.onCreateRealSession).toHaveBeenCalled()
       })
+    })
+
+    it('should open the restore screen from the welcome view', async () => {
+      const user = userEvent.setup()
+      render(<OnboardingModal {...defaultProps} />)
+
+      await user.click(screen.getByText('Restore with recovery key'))
+
+      expect(screen.getByRole('heading', { name: 'Restore Session' })).toBeInTheDocument()
+      expect(screen.getByPlaceholderText('zrec_...')).toBeInTheDocument()
     })
   })
 
@@ -256,6 +276,38 @@ describe('OnboardingModal', () => {
         expect(screen.getByText(/failed to generate deposit address/i)).toBeInTheDocument()
       })
     })
+
+    it('should show recovery controls in the deposit flow for real sessions', () => {
+      render(
+        <OnboardingModal
+          {...defaultProps}
+          sessionId="session-123"
+          depositAddress="tmDeposit123456789012345678901234"
+        />
+      )
+
+      expect(screen.getByText('Protect This Session')).toBeInTheDocument()
+      expect(screen.getByText('Create Recovery Key')).toBeInTheDocument()
+    })
+
+    it('should create and reveal a recovery key in the deposit flow', async () => {
+      const user = userEvent.setup()
+
+      render(
+        <OnboardingModal
+          {...defaultProps}
+          sessionId="session-123"
+          depositAddress="tmDeposit123456789012345678901234"
+        />
+      )
+
+      await user.click(screen.getByText('Create Recovery Key'))
+
+      await waitFor(() => {
+        expect(defaultProps.onCreateRecoveryKey).toHaveBeenCalled()
+        expect(screen.getByText(/save this key now/i)).toBeInTheDocument()
+      })
+    })
   })
 
   describe('Modal Behavior', () => {
@@ -268,11 +320,12 @@ describe('OnboardingModal', () => {
       expect(backdrop).toHaveClass('bg-black/80')
     })
 
-    it('should show restore session option', () => {
+    it('should show same-browser session recovery guidance', () => {
       render(<OnboardingModal {...defaultProps} />)
 
-      expect(screen.getByText(/already have a session/i)).toBeInTheDocument()
-      expect(screen.getByText('Restore')).toBeInTheDocument()
+      expect(screen.getByText(/closed your tab/i)).toBeInTheDocument()
+      expect(screen.getByText(/same browser and device/i)).toBeInTheDocument()
+      expect(screen.getByText('Restore with recovery key')).toBeInTheDocument()
     })
   })
 })

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Veilstone">
+  <rect width="128" height="128" rx="18" fill="#10151A"/>
+  <path d="M24 88 64 20l40 68H86L64 50 42 88Z" fill="#D8B46A"/>
+  <path d="M38 96h52l-8 12H46Z" fill="#4DA3A9"/>
+  <circle cx="64" cy="72" r="10" fill="#10151A" stroke="#F4E4B8" stroke-width="5"/>
+</svg>

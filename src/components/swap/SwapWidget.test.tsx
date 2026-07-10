@@ -96,6 +96,6 @@ describe('SwapWidget', () => {
 
     expect(screen.getByText('0.0018 ZEC')).toBeInTheDocument()
     expect(screen.getByText(/Includes a Zcashino fee of 0.15%/i)).toBeInTheDocument()
-    expect(screen.getByText(/Waiting for your SOL deposit/i)).toBeInTheDocument()
+    expect(screen.getAllByText(/Waiting for your SOL deposit/i).length).toBeGreaterThan(0)
   })
 })

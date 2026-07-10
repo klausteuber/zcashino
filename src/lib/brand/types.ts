@@ -1,4 +1,4 @@
-export type BrandId = 'cypher' | '21z'
+export type BrandId = 'cypher' | '21z' | 'veilstone'
 
 export type BrandSource = 'forced' | 'mapped' | 'fallback' | 'single-brand'
 

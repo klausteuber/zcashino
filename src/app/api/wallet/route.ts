@@ -383,8 +383,8 @@ async function handleCheckDeposits(session: {
 
     if (!existing) {
       let authenticatedThisTx = false
-      let createdTx = false
       let creditedThisTx = false
+      let createdTx = false
       try {
         await prisma.$transaction(async (dbTx) => {
           await dbTx.transaction.create({
@@ -480,8 +480,8 @@ async function handleCheckDeposits(session: {
     }
 
     let authenticatedThisTx = false
-    let promotedThisTx = false
     let creditedThisTx = false
+    let promotedThisTx = false
     await prisma.$transaction(async (dbTx) => {
       const promoted = await dbTx.transaction.updateMany({
         where: {

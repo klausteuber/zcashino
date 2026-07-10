@@ -22,13 +22,19 @@ jobs:
       - run: npx prisma generate
 
       - name: Lint
-        run: npm run lint
+        run: npm run lint:ci
 
       - name: Type check
         run: npx tsc --noEmit
 
-      - name: Test
+      - name: Unit tests
         run: npm run test:run
+
+      - name: Coverage thresholds
+        run: npm run test:coverage
+
+      - name: Validate migrations on a clean database
+        run: npm run db:migrations:check
 
       - name: Guard stale Next build lock
         run: |
@@ -41,3 +47,13 @@ jobs:
         run: npm run build
         env:
           DEMO_MODE: "true"
+          MULTI_BRAND_ENABLED: "true"
+
+      - name: Install smoke-test browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Smoke tests
+        run: npm run test:e2e:smoke
+        env:
+          DEMO_MODE: "true"
+          MULTI_BRAND_ENABLED: "true"

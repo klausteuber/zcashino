@@ -99,7 +99,6 @@ describe('withdrawal reconciliation service', () => {
   it('marks pending withdrawals confirmed when the operation succeeds', async () => {
     prismaMock.transaction.findMany.mockResolvedValue([pendingWithdrawal()])
     getOperationStatusMock.mockResolvedValue({ status: 'success', txid: 'a'.repeat(64) })
-
     const results = await reconcilePendingWithdrawals()
 
     expect(results).toHaveLength(1)

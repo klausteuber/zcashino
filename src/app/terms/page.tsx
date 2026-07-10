@@ -10,7 +10,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const brand = await getServerBrand()
   const brandUrl = getBrandUrlForPath(brand.id, '/terms')
   const canonicalUrl = getCanonicalUrlForPath(brand.id, '/terms')
-  const brandTitle = brand.id === '21z' ? '21z' : 'CypherJester'
+  const brandTitle = brand.config.name
 
   return {
     title: 'Terms of Service',

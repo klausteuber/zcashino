@@ -109,6 +109,7 @@ describe('/api/session address selection', () => {
     logPlayerCounterEventMock.mockResolvedValue(undefined)
     getProvablyFairModeMock.mockReturnValue('legacy_per_game_v1')
     getPublicFairnessStateMock.mockResolvedValue(null)
+    sendPlayerSessionStartedAlertMock.mockResolvedValue(undefined)
     getAdminSettingsMock.mockResolvedValue({
       rg: {
         defaultDepositLimit: null,
@@ -116,7 +117,6 @@ describe('/api/session address selection', () => {
         defaultSessionLimit: null,
       },
     })
-    sendPlayerSessionStartedAlertMock.mockResolvedValue(undefined)
     createDepositWalletForSessionMock.mockResolvedValue({
       id: 'wallet-1',
       unifiedAddr: 'utestUnifiedDepositAddress1234567890',
@@ -181,12 +181,14 @@ describe('/api/session address selection', () => {
       sessionId: 'session-2',
       walletAddress: 'real_wallet_2',
       exp: Date.now() + 60_000,
+      authVersion: 1,
     })
-
     prismaMock.session.findUnique.mockResolvedValueOnce({
       id: 'session-2',
       walletAddress: 'real_wallet_2',
+      playerAuthVersion: 1,
       wallet: null,
+      recoveryCredential: null,
     })
 
     const response = await GET({
@@ -199,7 +201,7 @@ describe('/api/session address selection', () => {
     expect(payload.error).toContain('Session expired')
     expect(prismaMock.session.findUnique).toHaveBeenCalledWith({
       where: { id: 'session-2' },
-      include: { wallet: true },
+      include: { wallet: true, recoveryCredential: true },
     })
   })
 
@@ -208,12 +210,14 @@ describe('/api/session address selection', () => {
       sessionId: 'demo-session',
       walletAddress: 'demo_wallet',
       exp: Date.now() + 60_000,
+      authVersion: 1,
     })
 
     prismaMock.session.findUnique
       .mockResolvedValueOnce({
         id: 'demo-session',
         walletAddress: 'demo_wallet',
+        playerAuthVersion: 1,
         balance: 10,
         totalWagered: 0,
         totalWon: 0,
@@ -225,10 +229,12 @@ describe('/api/session address selection', () => {
         authTxHash: null,
         excludedUntil: null,
         wallet: null,
+        recoveryCredential: null,
       })
       .mockResolvedValueOnce({
         id: 'real-session',
         walletAddress: 'real_wallet_new',
+        playerAuthVersion: 1,
         balance: 0,
         totalWagered: 0,
         totalWon: 0,
@@ -243,11 +249,13 @@ describe('/api/session address selection', () => {
           unifiedAddr: 'utestUnifiedDepositAddress1234567890',
           transparentAddr: 'tmTransparentAddress1234567890123',
         },
+        recoveryCredential: null,
       })
 
     prismaMock.session.create.mockResolvedValueOnce({
       id: 'real-session',
       walletAddress: 'real_wallet_new',
+      playerAuthVersion: 1,
       balance: 0,
       totalWagered: 0,
       totalWon: 0,
@@ -259,6 +267,7 @@ describe('/api/session address selection', () => {
       authTxHash: null,
       excludedUntil: null,
       wallet: null,
+      recoveryCredential: null,
     })
     prismaMock.session.update.mockResolvedValueOnce({})
 
@@ -275,7 +284,7 @@ describe('/api/session address selection', () => {
         totalDeposited: 0,
         isAuthenticated: false,
       }),
-      include: { wallet: true },
+      include: { wallet: true, recoveryCredential: true },
     })
 
     const payload = await response.json()
@@ -297,12 +306,14 @@ describe('/api/session address selection', () => {
       sessionId: 'real-session',
       walletAddress: 'real_wallet',
       exp: Date.now() + 60_000,
+      authVersion: 1,
     })
 
     prismaMock.session.findUnique
       .mockResolvedValueOnce({
         id: 'real-session',
         walletAddress: 'real_wallet',
+        playerAuthVersion: 1,
         balance: 0,
         totalWagered: 0,
         totalWon: 0,
@@ -314,10 +325,12 @@ describe('/api/session address selection', () => {
         authTxHash: null,
         excludedUntil: null,
         wallet: null,
+        recoveryCredential: null,
       })
       .mockResolvedValueOnce({
         id: 'real-session',
         walletAddress: 'real_wallet',
+        playerAuthVersion: 1,
         balance: 0,
         totalWagered: 0,
         totalWon: 0,
@@ -332,6 +345,7 @@ describe('/api/session address selection', () => {
           unifiedAddr: 'utestUnifiedDepositAddress1234567890',
           transparentAddr: 'tmTransparentAddress1234567890123',
         },
+        recoveryCredential: null,
       })
 
     prismaMock.session.update.mockResolvedValueOnce({})

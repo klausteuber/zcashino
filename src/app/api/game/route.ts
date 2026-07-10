@@ -9,6 +9,10 @@ import {
   getAvailableActions,
 } from '@/lib/game/blackjack'
 import {
+  parseBlackjackActionHistory,
+  reconstructBlackjackGameState,
+} from '@/lib/game/blackjack-replay'
+import {
   generateClientSeed
 } from '@/lib/provably-fair'
 import {
@@ -87,7 +91,7 @@ export async function POST(request: NextRequest) {
     const payload = parsed.data
     const sessionId = payload.sessionId
 
-    const playerSession = requirePlayerSession(request, sessionId)
+    const playerSession = await requirePlayerSession(request, sessionId)
     if (!playerSession.ok) return playerSession.response
     if (playerSession.legacyFallback) {
       await logPlayerCounterEvent({
@@ -593,7 +597,7 @@ async function handleGameAction(
   }
 
   // Parse existing action history
-  const actionHistory: BlackjackAction[] = JSON.parse(game.actionHistory || '[]')
+  const actionHistory = parseBlackjackActionHistory(game.actionHistory)
 
   const resolvedServerSeed = await resolveGameServerSeed(game.serverSeed, game.fairnessSeedId)
   if (!resolvedServerSeed) {
@@ -602,40 +606,13 @@ async function handleGameAction(
     }, { status: 503 })
   }
 
-  // Reconstruct game state from initial deal
-  const initialState = createInitialState(
-    session.balance + game.mainBet + game.perfectPairsBet + game.insuranceBet
-  )
-
-  // Read stored game rules from initial state for replay consistency
-  const storedInitial = JSON.parse(game.initialState || '{}')
-  const storedGameRules: BlackjackGameRules | undefined = storedInitial.gameRules
-
-  // Start round to get initial dealt cards (same seeds = same deck order)
-  let gameState = startRound(
-    initialState,
-    game.mainBet,
-    game.perfectPairsBet,
+  let gameState = reconstructBlackjackGameState({
+    game,
+    sessionBalance: session.balance,
     resolvedServerSeed,
-    game.serverSeedHash,
-    game.clientSeed,
-    game.nonce,
-    normalizeFairnessVersion(game.fairnessVersion),
-    // Use a permissive range so admin bet-limit changes don't break in-flight games.
-    { minBet: 0, maxBet: Math.max(game.mainBet, 1) },
-    storedGameRules
-  )
-
-  // Restore insurance bet if it was taken (insurance is not in actionHistory)
-  if (game.insuranceBet > 0) {
-    gameState = takeInsurance(gameState, game.insuranceBet)
-  }
-
-  // CRITICAL FIX: Replay all previous actions to restore correct deck position
-  // This ensures cards dealt in previous actions aren't lost
-  for (const previousAction of actionHistory) {
-    gameState = executeAction(gameState, previousAction)
-  }
+    replayPersistedProgress: true,
+    actionHistory,
+  })
 
   const dealerPeekWillAutoComplete =
     gameState.phase === 'playerTurn' &&
@@ -765,27 +742,11 @@ async function handleInsuranceAction(
     }, { status: 503 })
   }
 
-  // Reconstruct game state from initial deal
-  const initialState = createInitialState(session.balance + game.mainBet + game.perfectPairsBet)
-
-  // Read stored game rules from initial state for replay consistency
-  const storedInitial = JSON.parse(game.initialState || '{}')
-  const storedGameRules: BlackjackGameRules | undefined = storedInitial.gameRules
-
-  // Start round to get initial dealt cards
-  let gameState = startRound(
-    initialState,
-    game.mainBet,
-    game.perfectPairsBet,
+  let gameState = reconstructBlackjackGameState({
+    game,
+    sessionBalance: session.balance,
     resolvedServerSeed,
-    game.serverSeedHash,
-    game.clientSeed,
-    game.nonce,
-    normalizeFairnessVersion(game.fairnessVersion),
-    // Use a permissive range so admin bet-limit changes don't break in-flight games.
-    { minBet: 0, maxBet: Math.max(game.mainBet, 1) },
-    storedGameRules
-  )
+  })
 
   // Check if insurance can be taken (dealer showing Ace, no insurance yet)
   if (gameState.dealerHand.cards[0]?.rank !== 'A') {
@@ -898,24 +859,11 @@ async function handleDeclineInsurance(
     }, { status: 503 })
   }
 
-  // Reconstruct game state from initial deal
-  const initialState = createInitialState(session.balance + game.mainBet + game.perfectPairsBet)
-
-  const storedInitial = JSON.parse(game.initialState || '{}')
-  const storedGameRules: BlackjackGameRules | undefined = storedInitial.gameRules
-
-  let gameState = startRound(
-    initialState,
-    game.mainBet,
-    game.perfectPairsBet,
+  let gameState = reconstructBlackjackGameState({
+    game,
+    sessionBalance: session.balance,
     resolvedServerSeed,
-    game.serverSeedHash,
-    game.clientSeed,
-    game.nonce,
-    normalizeFairnessVersion(game.fairnessVersion),
-    { minBet: 0, maxBet: Math.max(game.mainBet, 1) },
-    storedGameRules
-  )
+  })
 
   // Insurance should not have been taken yet if declining
   if (game.insuranceBet > 0) {
@@ -1068,7 +1016,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Session ID required' }, { status: 400 })
   }
 
-  const playerSession = requirePlayerSession(request, sessionId)
+  const playerSession = await requirePlayerSession(request, sessionId)
   if (!playerSession.ok) return playerSession.response
   if (playerSession.legacyFallback) {
     return NextResponse.json(

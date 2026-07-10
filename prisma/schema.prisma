@@ -11,78 +11,92 @@ datasource db {
 
 // Player session - authenticated by ZEC deposit
 model Session {
-  id            String   @id @default(cuid())
-  walletAddress String   @unique  // Internal identifier (can be demo_ prefix)
+  id                String @id @default(cuid())
+  walletAddress     String @unique // Internal identifier (can be demo_ prefix)
+  playerAuthVersion Int    @default(1)
 
   // Authentication via deposit
-  withdrawalAddress  String?           // User's verified withdrawal address (t or z)
-  isAuthenticated    Boolean @default(false)
-  authTxHash         String?           // Transaction hash that authenticated the session
-  authConfirmedAt    DateTime?         // When authentication was confirmed
+  withdrawalAddress String? // User's verified withdrawal address (t or z)
+  isAuthenticated   Boolean   @default(false)
+  authTxHash        String? // Transaction hash that authenticated the session
+  authConfirmedAt   DateTime? // When authentication was confirmed
 
   // Balance tracking
-  balance       Float    @default(0)
-  totalDeposited Float   @default(0)
-  totalWithdrawn Float   @default(0)
-  totalWagered  Float    @default(0)
-  totalWon      Float    @default(0)
+  balance        Float @default(0)
+  totalDeposited Float @default(0)
+  totalWithdrawn Float @default(0)
+  totalWagered   Float @default(0)
+  totalWon       Float @default(0)
 
   // Responsible gambling limits
-  depositLimit  Float?   // Daily deposit limit
-  lossLimit     Float?   // Daily loss limit
-  sessionLimit  Int?     // Session time limit in minutes
+  depositLimit Float? // Daily deposit limit
+  lossLimit    Float? // Daily loss limit
+  sessionLimit Int? // Session time limit in minutes
 
   // Self-exclusion
   excludedUntil DateTime?
 
   // Timestamps
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  lastActiveAt  DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  lastActiveAt DateTime @default(now())
 
   // Relations
-  games         BlackjackGame[]
-  videoPokerGames VideoPokerGame[]
-  transactions  Transaction[]
-  wallet        DepositWallet?
-  fairnessState SessionFairnessState?
+  games              BlackjackGame[]
+  videoPokerGames    VideoPokerGame[]
+  transactions       Transaction[]
+  wallet             DepositWallet?
+  fairnessState      SessionFairnessState?
+  recoveryCredential SessionRecoveryCredential?
 
   @@index([walletAddress])
   @@index([withdrawalAddress])
 }
 
+model SessionRecoveryCredential {
+  id         String    @id @default(cuid())
+  sessionId  String    @unique
+  session    Session   @relation(fields: [sessionId], references: [id])
+  keyHash    String    @unique
+  createdAt  DateTime  @default(now())
+  rotatedAt  DateTime  @default(now())
+  lastUsedAt DateTime?
+
+  @@index([keyHash])
+}
+
 // Deposit wallet - unified deposit + transparent audit/sweep address
 model DepositWallet {
-  id              String   @id @default(cuid())
-  sessionId       String   @unique
-  session         Session  @relation(fields: [sessionId], references: [id])
+  id        String  @id @default(cuid())
+  sessionId String  @unique
+  session   Session @relation(fields: [sessionId], references: [id])
 
   // User-facing deposit receiver (u-address) for wallet compatibility
-  unifiedAddr     String?  @unique
+  unifiedAddr     String? @unique
   // Transparent companion address used for reserve visibility/sweeps
-  transparentAddr String   @unique
+  transparentAddr String  @unique
 
   // Network configuration
-  network         String   @default("testnet") // mainnet, testnet
+  network String @default("testnet") // mainnet, testnet
 
   // Derivation info (for HD wallet reconstruction)
-  accountIndex    Int      @default(0)
-  addressIndex    Int      @default(0)
+  accountIndex Int @default(0)
+  addressIndex Int @default(0)
 
   // Cached balance (updated periodically)
-  cachedBalance   Float    @default(0)
+  cachedBalance    Float     @default(0)
   balanceUpdatedAt DateTime?
 
   // Sweep tracking (funds consolidated to house wallet)
-  lastSweptAt     DateTime?
-  totalSwept      Float    @default(0)
+  lastSweptAt DateTime?
+  totalSwept  Float     @default(0)
 
   // Timestamps
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  sweepLogs       SweepLog[]
+  sweepLogs SweepLog[]
 
   @@index([transparentAddr])
   @@index([unifiedAddr])
@@ -90,46 +104,46 @@ model DepositWallet {
 
 // Individual blackjack game/hand
 model BlackjackGame {
-  id              String   @id @default(cuid())
-  sessionId       String
-  session         Session  @relation(fields: [sessionId], references: [id])
+  id        String  @id @default(cuid())
+  sessionId String
+  session   Session @relation(fields: [sessionId], references: [id])
 
   // Bet amounts
   mainBet         Float
-  perfectPairsBet Float    @default(0)
-  insuranceBet    Float    @default(0)
+  perfectPairsBet Float @default(0)
+  insuranceBet    Float @default(0)
 
   // Game state (JSON for flexibility)
-  initialState    String   // JSON: deck order, initial cards
-  finalState      String?  // JSON: final hands, outcomes
-  actionHistory   String   @default("[]") // JSON array of actions taken (hit, stand, double, split)
+  initialState  String // JSON: deck order, initial cards
+  finalState    String? // JSON: final hands, outcomes
+  actionHistory String  @default("[]") // JSON array of actions taken (hit, stand, double, split)
 
   // Provably fair data
   serverSeed      String?
   serverSeedHash  String
   clientSeed      String
   nonce           Int
-  fairnessVersion String   @default("legacy_mulberry_v1")
+  fairnessVersion String  @default("legacy_mulberry_v1")
   fairnessSeedId  String?
   fairnessMode    String?
 
   // Blockchain commitment (provably fair on-chain)
-  commitmentTxHash    String?   // Zcash tx hash of commitment
-  commitmentBlock     Int?      // Block height when commitment was made
+  commitmentTxHash    String? // Zcash tx hash of commitment
+  commitmentBlock     Int? // Block height when commitment was made
   commitmentTimestamp DateTime? // Block timestamp of commitment
 
   // Verification tracking
-  verifiedOnChain     Boolean   @default(false)
-  verificationTxHash  String?   // Optional: tx proving game result
+  verifiedOnChain    Boolean @default(false)
+  verificationTxHash String? // Optional: tx proving game result
 
   // Outcome
-  status          String   @default("active") // active, completed, abandoned
-  outcome         String?  // win, lose, push, blackjack
-  payout          Float?
+  status  String  @default("active") // active, completed, abandoned
+  outcome String? // win, lose, push, blackjack
+  payout  Float?
 
   // Timestamps
-  createdAt       DateTime @default(now())
-  completedAt     DateTime?
+  createdAt   DateTime  @default(now())
+  completedAt DateTime?
 
   @@index([sessionId])
   @@index([serverSeedHash])
@@ -145,23 +159,23 @@ model BlackjackGame {
 // Pre-generated seed commitments for provably fair games
 // Commitments are created in advance so games don't wait for blockchain confirmation
 model SeedCommitment {
-  id              String   @id @default(cuid())
-  serverSeed      String   @unique
-  serverSeedHash  String   @unique
+  id             String @id @default(cuid())
+  serverSeed     String @unique
+  serverSeedHash String @unique
 
   // Blockchain proof
-  txHash          String   @unique
-  blockHeight     Int
-  blockTimestamp  DateTime
+  txHash         String   @unique
+  blockHeight    Int
+  blockTimestamp DateTime
 
   // Pool management
-  status          String   @default("available") // available, used, expired
-  usedByGameId    String?  // Reference to game that consumed this commitment
-  usedAt          DateTime?
+  status       String    @default("available") // available, used, expired
+  usedByGameId String? // Reference to game that consumed this commitment
+  usedAt       DateTime?
 
   // Lifecycle
-  createdAt       DateTime @default(now())
-  expiresAt       DateTime // Commitments expire after 24h if unused
+  createdAt DateTime @default(now())
+  expiresAt DateTime // Commitments expire after 24h if unused
 
   @@index([status])
   @@index([txHash])
@@ -169,18 +183,18 @@ model SeedCommitment {
 }
 
 model FairnessSeed {
-  id             String   @id @default(cuid())
+  id             String    @id @default(cuid())
   seed           String
-  seedHash       String   @unique
-  txHash         String   @unique
+  seedHash       String    @unique
+  txHash         String    @unique
   blockHeight    Int?
   blockTimestamp DateTime?
-  status         String   @default("available") // available, assigned, revealed, expired
+  status         String    @default("available") // available, assigned, revealed, expired
   assignedAt     DateTime?
   revealedAt     DateTime?
-  createdAt      DateTime @default(now())
+  createdAt      DateTime  @default(now())
 
-  sessionStates  SessionFairnessState[]
+  sessionStates SessionFairnessState[]
 
   @@index([status, createdAt])
   @@index([seedHash])
@@ -188,80 +202,80 @@ model FairnessSeed {
 }
 
 model SessionFairnessState {
-  sessionId        String   @id
-  session          Session  @relation(fields: [sessionId], references: [id])
-  seedId           String   @unique
-  seed             FairnessSeed @relation(fields: [seedId], references: [id])
-  clientSeed       String
-  nextNonce        Int      @default(0)
-  fairnessVersion  String   @default("hmac_sha256_v1")
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  sessionId       String       @id
+  session         Session      @relation(fields: [sessionId], references: [id])
+  seedId          String       @unique
+  seed            FairnessSeed @relation(fields: [seedId], references: [id])
+  clientSeed      String
+  nextNonce       Int          @default(0)
+  fairnessVersion String       @default("hmac_sha256_v1")
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
 
   @@index([seedId])
 }
 
 // Deposit and withdrawal transactions
 model Transaction {
-  id            String   @id @default(cuid())
-  sessionId     String
-  session       Session  @relation(fields: [sessionId], references: [id])
+  id        String  @id @default(cuid())
+  sessionId String
+  session   Session @relation(fields: [sessionId], references: [id])
 
-  type          String   // deposit, withdrawal
-  amount        Float
-  fee           Float    @default(0)
+  type   String // deposit, withdrawal
+  amount Float
+  fee    Float  @default(0)
 
   // Zcash transaction details
-  txHash        String?  // Zcash transaction hash
-  address       String?  // Deposit address or withdrawal destination
-  confirmations Int      @default(0)
+  txHash        String? // Zcash transaction hash
+  address       String? // Deposit address or withdrawal destination
+  confirmations Int     @default(0)
 
   // Shielded transaction support
-  isShielded    Boolean  @default(false)
-  memo          String?  // Encrypted memo for z-transactions
-  operationId   String?  // z_sendmany operation ID (for tracking)
+  isShielded     Boolean @default(false)
+  memo           String? // Encrypted memo for z-transactions
+  operationId    String? // z_sendmany operation ID (for tracking)
   idempotencyKey String? // Client-supplied key to prevent duplicate withdrawals
 
   // Status
-  status        String   @default("pending") // pending, confirmed, failed
-  failReason    String?  // Reason if failed
+  status     String  @default("pending") // pending, confirmed, failed
+  failReason String? // Reason if failed
 
   // Timestamps
-  createdAt     DateTime @default(now())
-  confirmedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  confirmedAt DateTime?
 
+  @@unique([sessionId, type, txHash])
+  @@unique([sessionId, type, idempotencyKey])
   @@index([sessionId])
   @@index([txHash])
   @@index([status])
   @@index([operationId])
   @@index([type, status])
   @@index([type, createdAt])
-  @@unique([sessionId, type, txHash])
-  @@unique([sessionId, type, idempotencyKey])
 }
 
 // Sweep logs — tracks consolidation of deposit address funds → house wallet
 model SweepLog {
-  id              String   @id @default(cuid())
+  id              String        @id @default(cuid())
   depositWalletId String
   depositWallet   DepositWallet @relation(fields: [depositWalletId], references: [id])
 
-  fromAddress     String   // Transparent deposit address
-  toAddress       String   // House z-address
-  amount          Float
-  fee             Float    @default(0)
+  fromAddress String // Transparent deposit address
+  toAddress   String // House z-address
+  amount      Float
+  fee         Float  @default(0)
 
   // Zcash operation tracking
-  operationId     String?  // z_sendmany operation ID
-  txHash          String?  // Final transaction hash once confirmed
+  operationId String? // z_sendmany operation ID
+  txHash      String? // Final transaction hash once confirmed
 
   // Status
-  status          String   @default("pending") // pending, confirmed, failed
-  failReason      String?
+  status     String  @default("pending") // pending, confirmed, failed
+  failReason String?
 
   // Timestamps
-  createdAt       DateTime @default(now())
-  confirmedAt     DateTime?
+  createdAt   DateTime  @default(now())
+  confirmedAt DateTime?
 
   @@index([status])
   @@index([depositWalletId])
@@ -270,46 +284,46 @@ model SweepLog {
 
 // Individual video poker game/hand
 model VideoPokerGame {
-  id              String   @id @default(cuid())
-  sessionId       String
-  session         Session  @relation(fields: [sessionId], references: [id])
+  id        String  @id @default(cuid())
+  sessionId String
+  session   Session @relation(fields: [sessionId], references: [id])
 
   // Variant
-  variant         String   @default("jacks_or_better") // jacks_or_better | deuces_wild
+  variant String @default("jacks_or_better") // jacks_or_better | deuces_wild
 
   // Bet
-  baseBet         Float              // e.g., 0.01 ZEC
-  betMultiplier   Int      @default(1) // 1-5 coins
-  totalBet        Float              // baseBet * betMultiplier
+  baseBet       Float // e.g., 0.01 ZEC
+  betMultiplier Int   @default(1) // 1-5 coins
+  totalBet      Float // baseBet * betMultiplier
 
   // Game state (JSON)
-  initialState    String             // JSON: shuffled deck, initial 5 cards
-  finalState      String?            // JSON: final hand after draw
-  actionHistory   String   @default("[]") // JSON: ["deal", "[0,2,4]"] (held indices)
+  initialState  String // JSON: shuffled deck, initial 5 cards
+  finalState    String? // JSON: final hand after draw
+  actionHistory String  @default("[]") // JSON: ["deal", "[0,2,4]"] (held indices)
 
   // Provably fair data
   serverSeed      String?
   serverSeedHash  String
   clientSeed      String
   nonce           Int
-  fairnessVersion String   @default("legacy_mulberry_v1")
+  fairnessVersion String  @default("legacy_mulberry_v1")
   fairnessSeedId  String?
   fairnessMode    String?
 
   // Blockchain commitment
   commitmentTxHash    String?
   commitmentBlock     Int?
-  commitmentTimestamp  DateTime?
+  commitmentTimestamp DateTime?
 
   // Outcome
-  status          String   @default("active") // active, completed
-  handRank        String?  // royal_flush, straight_flush, four_of_a_kind, etc.
-  multiplier      Float?   // Paytable multiplier (0 for nothing)
-  payout          Float?
+  status     String  @default("active") // active, completed
+  handRank   String? // royal_flush, straight_flush, four_of_a_kind, etc.
+  multiplier Float? // Paytable multiplier (0 for nothing)
+  payout     Float?
 
   // Timestamps
-  createdAt       DateTime @default(now())
-  completedAt     DateTime?
+  createdAt   DateTime  @default(now())
+  completedAt DateTime?
 
   @@index([sessionId])
   @@index([status])
@@ -323,14 +337,14 @@ model VideoPokerGame {
 
 // Geo-blocking log (30-day retention)
 model GeoCheck {
-  id          String   @id @default(cuid())
-  ipAddress   String
-  country     String?
-  region      String?
-  allowed     Boolean
-  reason      String?  // Why blocked, if applicable
+  id        String  @id @default(cuid())
+  ipAddress String
+  country   String?
+  region    String?
+  allowed   Boolean
+  reason    String? // Why blocked, if applicable
 
-  createdAt   DateTime @default(now())
+  createdAt DateTime @default(now())
 
   @@index([ipAddress])
   @@index([createdAt])
@@ -338,17 +352,17 @@ model GeoCheck {
 
 // Admin audit log for security and operations tracking
 model AdminAuditLog {
-  id         String   @id @default(cuid())
-  action     String
-  actor      String?
-  success    Boolean  @default(true)
-  route      String?
-  method     String?
-  ipAddress  String?
-  userAgent  String?
-  details    String?
-  metadata   String?
-  createdAt  DateTime @default(now())
+  id        String   @id @default(cuid())
+  action    String
+  actor     String?
+  success   Boolean  @default(true)
+  route     String?
+  method    String?
+  ipAddress String?
+  userAgent String?
+  details   String?
+  metadata  String?
+  createdAt DateTime @default(now())
 
   @@index([createdAt])
   @@index([action])
@@ -359,13 +373,13 @@ model AdminAuditLog {
 // Admin alerts — persisted alerts generated by background job
 model AdminAlert {
   id          String    @id @default(cuid())
-  type        String    // large_win, high_rtp, rapid_cycle, withdrawal_velocity, pool_critical
-  severity    String    // info, warning, critical
+  type        String // large_win, high_rtp, rapid_cycle, withdrawal_velocity, pool_critical
+  severity    String // info, warning, critical
   title       String
   description String
   sessionId   String?
   gameId      String?
-  metadata    String?   // JSON for alert-specific data
+  metadata    String? // JSON for alert-specific data
   dismissed   Boolean   @default(false)
   dismissedBy String?
   dismissedAt DateTime?
@@ -380,25 +394,25 @@ model AdminAlert {
 // Admin configuration — runtime-configurable settings
 model AdminConfig {
   key       String   @id
-  value     String   // JSON-encoded value
+  value     String // JSON-encoded value
   updatedAt DateTime @updatedAt
   updatedBy String?
 }
 
 // Admin users with role-based access control
 model AdminUser {
-  id             String    @id @default(cuid())
-  username       String    @unique
-  passwordHash   String                    // bcrypt hash
-  role           String    @default("analyst")  // analyst, operator, super_admin
-  isActive       Boolean   @default(true)
-  totpSecret     String?                   // For TOTP 2FA
-  totpEnabled    Boolean   @default(false)
-  lastLoginAt    DateTime?
-  lastLoginIp    String?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-  createdBy      String?                   // Who created this admin
+  id           String    @id @default(cuid())
+  username     String    @unique
+  passwordHash String // bcrypt hash
+  role         String    @default("analyst") // analyst, operator, super_admin
+  isActive     Boolean   @default(true)
+  totpSecret   String? // For TOTP 2FA
+  totpEnabled  Boolean   @default(false)
+  lastLoginAt  DateTime?
+  lastLoginIp  String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  createdBy    String? // Who created this admin
 
   @@index([username])
   @@index([role])
@@ -407,8 +421,8 @@ model AdminUser {
 // Daily ZEC/USD price snapshots for historical P&L normalization
 model ZecPriceSnapshot {
   id        String   @id @default(cuid())
-  date      String   @unique  // YYYY-MM-DD
-  priceUsd  Float              // ZEC/USD closing price for the day
+  date      String   @unique // YYYY-MM-DD
+  priceUsd  Float // ZEC/USD closing price for the day
   source    String   @default("coingecko")
   createdAt DateTime @default(now())
 
@@ -419,9 +433,9 @@ model ZecPriceSnapshot {
 model Promotion {
   id              String    @id @default(cuid())
   name            String
-  type            String    // deposit_match, free_play, cashback
+  type            String // deposit_match, free_play, cashback
   status          String    @default("draft") // draft, active, paused, expired
-  config          String    // JSON: { matchPercent, maxBonus, wagerRequirement, minDeposit }
+  config          String // JSON: { matchPercent, maxBonus, wagerRequirement, minDeposit }
   startDate       DateTime?
   endDate         DateTime?
   maxRedemptions  Int?
@@ -442,8 +456,8 @@ model PromotionRedemption {
   promotion   Promotion @relation(fields: [promotionId], references: [id])
   sessionId   String
   bonusAmount Float
-  wagered     Float     @default(0)  // Track wagering requirement progress
-  wagerTarget Float                   // Required wagering to unlock bonus
+  wagered     Float     @default(0) // Track wagering requirement progress
+  wagerTarget Float // Required wagering to unlock bonus
   status      String    @default("active") // active, completed, forfeited, expired
   createdAt   DateTime  @default(now())
   completedAt DateTime?
@@ -451,4 +465,231 @@ model PromotionRedemption {
   @@index([promotionId])
   @@index([sessionId])
   @@index([status])
+}
+
+model VeilstoneTable {
+  id          String   @id @default(cuid())
+  status      String   @default("waiting") // waiting, active, cancelled, completed
+  mode        String   @default("play_zec_mvp_zero")
+  buyInZats   BigInt   @default(100000000)
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  seats VeilstoneSeat[]
+  match VeilstoneMatch?
+
+  @@index([status])
+  @@index([createdAt])
+  @@index([createdById])
+}
+
+model VeilstoneSeat {
+  id                 String    @id @default(cuid())
+  tableId            String
+  sessionId          String
+  seatIndex          Int
+  status             String    @default("seated") // seated, ready, left
+  houseId            String?
+  displayName        String?
+  isBot              Boolean   @default(false)
+  publicStartZats    BigInt?
+  shieldedStartZats  BigInt?
+  readyAt            DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  table VeilstoneTable @relation(fields: [tableId], references: [id])
+
+  @@unique([tableId, seatIndex])
+  @@unique([tableId, sessionId])
+  @@index([sessionId])
+  @@index([status])
+}
+
+model VeilstoneMatch {
+  id           String    @id @default(cuid())
+  tableId      String    @unique
+  status       String    @default("active") // active, complete, cancelled
+  epoch        Int       @default(1)
+  phase        String    @default("EPOCH_1_FORECAST")
+  stateVersion BigInt    @default(0)
+  stateJson    String
+  publicHash   String?
+  finalHash    String?
+  engineVersion String   @default("veilstone_mvp_zero_v1")
+  startedAt    DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  table    VeilstoneTable @relation(fields: [tableId], references: [id])
+  events   VeilstoneEvent[]
+  accounts VeilstoneAccount[]
+  orders   VeilstoneOrder[]
+  contracts VeilstoneContract[]
+  commitments VeilstoneCommitment[]
+  playtestEvents VeilstonePlaytestEvent[]
+  playtestFeedback VeilstonePlaytestFeedback[]
+
+  @@index([status])
+  @@index([phase])
+  @@index([updatedAt])
+}
+
+model VeilstoneEvent {
+  id             String   @id @default(cuid())
+  matchId        String
+  sequence       BigInt
+  stateVersion   BigInt
+  type           String
+  visibility     String   @default("public") // public, private, admin
+  actorSessionId String?
+  clientActionId String?
+  payloadJson    String
+  eventHash      String
+  prevEventHash  String?
+  createdAt      DateTime @default(now())
+
+  match VeilstoneMatch @relation(fields: [matchId], references: [id])
+
+  @@unique([matchId, sequence])
+  @@unique([matchId, clientActionId])
+  @@index([matchId, stateVersion])
+  @@index([matchId, createdAt])
+  @@index([actorSessionId])
+}
+
+model VeilstoneAccount {
+  id          String   @id @default(cuid())
+  matchId     String
+  ownerType   String   // player, reserve, dividend, market, contract
+  ownerId     String   @default("system")
+  accountType String   // PLAYER_PUBLIC, PLAYER_SHIELDED, PLAYER_LOCKED, FRONTIER_RESERVE, CIVIC_DIVIDEND, MARKET_ESCROW, CONTRACT_ESCROW
+  balanceZats BigInt   @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  match VeilstoneMatch @relation(fields: [matchId], references: [id])
+
+  @@unique([matchId, ownerType, ownerId, accountType])
+  @@index([matchId])
+  @@index([ownerId])
+}
+
+model VeilstoneLedgerEntry {
+  id              String   @id @default(cuid())
+  matchId          String
+  eventId          String
+  debitAccountId   String
+  creditAccountId  String
+  amountZats       BigInt
+  reason           String
+  visibility       String   @default("public")
+  createdAt        DateTime @default(now())
+
+  @@index([matchId])
+  @@index([eventId])
+  @@index([debitAccountId])
+  @@index([creditAccountId])
+}
+
+model VeilstoneOrder {
+  id             String   @id @default(cuid())
+  matchId        String
+  playerSessionId String
+  resource       String
+  side           String
+  quantity       Int
+  priceZats      BigInt
+  status         String   @default("open")
+  createdAt      DateTime @default(now())
+
+  match VeilstoneMatch @relation(fields: [matchId], references: [id])
+
+  @@index([matchId])
+  @@index([playerSessionId])
+  @@index([status])
+}
+
+model VeilstoneContract {
+  id          String   @id @default(cuid())
+  matchId     String
+  epoch       Int
+  type        String
+  status      String   @default("open")
+  requirementsJson String
+  payoutRuleJson   String
+  createdAt   DateTime @default(now())
+  resolvedAt  DateTime?
+
+  match VeilstoneMatch @relation(fields: [matchId], references: [id])
+
+  @@index([matchId])
+  @@index([status])
+}
+
+model VeilstoneCommitment {
+  id             String    @id @default(cuid())
+  matchId        String
+  playerSessionId String
+  contractId     String?
+  commitmentHash String
+  actionType     String
+  status         String    @default("committed")
+  publicAmountZats BigInt?
+  revealJson     String?
+  createdAt      DateTime  @default(now())
+  revealedAt     DateTime?
+
+  match VeilstoneMatch @relation(fields: [matchId], references: [id])
+
+  @@index([matchId])
+  @@index([playerSessionId])
+  @@index([commitmentHash])
+  @@index([status])
+}
+
+model VeilstonePlaytestEvent {
+  id             String   @id @default(cuid())
+  matchId        String
+  sessionId      String?
+  seatIndex      Int?
+  eventName      String
+  phase          String?
+  stateVersion   BigInt?
+  metadataJson   String?
+  occurredAt     DateTime @default(now())
+  createdAt      DateTime @default(now())
+
+  match VeilstoneMatch @relation(fields: [matchId], references: [id])
+
+  @@index([matchId, occurredAt])
+  @@index([sessionId])
+  @@index([eventName])
+}
+
+model VeilstonePlaytestFeedback {
+  id                    String   @id @default(cuid())
+  matchId               String
+  sessionId             String
+  seatIndex             Int?
+  understoodGoal        Int
+  decisionsMattered     Int
+  understoodOutcome     Int
+  shieldedFeltFair      Int
+  trustPrestigeMattered Int
+  feltSkillful          Int
+  wouldPlayAgain        Int
+  mostExcitingMoment    String?
+  mostConfusingMoment   String?
+  oneThingToChange      String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  match VeilstoneMatch @relation(fields: [matchId], references: [id])
+
+  @@unique([matchId, sessionId])
+  @@index([matchId])
+  @@index([sessionId])
 }

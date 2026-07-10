@@ -7,11 +7,25 @@ import { getBrandUrlForPath } from '@/lib/brand/config'
 import { getServerBrand } from '@/lib/brand/server'
 import SiteHeader from '@/components/layout/SiteHeader'
 import Home21z from '@/components/brand/Home21z'
+import HomeVeilstone from '@/components/brand/HomeVeilstone'
 
 export default async function Home() {
   const brand = await getServerBrand()
   const homeUrl = getBrandUrlForPath(brand.id, '/')
   const is21z = brand.id === '21z'
+  const isVeilstone = brand.id === 'veilstone'
+
+  if (isVeilstone) {
+    return (
+      <>
+        <BreadcrumbJsonLd items={[{ name: 'Home', url: homeUrl }]} />
+        <main className="min-h-screen">
+          <SiteHeader />
+          <HomeVeilstone />
+        </main>
+      </>
+    )
+  }
 
   if (is21z) {
     return (

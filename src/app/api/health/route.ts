@@ -5,6 +5,8 @@ import { DEFAULT_NETWORK } from '@/lib/wallet'
 import { isKillSwitchActive } from '@/lib/kill-switch'
 import { getProvablyFairMode } from '@/lib/provably-fair/mode'
 import { getSessionSeedPoolStatus } from '@/lib/services/session-seed-pool-manager'
+import { VEILSTONE_ENGINE_VERSION } from '@/lib/veilstone/engine'
+import { getVeilstoneOperationalSummary } from '@/lib/veilstone/admin'
 
 // Severity thresholds
 const POOL_LOW_THRESHOLD = 5
@@ -22,7 +24,7 @@ export async function GET() {
   // Run all checks in parallel so a slow zcashd RPC doesn't block the
   // entire response.  Each check has its own error handling.
 
-  const [dbResult, nodeResult, poolResult, balanceResult, withdrawalResult] =
+  const [dbResult, nodeResult, poolResult, balanceResult, withdrawalResult, veilstoneResult] =
     await Promise.allSettled([
       // 1. Database check
       prisma.session.count(),
@@ -59,6 +61,9 @@ export async function GET() {
       prisma.transaction.count({
         where: { type: 'withdrawal', status: { in: ['pending', 'pending_approval'] } },
       }),
+
+      // 6. Veilstone Play-ZEC prototype health
+      getVeilstoneOperationalSummary(),
     ])
 
   // --- Process results ---
@@ -136,6 +141,33 @@ export async function GET() {
     checks.pendingWithdrawals = withdrawalResult.value
   } else {
     checks.pendingWithdrawals = null
+  }
+
+  if (veilstoneResult.status === 'fulfilled') {
+    checks.veilstone = {
+      engineVersion: VEILSTONE_ENGINE_VERSION,
+      activeMatchCount: veilstoneResult.value.activeMatches,
+      waitingTableCount: veilstoneResult.value.waitingTables,
+      stuckMatchCount: veilstoneResult.value.stuckMatchCount,
+      ledgerInvariantStatus: veilstoneResult.value.ledgerInvariantStatus,
+    }
+    if (veilstoneResult.value.stuckMatchCount > 0) {
+      if (severity === 'ok') severity = 'warning'
+      checks.veilstoneWarning = 'One or more Veilstone matches appear stuck past their phase timer'
+    }
+    if (veilstoneResult.value.ledgerInvariantStatus !== 'ok') {
+      severity = 'critical'
+      checks.veilstoneLedgerWarning = 'Veilstone ledger invariant failed'
+    }
+  } else {
+    checks.veilstone = {
+      engineVersion: VEILSTONE_ENGINE_VERSION,
+      activeMatchCount: null,
+      waitingTableCount: null,
+      stuckMatchCount: null,
+      ledgerInvariantStatus: 'unknown',
+    }
+    if (severity === 'ok') severity = 'warning'
   }
 
   // Kill switch (synchronous, always available)

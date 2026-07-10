@@ -92,9 +92,7 @@ function maybeCleanupStore(now: number): void {
   }
 
   const maxWindowMs = Math.max(
-    DEFAULT_BUCKET_CONFIG['auth-login'].windowMs,
-    DEFAULT_BUCKET_CONFIG['admin-read'].windowMs,
-    DEFAULT_BUCKET_CONFIG['admin-action'].windowMs
+    ...Object.values(DEFAULT_BUCKET_CONFIG).map((config) => config.windowMs)
   )
 
   for (const [key, state] of store.entries()) {
@@ -171,4 +169,13 @@ export function checkPublicRateLimit(
   bucket: PublicRateLimitBucket
 ): RateLimitResult {
   return checkAdminRateLimit(request, bucket)
+}
+
+export function resetRateLimitStateForTests(): void {
+  if (process.env.NODE_ENV !== 'test') {
+    throw new Error('Rate-limit state can only be reset in tests')
+  }
+
+  store.clear()
+  cleanupCounter = 0
 }

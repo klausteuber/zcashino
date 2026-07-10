@@ -164,6 +164,7 @@ describe('/api/wallet POST withdrawal-status transitions', () => {
     validateAddressViaRPCMock.mockResolvedValue({ isvalid: true })
     getDepositInfoMock.mockReturnValue({})
     creditFundsMock.mockResolvedValue(undefined)
+    prismaMock.transaction.updateMany.mockResolvedValue({ count: 1 })
     sendPlayerDepositAlertMock.mockResolvedValue(undefined)
     createDepositWalletForSessionMock.mockResolvedValue({
       id: 'wallet-1',
@@ -231,15 +232,20 @@ describe('/api/wallet POST withdrawal-status transitions', () => {
 
     expect(payload.transaction.status).toBe('confirmed')
     expect(payload.transaction.txHash).toBe('zcash-tx-hash')
-    expect(prismaMock.transaction.update).toHaveBeenCalledWith({
-      where: { id: 'tx-1' },
+    expect(prismaMock.transaction.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'tx-1',
+        type: 'withdrawal',
+        status: 'pending',
+        operationId: 'op-1',
+        failReason: null,
+      },
       data: {
         status: 'confirmed',
         txHash: 'zcash-tx-hash',
         confirmedAt: expect.any(Date),
         failReason: null,
       },
-      select: expect.any(Object),
     })
     expect(prismaMock.session.update).not.toHaveBeenCalled()
   })
@@ -279,8 +285,14 @@ describe('/api/wallet POST withdrawal-status transitions', () => {
       0.4
     )
 
-    expect(prismaMock.transaction.update).toHaveBeenCalledWith({
-      where: { id: 'tx-2' },
+    expect(prismaMock.transaction.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'tx-2',
+        type: 'withdrawal',
+        status: 'pending',
+        operationId: 'op-2',
+        failReason: null,
+      },
       data: { status: 'failed', failReason: 'insufficient fee' },
     })
   })
@@ -329,8 +341,14 @@ describe('/api/wallet POST withdrawal-status transitions', () => {
       0.0002
     )
 
-    expect(prismaMock.transaction.update).toHaveBeenCalledWith({
-      where: { id: 'tx-ua-1' },
+    expect(prismaMock.transaction.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'tx-ua-1',
+        type: 'withdrawal',
+        status: 'pending',
+        operationId: 'op-ua-1',
+        failReason: expect.stringMatching(/^reconciling:/),
+      },
       data: {
         status: 'pending',
         operationId: 'op-ua-retry-1',
@@ -571,7 +589,7 @@ describe('/api/wallet POST withdrawal-status transitions', () => {
     prismaMock.session.findUnique
       .mockResolvedValueOnce({
         id: 'session-1',
-        balance: 1,
+        balance: 0,
         walletAddress: 'real_wallet',
         isAuthenticated: false,
         withdrawalAddress: null,
@@ -587,7 +605,7 @@ describe('/api/wallet POST withdrawal-status transitions', () => {
       .mockResolvedValueOnce({ depositLimit: null })
       .mockResolvedValueOnce({
         id: 'session-1',
-        balance: 1.25,
+        balance: 0.25,
         isAuthenticated: true,
         withdrawalAddress: null,
         authTxHash: 'tx-confirmed',
@@ -599,7 +617,7 @@ describe('/api/wallet POST withdrawal-status transitions', () => {
         txid: 'tx-confirmed',
         category: 'receive',
         amount: 0.25,
-        confirmations: 3,
+        confirmations: 4,
         time: 1,
       },
     ])
@@ -612,6 +630,20 @@ describe('/api/wallet POST withdrawal-status transitions', () => {
     }))
 
     expect(response.status).toBe(200)
+    const payload = await response.json()
+
+    expect(payload.newDeposit).toBe(true)
+    expect(payload.depositAmount).toBe(0.25)
+    expect(payload.authenticated).toBe(true)
+    expect(prismaMock.transaction.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        sessionId: 'session-1',
+        type: 'deposit',
+        amount: 0.25,
+        txHash: 'tx-confirmed',
+        status: 'confirmed',
+      }),
+    })
     expect(creditFundsMock).toHaveBeenCalledWith(
       prismaMock,
       'session-1',
@@ -622,7 +654,7 @@ describe('/api/wallet POST withdrawal-status transitions', () => {
       sessionId: 'session-1',
       amount: 0.25,
       txHash: 'tx-confirmed',
-      confirmations: 3,
+      confirmations: 4,
       address: 'utestUnifiedDepositAddress1234567890',
       isAuthDeposit: true,
       credited: true,

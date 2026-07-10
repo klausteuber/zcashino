@@ -227,6 +227,22 @@ npm run build
 **Fix:** Before wallet repair, enable kill-switch maintenance and take a root-only `wallet.dat` backup. Run a temporary `zcashd` startup with `-zapwallettxes=1` to rebuild wallet transaction and witness state, remove the temporary repair flag once rescan finishes, then restart normally. `check-node.sh` now reports startup/rescan states as maintenance/grace skips instead of urgent alerts, and `backup-wallet.sh` now finds the actual `mainnet_zcash-mainnet-data` wallet path.
 
 **Key files:** `scripts/check-node.sh`, `scripts/backup-wallet.sh`, `docker-compose.mainnet.yml`.
+## Zcash Node Operations
+
+### zcashd Docker Image Entrypoint Change (2026-05-01)
+
+**Symptom:** Production showed `zcashNode.connected=false`, real-session creation failed with "The Zcash node is temporarily offline," and the Telegram monitor repeated `NODE ERROR: Cannot reach zcash-cli (RPC unresponsive)`.
+
+**Root Cause:**
+The running `electriccoinco/zcashd:latest` image was still v6.11.0 and shut itself down at mainnet block height 3327100 with a deprecation error. Pulling the current image upgraded to v6.12.1, but the newer image no longer accepts raw daemon flags as the container command. It tried to execute `-par=6` as the binary. It also defaults CLI lookups to `/root/.zcash`, while production wallet data is mounted at `/srv/zcashd/.zcash`.
+
+**Fix:**
+- Pull the current `electriccoinco/zcashd:latest` image before restarting at deprecation height.
+- In `docker-compose.mainnet.yml`, explicitly set `entrypoint: ["zcashd"]`.
+- Pass `-datadir=/srv/zcashd/.zcash` and `-printtoconsole` to `zcashd`.
+- Pass `-datadir=/srv/zcashd/.zcash` to `zcash-cli` in Docker healthchecks and node-monitor scripts.
+
+**Key files:** `docker-compose.mainnet.yml`, `scripts/check-node.sh`
 
 ---
 
@@ -758,7 +774,7 @@ There was a second trap hiding behind the same symptom: if a real session had be
 
 ---
 
-### Insurance decline must be server-side — game logic never client-only (2026-02-18)
+### Insurance decline must be server-side - game logic never client-only (2026-02-18)
 
 **Symptom:** Player allowed to Hit/Stand while insurance prompt was visible. Dealer blackjack not checked after declining insurance. Player could play a full hand and lose to a dealer blackjack that should have ended the round immediately.
 
@@ -842,6 +858,52 @@ Also ignored the user's own statement ("I thought we changed the architecture") 
 
 ---
 
+### Strict cookie restore without a backup credential creates a dead-end UX (2026-03-23)
+
+**Symptom:** The app correctly blocked `sessionId`-only restores for security, but players who lost the signed browser cookie had no supported way back into a real-money session. The onboarding modal still showed a restore affordance, so the experience felt broken even though the hardening was intentional.
+
+**Root Cause:** Session security and session recovery were treated as the same feature. Once the cookie became the only authority source, the product needed a second authority source for cross-browser/manual restore. Without that, the "restore" UI was either a dead button or a security regression waiting to happen.
+
+**Fix:**
+1. Add a separate recovery credential model for non-demo sessions and store only a hash of a high-entropy recovery key.
+2. Add `playerAuthVersion` to session auth state and signed player cookies so a successful manual restore can invalidate older browser cookies.
+3. Add `/api/session/recovery` for key creation, regeneration, and restore; never trust caller-supplied `sessionId` for manual recovery.
+4. Keep same-browser auto-restore via local storage + cookie, but when stale local storage hits a `401`, guide the user into the recovery flow instead of silently dropping them into a new session.
+
+**Key files:** `prisma/schema.prisma`, `src/lib/auth/player-session.ts`, `src/app/api/session/recovery/route.ts`, `src/hooks/useGameSession.ts`, `src/components/onboarding/OnboardingModal.tsx`
+
+---
+
+### Pending withdrawals can look unresolved even after zcashd has already sent them (2026-03-24)
+
+**Symptom:** The admin dashboard showed a fresh withdrawal as `PENDING`, but zcashd had already finished the `z_sendmany` operation and assigned a real txid. The dashboard also continued to show old `pending` rows unless someone used a manual poll action.
+
+**Root Cause:** Withdrawal state reconciliation only happened in ad hoc action paths. Read endpoints such as `/api/admin/overview`, `/api/admin/withdrawals`, and `/api/health` were returning raw DB rows without first checking `operationId` state against zcashd.
+
+**Fix:**
+1. Add a shared withdrawal reconciliation service that:
+   - confirms successful operations and stores txid/confirmedAt
+   - retries unpaid-action failures with adjusted ZIP-317 fee
+   - refunds only real failures
+2. Run reconciliation before admin overview, admin withdrawals, and health reads.
+3. Reuse the same service for player polling and admin poll/process actions so there is one source of truth.
+
+**Files:** `src/lib/services/withdrawal-reconciliation.ts`, `src/app/api/wallet/route.ts`, `src/app/api/admin/overview/route.ts`, `src/app/api/admin/withdrawals/route.ts`, `src/app/api/admin/pool/route.ts`, `src/app/api/health/route.ts`
+
+---
+
+### `Operation not found` must stay in manual-review territory (2026-03-24)
+
+**Symptom:** Older pending withdrawals can survive container restarts with an `operationId` that zcashd no longer remembers. A naive reconciler sees that missing op and could mark the withdrawal failed and refund the player.
+
+**Root Cause:** zcashd operation memory is not a durable source of truth. Once an op disappears from `z_getoperationstatus`, the system no longer has enough evidence to distinguish "never sent" from "sent successfully but op memory is gone" unless it also has the chain txid.
+
+**Fix:** Treat `Operation not found` as `unknown`, leave the row out of the automatic refund path, and provide a deliberate admin-only manual confirm action that requires the known chain txid.
+
+**Files:** `src/lib/services/withdrawal-reconciliation.ts`, `src/app/api/admin/pool/route.ts`, `src/app/admin/withdrawals/page.tsx`, `src/app/admin/page.tsx`
+
+---
+
 ### Swap onboarding can fail in two subtle ways at once (2026-04-09)
 
 **Symptom:** "Play & Swap" on `/get-zec` landed on Blackjack without opening the deposit flow, and once players manually opened the real-money onboarding modal the "Need ZEC?" tab could spam `/api/wallet`, throw `Maximum update depth exceeded`, and make the swap UI look broken.
@@ -851,6 +913,36 @@ Also ignored the user's own statement ("I thought we changed the architecture") 
 **Fix:** Pointed the `/get-zec` swap CTA directly at deposit onboarding and stabilized `useDepositPolling()` with refs for the latest status/callbacks so polling keeps one steady interval instead of rearming on every render. Added a regression test that rerenders with new callback identities and confirms polling does not restart.
 
 **Key files:** `src/app/get-zec/page.tsx`, `src/hooks/useDepositPolling.ts`, `src/hooks/useDepositPolling.test.ts`
+
+---
+
+### Admin withdrawal decisions need a guarded status claim before moving funds (2026-04-24)
+
+**Symptom:** Two concurrent admin approval clicks could both read the same `pending_approval` withdrawal and each call `sendZec(...)`. Two concurrent rejection clicks could each refund the same reserved withdrawal balance.
+
+**Root Cause:** The approval/rejection paths used read-then-act flows around money movement. The row status was only updated after the external wallet call or after balance mutation, so duplicate requests had a race window.
+
+**Fix:**
+1. Approval must first claim the row with `updateMany({ where: { status: 'pending_approval' } })` before calling `sendZec(...)`.
+2. Duplicate approval callers should re-read the row and return an idempotent "already processing/processed" response, not call the wallet RPC again.
+3. Rejection must move `pending_approval -> failed` and release held funds in the same Prisma transaction.
+4. Only refund/release funds when the guarded status update affects exactly one row.
+
+**Files:** `src/app/api/admin/pool/route.ts`, `src/app/api/admin/pool/route.test.ts`
+
+---
+
+### Primary CTAs can disappear inside mobile overflow nav (2026-04-24)
+
+**Symptom:** A "Buy ZEC" header CTA looked clear on desktop but sat off-screen on mobile because it was the final item in a horizontally scrollable nav row.
+
+**Root Cause:** The header treated the primary acquisition CTA like a normal navigation link. On narrow viewports, the overflow nav showed the early game links first and required horizontal scrolling before users could find the action meant for visitors who do not already have ZEC.
+
+**Fix:** Keep the primary CTA in the always-visible header row and put secondary nav links in the scrollable row on smaller screens.
+
+**Lesson:** Acquisition or deposit CTAs should not depend on horizontal scrolling for discovery. For mobile headers, separate the primary action from secondary navigation.
+
+**Files:** `src/components/layout/SiteHeader.tsx`, `src/app/globals.css`
 
 ---
 
@@ -923,3 +1015,24 @@ Also ignored the user's own statement ("I thought we changed the architecture") 
 **Fix:** Skip legacy no-UA sweep rows without counting them as sweep errors, chown `.next` for the `nextjs` runtime user, filter demo sessions from reserves, calculate reserve coverage from wallet balance, and auto-dismiss resolved stale alerts when their owning checks prove recovery.
 
 **Key files:** `src/lib/services/deposit-sweep.ts`, `src/app/api/reserves/route.ts`, `src/app/reserves/page.tsx`, `src/lib/admin/alerts.ts`, `Dockerfile`
+### Standalone output, nonce CSP, and proxy trust cross release boundaries (2026-07-09)
+
+**Symptoms:** A local standalone build could contain environment/database/project files; a strict script policy could block JSON-LD; CI smoke could run a server with missing static assets or a different SQLite file; and a caller-supplied forwarded host could select the Cypher admin brand.
+
+**Root causes:** Next.js traces files loaded during the build, standalone `server.js` changes its working directory, `public/` and `.next/static/` are not copied automatically, nonced CSP applies to non-executable JSON-LD script tags too, and `x-forwarded-host` is untrusted unless the deployment proxy overwrites it.
+
+**Fix:** Validate the standalone artifact and construct the runtime image only from validated output; copy public/static assets for standalone smoke tests and use an absolute test database URL; generate one request nonce in `proxy.ts` and pass it to all JSON-LD; ignore forwarded hosts unless explicitly trusted; and make admin host checks reject fallback resolution.
+
+**Key files:** `Dockerfile`, `.dockerignore`, `scripts/validate-standalone-artifact.mjs`, `scripts/prepare-standalone-smoke.mjs`, `src/proxy.ts`, `src/components/seo/JsonLd.tsx`, `src/lib/brand/resolve-host.ts`, `src/lib/admin/host-guard.ts`
+
+---
+
+### Legacy SQLite migration history cannot be validated by a clean database alone (2026-07-09)
+
+**Symptom:** Clean bootstrap and fully migrated database tests pass, but a production database with partial/manual schema changes may still fail a pending historical migration.
+
+**Root cause:** The legacy migration chain and production's recorded `_prisma_migrations` state can diverge from the current schema. Rewriting historical SQL would break checksums and make existing installations less trustworthy.
+
+**Fix:** Empty databases use the current Prisma schema and baseline all historical migrations; non-empty databases without history fail closed; databases with history use normal deploy/status. Before the first rollout of automatic migration gating, back up production and inspect its migration rows and schema, then explicitly resolve or forward-repair any drift.
+
+**Key files:** `scripts/migrate-safe.js`, `scripts/check-migrations.js`, `docker-compose.mainnet.yml`, `prisma/migrations/`

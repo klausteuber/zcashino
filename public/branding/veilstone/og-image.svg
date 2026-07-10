@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" role="img" aria-label="Veilstone">
+  <rect width="1200" height="630" fill="#10151A"/>
+  <path d="M0 500c180-100 360-124 540-72s366 70 660-64v266H0Z" fill="#15252A"/>
+  <g opacity=".18" stroke="#D8B46A" stroke-width="2">
+    <path d="M80 120h1040M80 200h1040M80 280h1040M80 360h1040"/>
+    <path d="M160 80v420M320 80v420M480 80v420M640 80v420M800 80v420M960 80v420"/>
+  </g>
+  <path d="M760 458 940 150l180 308h-82l-98-170-98 170Z" fill="#D8B46A"/>
+  <circle cx="940" cy="380" r="42" fill="#10151A" stroke="#F4E4B8" stroke-width="16"/>
+  <text x="90" y="240" fill="#F4E4B8" font-family="Georgia, serif" font-size="86" font-weight="700">Veilstone</text>
+  <text x="96" y="306" fill="#D8B46A" font-family="Arial, sans-serif" font-size="32">City-States of the Shielded Frontier</text>
+  <text x="96" y="382" fill="#9CB8B3" font-family="Arial, sans-serif" font-size="28">Public trust earns credit. Shielded capital wins showdowns.</text>
+</svg>

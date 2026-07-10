@@ -1,6 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 
+const navigation = vi.hoisted(() => ({
+  pathname: '/blackjack',
+  replace: vi.fn(),
+  searchParams: new URLSearchParams(),
+}))
+
+vi.mock('next/navigation', () => ({
+  usePathname: () => navigation.pathname,
+  useRouter: () => ({ replace: navigation.replace }),
+  useSearchParams: () => navigation.searchParams,
+}))
+
 vi.mock('@/components/ui/JesterLogo', () => ({
   default: () => <div data-testid="jester-logo" />,
 }))
@@ -37,7 +49,9 @@ vi.mock('@/hooks/useKeyboardShortcuts', () => ({
 }))
 
 vi.mock('@/components/onboarding/OnboardingModal', () => ({
-  OnboardingModal: () => null,
+  OnboardingModal: ({ isOpen, initialStep }: { isOpen: boolean; initialStep: string }) => (
+    isOpen ? <div data-testid="onboarding-modal">{initialStep}</div> : null
+  ),
 }))
 
 vi.mock('@/components/wallet/DepositWidget', () => ({
@@ -47,12 +61,6 @@ vi.mock('@/components/wallet/DepositWidget', () => ({
 
 vi.mock('@/components/wallet/WithdrawalModal', () => ({
   WithdrawalModal: () => null,
-}))
-
-vi.mock('next/navigation', () => ({
-  useSearchParams: () => new URLSearchParams(),
-  useRouter: () => ({ replace: vi.fn() }),
-  usePathname: () => '/blackjack',
 }))
 
 import BlackjackGame from './BlackjackGame'
@@ -114,6 +122,8 @@ describe('BlackjackGame auto-bet timers', () => {
   beforeEach(() => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     vi.clearAllMocks()
+    navigation.searchParams = new URLSearchParams()
+    navigation.replace.mockReset()
 
     ;(window.localStorage.getItem as unknown as ReturnType<typeof vi.fn>).mockImplementation((key: string) => {
       if (key === 'zcashino_onboarding_seen') return 'true'
@@ -241,6 +251,18 @@ describe('BlackjackGame auto-bet timers', () => {
     const payload = JSON.parse(String(init?.body))
 
     expect(payload.clientSeed).toBe('seed-from-storage')
+  })
+
+  it('opens the deposit onboarding flow from the onboarding query param', async () => {
+    navigation.searchParams = new URLSearchParams('onboarding=deposit')
+
+    render(<BlackjackGame />)
+
+    await waitFor(() => {
+      expect(screen.getByTestId('onboarding-modal')).toHaveTextContent('deposit')
+    })
+
+    expect(navigation.replace).toHaveBeenCalledWith('/blackjack', { scroll: false })
   })
 
   it('keeps completed-round net display stable when next-bet controls change', async () => {

@@ -6,7 +6,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const brand = await getServerBrand()
   const brandUrl = getBrandUrlForPath(brand.id, '/reserves')
   const canonicalUrl = getCanonicalUrlForPath(brand.id, '/reserves')
-  const brandTitle = brand.id === '21z' ? '21z' : 'CypherJester'
+  const brandTitle = brand.config.name
 
   return {
     title: 'Proof of Reserves',

@@ -71,7 +71,7 @@ body[data-brand="21z"] {
   --bg-elevated: #161825;
   --text-primary: #e0e4f0;
   --text-secondary: #8890a6;
-  --text-muted: #4a5068;
+  --text-muted: #7a839d;
   --color-success: #00ffb3;
   --color-error: #ff2e63;
   --color-warning: #f4b728;
@@ -93,6 +93,37 @@ body[data-brand="21z"] {
   --blood-ruby: #ff2e63;
 }
 
+body[data-brand="veilstone"] {
+  --accent-primary: #d8b46a;
+  --accent-secondary: #f4e4b8;
+  --bg-base: #10151a;
+  --bg-base-alt: #16252a;
+  --bg-surface: #0d1116;
+  --bg-elevated: #172026;
+  --text-primary: #f4e4b8;
+  --text-secondary: #b8c6bd;
+  --text-muted: #82968f;
+  --color-success: #4da36f;
+  --color-error: #b45d5d;
+  --color-warning: #d8b46a;
+  --border-default: rgba(216, 180, 106, 0.22);
+  --border-active: rgba(77, 163, 169, 0.55);
+  --card-red: #b45d5d;
+  --card-black: #10151a;
+  --font-display: var(--font-cinzel), Georgia, serif;
+  --font-body: var(--font-inter), system-ui, sans-serif;
+  --font-mono-brand: var(--font-space-mono), ui-monospace, monospace;
+  --jester-purple: #2f6f73;
+  --jester-purple-dark: #16252a;
+  --jester-purple-light: #4da3a9;
+  --masque-gold: #d8b46a;
+  --venetian-gold: #f4e4b8;
+  --midnight-black: #0d1116;
+  --bone-white: #f4e4b8;
+  --crimson-mask: #6d4f7f;
+  --blood-ruby: #b45d5d;
+}
+
 body {
   color: var(--text-primary);
   background: linear-gradient(to bottom,
@@ -104,6 +135,36 @@ body {
 
 body[data-brand="21z"] {
   background: #05050a;
+}
+
+.skip-link {
+  position: fixed;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 100;
+  padding: 0.75rem 1rem;
+  border: 2px solid var(--accent-primary);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font-weight: 700;
+  transform: translateY(calc(-100% - 1rem));
+}
+
+.skip-link:focus-visible {
+  transform: translateY(0);
+  outline: 2px solid var(--text-primary);
+  outline-offset: 3px;
+}
+
+#site-content:focus {
+  outline: none;
+}
+
+body[data-brand="veilstone"] {
+  background:
+    linear-gradient(135deg, rgba(216, 180, 106, 0.06) 25%, transparent 25%) 0 0 / 28px 28px,
+    linear-gradient(225deg, rgba(77, 163, 169, 0.05) 25%, transparent 25%) 0 0 / 28px 28px,
+    #10151a;
 }
 
 body[data-brand="21z"]::before {
@@ -145,10 +206,16 @@ body[data-brand="21z"] .buy-zec-cta {
   text-transform: uppercase;
 }
 
+body[data-brand="veilstone"] .buy-zec-cta {
+  background: #d8b46a;
+  color: #10151a;
+  box-shadow: 0 12px 30px rgba(216, 180, 106, 0.18);
+}
+
 @media (max-width: 640px) {
   .buy-zec-cta {
     min-width: 6.8rem;
-    min-height: 2.45rem;
+    min-height: 2.75rem;
     padding: 0.65rem 1rem;
     font-size: 0.88rem;
   }
@@ -494,6 +561,7 @@ body[data-brand="21z"] :is(div, section, article, aside, form, details, table).r
 .brand-logo-21z,
 .brand-bell-21z,
 .brand-wordmark-21z,
+.brand-wordmark-veilstone,
 .brand-cardback-21z {
   display: none;
 }
@@ -501,6 +569,7 @@ body[data-brand="21z"] :is(div, section, article, aside, form, details, table).r
 body[data-brand="21z"] .brand-logo-cypher,
 body[data-brand="21z"] .brand-bell-cypher,
 body[data-brand="21z"] .brand-wordmark-cypher,
+body[data-brand="21z"] .brand-wordmark-veilstone,
 body[data-brand="21z"] .brand-cardback-cypher {
   display: none;
 }
@@ -509,6 +578,18 @@ body[data-brand="21z"] .brand-logo-21z,
 body[data-brand="21z"] .brand-bell-21z,
 body[data-brand="21z"] .brand-wordmark-21z,
 body[data-brand="21z"] .brand-cardback-21z {
+  display: inline-flex;
+}
+
+body[data-brand="veilstone"] .brand-logo-cypher,
+body[data-brand="veilstone"] .brand-bell-cypher,
+body[data-brand="veilstone"] .brand-wordmark-cypher,
+body[data-brand="veilstone"] .brand-wordmark-21z,
+body[data-brand="veilstone"] .brand-cardback-cypher {
+  display: none;
+}
+
+body[data-brand="veilstone"] .brand-wordmark-veilstone {
   display: inline-flex;
 }
 
@@ -1762,6 +1843,11 @@ button,
 a,
 [role="button"] {
   transition: all 0.15s ease-out;
+}
+
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 3px;
 }
 
 @media (prefers-reduced-motion: reduce) {

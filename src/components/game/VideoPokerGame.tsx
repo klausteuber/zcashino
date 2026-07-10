@@ -22,31 +22,17 @@ import { DepositWidget, DepositWidgetCompact } from '@/components/wallet/Deposit
 import { WithdrawalModal } from '@/components/wallet/WithdrawalModal'
 import JesterLogo from '@/components/ui/JesterLogo'
 import { useGameSounds } from '@/hooks/useGameSounds'
+import { useBrand } from '@/hooks/useBrand'
+import {
+  generateClientSeedHex,
+  type FairnessRevealBundle,
+} from '@/lib/game/client-fairness'
+import { GameSessionStats } from '@/components/game/GameSessionStats'
 
 const CHIP_VALUES = [0.01, 0.05, 0.1, 0.25, 0.5, 1]
 
-function generateClientSeedHex(bytes: number = 16): string {
-  const cryptoApi = globalThis.crypto
-  if (!cryptoApi?.getRandomValues) {
-    return `${Date.now().toString(16)}${Math.random().toString(16).slice(2)}`
-  }
-  const random = new Uint8Array(bytes)
-  cryptoApi.getRandomValues(random)
-  return Array.from(random).map((value) => value.toString(16).padStart(2, '0')).join('')
-}
-
-interface FairnessRevealBundle {
-  mode: 'session_nonce_v1'
-  serverSeed: string
-  serverSeedHash: string
-  clientSeed: string
-  lastNonceUsed: number | null
-  txHash: string
-  blockHeight: number | null
-  blockTimestamp: string | Date | null
-}
-
 export default function VideoPokerGame() {
+  const brand = useBrand()
   // Session management via shared hook (auto-creates demo for first-time visitors)
   const {
     session, setSession,
@@ -54,6 +40,7 @@ export default function VideoPokerGame() {
     error: sessionError, setError: setSessionError,
     showOnboarding, setShowOnboarding,
     onboardingMode,
+    restoreNotice,
     depositAddress,
     fairness, setFairness,
     handleDemoSelect,
@@ -62,6 +49,9 @@ export default function VideoPokerGame() {
     handleSwitchToReal,
     handleSetWithdrawalAddress,
     handleResetDemoBalance,
+    handleCreateRecoveryKey,
+    handleRegenerateRecoveryKey,
+    handleRestoreSession,
     demoWinNudgeShown,
     demoHandCount,
   } = useGameSession()
@@ -219,7 +209,7 @@ export default function VideoPokerGame() {
     } finally {
       setIsActing(false)
     }
-  }, [session, isActing, selectedBet, betMultiplier, variant, playSound, canEditSessionClientSeed, clientSeedInput])
+  }, [session, isActing, selectedBet, betMultiplier, variant, playSound, canEditSessionClientSeed, clientSeedInput, setFairness, setSession])
 
   const handleDraw = useCallback(async () => {
     if (!session || !gameId || isActing || gameState?.phase !== 'hold') return
@@ -300,7 +290,7 @@ export default function VideoPokerGame() {
     } finally {
       setIsActing(false)
     }
-  }, [session, gameId, isActing, gameState?.phase, localHeldCards, playSound, variant, selectedBet, betMultiplier])
+  }, [session, gameId, isActing, gameState?.phase, localHeldCards, playSound, variant, selectedBet, betMultiplier, demoHandCount, demoWinNudgeShown, setSession])
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -349,7 +339,7 @@ export default function VideoPokerGame() {
     } catch {
       // Non-blocking
     }
-  }, [session?.id])
+  }, [session?.id, setFairness])
 
   const persistClientSeedIfEditable = useCallback(async () => {
     if (!session?.id || !isSessionFairnessMode || !canEditSessionClientSeed) return
@@ -373,7 +363,7 @@ export default function VideoPokerGame() {
     } catch {
       // Ignore - seed can still be set on deal request.
     }
-  }, [canEditSessionClientSeed, clientSeedInput, isSessionFairnessMode, session?.id])
+  }, [canEditSessionClientSeed, clientSeedInput, isSessionFairnessMode, session?.id, setFairness])
 
   const handleRotateSeed = useCallback(async () => {
     if (!session?.id || !isSessionFairnessMode || isActing) return
@@ -411,7 +401,7 @@ export default function VideoPokerGame() {
     } finally {
       setIsActing(false)
     }
-  }, [isActing, isSessionFairnessMode, refreshFairnessState, session?.id])
+  }, [isActing, isSessionFairnessMode, refreshFairnessState, session?.id, setFairness])
 
   const isDeucesWild = variant === 'deuces_wild'
   const phase = gameState?.phase
@@ -455,7 +445,9 @@ export default function VideoPokerGame() {
               }}
             >
               <div className="w-8 h-8 sm:w-10 sm:h-10 border border-masque-gold/20 rounded-full flex items-center justify-center">
-                <span className="text-masque-gold/40 text-xs font-display">21z</span>
+                <span className="text-masque-gold/40 text-xs font-display">
+                  {brand.id === '21z' ? '21z' : brand.config.shortName}
+                </span>
               </div>
             </div>
           ))}
@@ -811,15 +803,7 @@ export default function VideoPokerGame() {
       )}
 
       {/* Session stats */}
-      {session && (
-        <div className="flex justify-center gap-6 text-sm text-venetian-gold/60 border-t border-masque-gold/10 pt-3">
-          <span>Wagered: {session.totalWagered.toFixed(4)} ZEC</span>
-          <span>Won: {session.totalWon.toFixed(4)} ZEC</span>
-          <span className={session.totalWon - session.totalWagered >= 0 ? 'text-green-400' : 'text-blood-ruby'}>
-            Net: {(session.totalWon - session.totalWagered) >= 0 ? '+' : ''}{(session.totalWon - session.totalWagered).toFixed(4)} ZEC
-          </span>
-        </div>
-      )}
+      {session && <GameSessionStats session={session} showNet />}
 
       {/* Hand history */}
       {handHistory.length > 0 && (
@@ -872,7 +856,12 @@ export default function VideoPokerGame() {
         transparentAddress={session?.transparentAddress ?? null}
         onCreateRealSession={handleCreateRealSession}
         onSetWithdrawalAddress={handleSetWithdrawalAddress}
-        initialStep={onboardingMode === 'deposit' ? 'deposit' : 'welcome'}
+        recovery={session?.recovery ?? null}
+        onCreateRecoveryKey={handleCreateRecoveryKey}
+        onRegenerateRecoveryKey={handleRegenerateRecoveryKey}
+        onRestoreSession={handleRestoreSession}
+        restoreNotice={restoreNotice}
+        initialStep={onboardingMode === 'deposit' ? 'deposit' : onboardingMode === 'restore' ? 'restore' : 'welcome'}
       />
 
       {/* Demo Win Nudge Toast */}

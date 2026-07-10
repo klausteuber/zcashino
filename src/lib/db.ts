@@ -1,6 +1,5 @@
 import { PrismaClient } from '@prisma/client'
 import { PrismaLibSql } from '@prisma/adapter-libsql'
-import path from 'path'
 
 // Prevent multiple instances during development hot reload
 const globalForPrisma = globalThis as unknown as {
@@ -11,17 +10,18 @@ const globalForPrisma = globalThis as unknown as {
 function getDatabaseUrl(): string {
   const envUrl = process.env.DATABASE_URL
   if (envUrl) {
-    // If it's a relative file path, resolve it to absolute
+    // libSQL resolves file URLs itself. Constructing the absolute URL as a
+    // string avoids handing a runtime-controlled path to the bundler's file
+    // tracer, which would otherwise copy the entire project into standalone.
     if (envUrl.startsWith('file:./') || envUrl.startsWith('file:prisma/')) {
-      const relativePath = envUrl.replace('file:', '')
-      const absolutePath = path.resolve(process.cwd(), relativePath)
-      return `file:${absolutePath}`
+      const projectRoot = process.cwd().replace(/\/+$/, '')
+      const relativePath = envUrl.slice('file:'.length).replace(/^\.\//, '')
+      return `file:${projectRoot}/${relativePath}`
     }
     return envUrl
   }
   // Default path
-  const defaultPath = path.resolve(process.cwd(), 'prisma', 'dev.db')
-  return `file:${defaultPath}`
+  return `file:${process.cwd().replace(/\/+$/, '')}/prisma/dev.db`
 }
 
 // Prisma 7 requires adapter-based connection with config
