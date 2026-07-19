@@ -3,7 +3,7 @@ import { DEFAULT_NETWORK, generateDepositAddressSet, checkNodeStatus } from '@/l
 
 /**
  * Create a deposit wallet for a session.
- * Generates a unified deposit address plus transparent companion receiver via zcashd RPC
+ * Generates a unified deposit address plus transparent companion receiver via wallet RPC
  * (or demo placeholders on testnet).
  * On mainnet, refuses to generate fake addresses (funds would be permanently lost).
  */
@@ -13,6 +13,7 @@ export async function createDepositWalletForSession(sessionId: string) {
   let unifiedAddr: string | null
   let transparentAddr: string
   let accountIndex = 0
+  let accountUuid: string | null = null
 
   // Check if we have RPC connection — retry once after 2s if the first check fails
   let nodeStatus = await checkNodeStatus(network)
@@ -22,16 +23,17 @@ export async function createDepositWalletForSession(sessionId: string) {
     nodeStatus = await checkNodeStatus(network)
   }
 
-  if (nodeStatus.connected) {
+  if (nodeStatus.connected && (network !== 'mainnet' || nodeStatus.synced)) {
     // Generate both unified (user-facing) and transparent companion address
     const addressSet = await generateDepositAddressSet(network)
     unifiedAddr = addressSet.unifiedAddr
     transparentAddr = addressSet.transparentAddr
     accountIndex = addressSet.accountIndex
+    accountUuid = addressSet.accountUuid
   } else if (network === 'mainnet') {
     // SAFETY: Never generate fake addresses on mainnet — funds sent
     // to a fake address are permanently lost (no private key).
-    throw new Error('Cannot generate deposit address: Zcash node not connected')
+    throw new Error('Cannot generate deposit address: Zcash node not connected or wallet not fully synced')
   } else {
     // Generate demo placeholder addresses (testnet only)
     const timestamp = Date.now().toString(36)
@@ -56,6 +58,7 @@ export async function createDepositWalletForSession(sessionId: string) {
         transparentAddr,
         network,
         accountIndex,
+        accountUuid,
         addressIndex,
       },
     })

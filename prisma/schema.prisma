@@ -81,6 +81,8 @@ model DepositWallet {
 
   // Derivation info (for HD wallet reconstruction)
   accountIndex Int @default(0)
+  // Zallet uses UUID account identifiers for newly generated accounts.
+  accountUuid  String? @unique
   addressIndex Int @default(0)
 
   // Cached balance (updated periodically)

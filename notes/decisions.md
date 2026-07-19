@@ -211,6 +211,10 @@ Integrate Sentry for error tracking using four separate instrumentation entry po
 
 ## Zcash Node: zcashd over Zebra + Zallet (2026-02-08)
 
+> **Superseded 2026-07-19:** zcashd hard-stopped at block 3417100 and does not
+> support NU6.3. Mainnet now uses Zebra 6.0.0 plus Zallet 0.1.0-beta.1; the
+> original rationale below is retained as historical context.
+
 ### Decision
 Use zcashd (deprecated but functional) for the Zcash node, not the new Zebra + Zallet stack.
 
@@ -240,6 +244,36 @@ We evaluated Zebra (v4.1.0, production-ready consensus node) + Zallet (v0.1.0-al
 
 ### Risk
 zcashd is deprecated. The deprecation flag (`i-am-aware-zcashd-will-be-replaced-by-zebrad-and-zallet-in-2025=1`) is required in config. No announced end-of-life date — the binary continues to work on the current network.
+
+---
+
+## Mainnet Wallet: Zebra + Zallet (2026-07-19)
+
+### Decision
+Replace the end-of-life zcashd mainnet service with digest-pinned Zebra 6.0.0
+and Zallet 0.1.0-beta.1. Keep the development/testnet stack unchanged for now.
+
+### Why
+- zcashd 6.20.0 exits at block 3417100 and cannot follow NU6.3.
+- Zebra 6.0.0 supports NU6.3, and Zallet beta.1 provides the account, balance,
+  transaction, validation, and async-send RPCs used by the application.
+- Zallet can migrate the existing `wallet.dat`, preserving the original file as
+  the immutable recovery source.
+
+### Guardrails
+- Keep the kill switch enabled until Zebra, Zallet, wallet balances, and public
+  health all pass live checks.
+- Pin every runtime image by digest.
+- Store each Zallet account UUID in `DepositWallet`; resolve migrated numeric
+  accounts against `z_listaccounts` during the transition.
+- Never fall back from a failed per-account lookup to `z_gettotalbalance`.
+- Back up `wallet.db` and `encryption-identity.txt` together, while retaining the
+  original zcashd `wallet.dat` permanently.
+
+### Risk
+Zallet is beta software and its migration format is explicitly temporary. The
+operational rollback is maintenance mode plus restoration from the verified
+wallet backups; zcashd itself is no longer a viable network rollback.
 
 ---
 

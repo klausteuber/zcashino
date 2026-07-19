@@ -558,7 +558,8 @@ describe('/api/wallet POST withdrawal-status transitions', () => {
     expect(listAddressTransactionsMock).toHaveBeenCalledWith(
       'utestUnifiedDepositAddress1234567890',
       200,
-      'testnet'
+      'testnet',
+      undefined
     )
     expect(prismaMock.depositWallet.update).toHaveBeenCalledWith({
       where: { sessionId: 'session-1' },

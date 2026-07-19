@@ -278,6 +278,8 @@ async function handleCheckDeposits(session: {
     transparentAddr: string
     unifiedAddr: string | null
     network: string
+    accountIndex: number
+    accountUuid: string | null
   } | null
 }) {
   if (!session.wallet) {
@@ -306,11 +308,17 @@ async function handleCheckDeposits(session: {
   }
 
   // Keep an address-level balance snapshot for reserves UI only.
-  const tBalance = await getAddressBalance(session.wallet.transparentAddr, network)
+  const accountRef = session.wallet.accountUuid ?? session.wallet.accountIndex
+  const tBalance = await getAddressBalance(
+    session.wallet.transparentAddr,
+    network,
+    CONFIRMATIONS_REQUIRED,
+    accountRef
+  )
   let totalConfirmed = 0
   let totalPending = 0
 
-  const chainTxs = await listAddressTransactions(monitorAddress, 200, network)
+  const chainTxs = await listAddressTransactions(monitorAddress, 200, network, accountRef)
   const receiveMap = new Map<string, { amount: number; confirmations: number }>()
   for (const tx of chainTxs) {
     if (tx.category !== 'receive' || !tx.txid || tx.amount <= 0) continue

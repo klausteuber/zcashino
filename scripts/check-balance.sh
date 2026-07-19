@@ -26,7 +26,7 @@ alert() {
 
 # Query health endpoint which now includes house balance.
 # Timeout must exceed the health endpoint's internal RPC timeout (8s)
-# to avoid false "unreachable" alerts when zcashd is slow.
+# to avoid false "unreachable" alerts when wallet RPC is slow.
 RESPONSE=$(curl -s --max-time 20 "$HEALTH_URL" 2>/dev/null || echo "")
 
 if [[ -z "$RESPONSE" ]]; then
@@ -43,7 +43,7 @@ fi
 SEVERITY=$(echo "$RESPONSE" | jq -r '.status // .severity // "unknown"')
 PENDING_WITHDRAWALS=$(echo "$RESPONSE" | jq -r '.pendingWithdrawals // "0"')
 
-# houseBalance may be null when zcashd is slow (RPC timeout).
+# houseBalance may be null when wallet RPC is slow (RPC timeout).
 # Skip the balance check entirely in that case — don't fire a false LOW BALANCE alert.
 BALANCE_NULL=$(echo "$RESPONSE" | jq -r '.houseBalance == null')
 

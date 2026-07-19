@@ -586,6 +586,36 @@ In-memory limits and remote font fetches are acceptable in dev, but must be call
    Next.js writes image cache files under `.next/cache`. If `.next` is copied from the builder as root-owned and then the app runs as `nextjs`, image optimization can work but throw repeated permission errors.
 
 **Key files:** `src/lib/services/deposit-sweep.ts`, `src/app/api/reserves/route.ts`, `src/app/reserves/page.tsx`, `src/lib/admin/alerts.ts`, `Dockerfile`
+
+## zcashd End-of-Life Migration Learnings (2026-07-19)
+
+1. **A consensus-client deprecation height is an outage deadline, not a routine warning.**
+   zcashd 6.20.0 shut down cleanly at block 3417100, so Docker's restart policy
+   turned the hard stop into an RPC outage loop. Track mandatory support heights
+   as release blockers and migrate before the chain reaches them.
+
+2. **Wallet migration has two independent recovery artifacts.**
+   Keep the original `wallet.dat` indefinitely. Zallet also requires both
+   `wallet.db` and `encryption-identity.txt`; losing either part can make imported
+   spending keys unrecoverable.
+
+3. **Account-scoped money checks must fail closed.**
+   Zallet uses UUID account identifiers. If a deposit account cannot be resolved,
+   return no spendable balance and surface the error; never substitute the whole
+   wallet total, which could over-credit a player.
+
+4. **Maintenance mode belongs at the beginning and end of a node migration.**
+   Enable the kill switch before touching wallet or chain state. Reopen only after
+   node tip, wallet scan tip, account mapping, balances, and public health agree.
+
+5. **Verify release containers, not only upstream feature lists.**
+   Zallet beta.1 implemented wallet migration and Zaino in source, but its
+   distroless image omitted the required Berkeley DB helper and CA bundle. Run
+   the exact pinned image through migration and backend startup canaries before
+   treating a documented feature as deployable.
+
+**Key files:** `docker-compose.mainnet.yml`, `src/lib/wallet/rpc.ts`,
+`scripts/check-node.sh`, `scripts/backup-wallet.sh`
 ## Comprehensive Site Remediation Learnings (2026-07-09)
 
 1. **Marketing language must match the exact fairness lifecycle.** `session_nonce_v1` anchors a seed-session commitment that can cover multiple nonce-derived hands; it is not a per-hand precommit/reveal system.

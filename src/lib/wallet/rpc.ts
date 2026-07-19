@@ -1,7 +1,7 @@
 /**
  * Zcash RPC Client
  *
- * Communicates with a Zcash node (zcashd) via JSON-RPC.
+ * Communicates with the configured Zcash wallet service via JSON-RPC.
  * Used for:
  * - Address generation
  * - Balance queries
@@ -9,12 +9,15 @@
  * - Deposit monitoring
  */
 
+import { randomUUID } from 'node:crypto'
 import type { ZcashNetwork, WalletBalance } from '@/types'
 import { NETWORK_CONFIG, DEFAULT_NETWORK } from './index'
 
 // RPC configuration from environment
 const RPC_USER = process.env.ZCASH_RPC_USER || 'zcashrpc'
 const RPC_PASSWORD = process.env.ZCASH_RPC_PASSWORD || ''
+const WALLET_BACKEND = process.env.ZCASH_WALLET_BACKEND || 'zcashd'
+const IS_ZALLET = WALLET_BACKEND === 'zallet'
 export const DEFAULT_Z_SENDMANY_FEE = 0.0001
 const ZIP317_MARGINAL_FEE_ZATS = 5000
 const MAX_UNPAID_ACTION_RETRIES = 3
@@ -131,6 +134,26 @@ export async function checkNodeStatus(
   error?: string
 }> {
   try {
+    if (IS_ZALLET) {
+      const status = await rpcCall<{
+        node_tip: { height: number }
+        wallet_tip?: { height: number }
+        fully_synced_height?: number
+        sync_work_remaining?: unknown
+      }>('getwalletstatus', [], network)
+
+      const walletHeight = status.wallet_tip?.height ?? 0
+      const synced = walletHeight === status.node_tip.height &&
+        status.fully_synced_height === walletHeight &&
+        status.sync_work_remaining === undefined
+
+      return {
+        connected: true,
+        synced,
+        blockHeight: status.node_tip.height,
+      }
+    }
+
     const info = await rpcCall<{
       blocks: number
       headers: number
@@ -160,7 +183,9 @@ export async function checkNodeStatus(
 }
 
 interface RpcAccountResult {
-  account: number
+  account?: number
+  account_uuid?: string
+  zip32_account_index?: number
 }
 
 interface RpcUnifiedAddressResult {
@@ -172,7 +197,7 @@ function extractAccountIndex(result: number | RpcAccountResult): number {
   if (typeof result === 'object' && result !== null && typeof result.account === 'number') {
     return result.account
   }
-  throw new Error('Invalid account response from z_getnewaccount')
+  return -1
 }
 
 /**
@@ -184,13 +209,35 @@ export async function generateDepositAddressSet(
   unifiedAddr: string
   transparentAddr: string
   accountIndex: number
+  accountUuid: string | null
 }> {
-  const accountResult = await rpcCall<number | RpcAccountResult>('z_getnewaccount', [], network)
-  const accountIndex = extractAccountIndex(accountResult)
+  const accountName = `cypherjester-deposit-${Date.now()}-${randomUUID().slice(0, 8)}`
+  const accountResult = await rpcCall<number | RpcAccountResult>(
+    'z_getnewaccount',
+    IS_ZALLET ? [accountName] : [],
+    network
+  )
+  let accountIndex = extractAccountIndex(accountResult)
+  const accountUuid = typeof accountResult === 'object' && accountResult !== null
+    ? accountResult.account_uuid ?? null
+    : null
+  const accountRef = accountUuid ?? accountIndex
+
+  if (accountRef === -1) {
+    throw new Error('Invalid account response from z_getnewaccount')
+  }
+
+  // Zallet beta returns the stable UUID from z_getnewaccount but omits the
+  // legacy numeric account field. Keep the ZIP-32 index too so existing DB
+  // records and recovery tooling retain a useful deterministic reference.
+  if (IS_ZALLET && accountUuid && accountIndex < 0) {
+    const account = await rpcCall<RpcAccountResult>('z_getaccount', [accountUuid], network)
+    accountIndex = account.zip32_account_index ?? -1
+  }
 
   const ua = await rpcCall<RpcUnifiedAddressResult>(
     'z_getaddressforaccount',
-    [accountIndex, ['p2pkh', 'sapling']],
+    [accountRef, ['p2pkh', 'sapling']],
     network
   )
 
@@ -208,6 +255,7 @@ export async function generateDepositAddressSet(
     unifiedAddr: ua.address,
     transparentAddr: receivers.p2pkh,
     accountIndex,
+    accountUuid,
   }
 }
 
@@ -234,7 +282,7 @@ export async function generateSaplingAddress(
 
 /**
  * Generate a new unified address
- * Note: Requires zcashd with unified address support
+ * Requires a wallet service with unified address support.
  */
 export async function generateUnifiedAddress(
   network: ZcashNetwork = DEFAULT_NETWORK
@@ -250,11 +298,11 @@ export async function generateUnifiedAddress(
 }
 
 /**
- * Get the balance of a specific address (or entire wallet for z/u addresses).
+ * Get the balance of the account that owns a specific address.
  *
- * For z/u addresses: Uses z_getbalanceforaccount (account 0) which properly
- * includes all pools (transparent, sapling, orchard). Falls back to
- * z_gettotalbalance if unavailable.
+ * Zallet resolves the owning UUID account and never falls back to the whole
+ * wallet for an account-scoped lookup. Legacy zcashd retains its historical
+ * z_gettotalbalance compatibility fallback.
  *
  * IMPORTANT: z_gettotalbalance is deprecated and may not reliably report
  * Orchard pool funds in all zcashd versions. z_getbalanceforaccount is the
@@ -263,51 +311,69 @@ export async function generateUnifiedAddress(
 export async function getAddressBalance(
   address: string,
   network: ZcashNetwork = DEFAULT_NETWORK,
-  minConfirmations: number = 3
+  minConfirmations: number = 3,
+  accountRef?: number | string | null
 ): Promise<WalletBalance> {
   try {
-    if (address.startsWith('z') || address.startsWith('u')) {
+    if (IS_ZALLET || address.startsWith('z') || address.startsWith('u')) {
       // Primary: z_getbalanceforaccount — gives explicit per-pool breakdown
       try {
+        const balanceAccount = IS_ZALLET
+          ? await resolveZalletAccountUuid(accountRef, address, network)
+          : accountRef ?? 0
+        if (balanceAccount === null) {
+          throw new Error(`Unable to resolve Zallet account for ${address.slice(0, 16)}...`)
+        }
         const [confirmedResult, totalResult] = await Promise.all([
           rpcCall<{
             pools: {
               transparent?: { valueZat: number }
               sapling?: { valueZat: number }
               orchard?: { valueZat: number }
+              ironwood?: { valueZat: number }
             }
-          }>('z_getbalanceforaccount', [0, minConfirmations], network),
+          }>('z_getbalanceforaccount', [balanceAccount, minConfirmations], network),
           rpcCall<{
             pools: {
               transparent?: { valueZat: number }
               sapling?: { valueZat: number }
               orchard?: { valueZat: number }
+              ironwood?: { valueZat: number }
             }
-          }>('z_getbalanceforaccount', [0, 0], network),
+          }>('z_getbalanceforaccount', [balanceAccount, 0], network),
         ])
 
         const zat = (v: number) => v / 1e8
         const transparentConfirmed = zat(confirmedResult.pools.transparent?.valueZat ?? 0)
         const saplingConfirmed = zat(confirmedResult.pools.sapling?.valueZat ?? 0)
         const orchardConfirmed = zat(confirmedResult.pools.orchard?.valueZat ?? 0)
-        const confirmed = transparentConfirmed + saplingConfirmed + orchardConfirmed
+        const ironwoodConfirmed = zat(confirmedResult.pools.ironwood?.valueZat ?? 0)
+        const confirmed = transparentConfirmed + saplingConfirmed + orchardConfirmed + ironwoodConfirmed
 
         const transparentTotal = zat(totalResult.pools.transparent?.valueZat ?? 0)
         const saplingTotal = zat(totalResult.pools.sapling?.valueZat ?? 0)
         const orchardTotal = zat(totalResult.pools.orchard?.valueZat ?? 0)
-        const total = transparentTotal + saplingTotal + orchardTotal
+        const ironwoodTotal = zat(totalResult.pools.ironwood?.valueZat ?? 0)
+        const total = transparentTotal + saplingTotal + orchardTotal + ironwoodTotal
 
         return {
           confirmed,
-          pending: total - confirmed,
+          pending: normalizeZecAmount(total - confirmed),
           total,
           pools: {
             transparent: transparentConfirmed,
             sapling: saplingConfirmed,
             orchard: orchardConfirmed,
+            ironwood: ironwoodConfirmed,
           },
         }
       } catch (e) {
+        if (IS_ZALLET) {
+          // Never substitute the entire casino wallet balance for one account.
+          // Doing so could make a player deposit address appear funded when it is not.
+          console.error('[RPC] Zallet account balance lookup failed:', e)
+          return { confirmed: 0, pending: 0, total: 0 }
+        }
         console.warn('[RPC] z_getbalanceforaccount failed, falling back to z_gettotalbalance:', e)
       }
 
@@ -323,7 +389,7 @@ export async function getAddressBalance(
         const total = parseFloat(totalsUnconfirmed.total)
         return {
           confirmed,
-          pending: total - confirmed,
+          pending: normalizeZecAmount(total - confirmed),
           total,
         }
       } catch (e) {
@@ -388,10 +454,10 @@ export async function getWalletBalance(
     // z_gettotalbalance — sums ALL accounts, ALL pools
     const [confirmed, unconfirmed] = await Promise.all([
       rpcCall<{ transparent: string; private: string; total: string }>(
-        'z_gettotalbalance', [minConfirmations], network, options.timeoutMs
+        'z_gettotalbalance', IS_ZALLET ? [minConfirmations, true] : [minConfirmations], network, options.timeoutMs
       ),
       rpcCall<{ transparent: string; private: string; total: string }>(
-        'z_gettotalbalance', [0], network, options.timeoutMs
+        'z_gettotalbalance', IS_ZALLET ? [0, true] : [0], network, options.timeoutMs
       ),
     ])
 
@@ -408,6 +474,7 @@ export async function getWalletBalance(
             transparent?: { valueZat: number }
             sapling?: { valueZat: number }
             orchard?: { valueZat: number }
+            ironwood?: { valueZat: number }
           }
         }>('z_getbalanceforaccount', [0, minConfirmations], network, options.timeoutMs)
 
@@ -416,6 +483,7 @@ export async function getWalletBalance(
           transparent: zat(acct0.pools.transparent?.valueZat ?? 0),
           sapling: zat(acct0.pools.sapling?.valueZat ?? 0),
           orchard: zat(acct0.pools.orchard?.valueZat ?? 0),
+          ironwood: zat(acct0.pools.ironwood?.valueZat ?? 0),
         }
       } catch {
         // Pool breakdown unavailable — non-fatal
@@ -424,7 +492,7 @@ export async function getWalletBalance(
 
     return {
       confirmed: confirmedTotal,
-      pending: allTotal - confirmedTotal,
+      pending: normalizeZecAmount(allTotal - confirmedTotal),
       total: allTotal,
       pools,
     }
@@ -508,12 +576,103 @@ export async function getWalletBalanceCached(
 /**
  * List transactions for a specific address
  */
+interface ZalletAccount {
+  account_uuid: string
+  account?: number
+  zip32_account_index?: number
+  addresses?: Array<{
+    ua?: string
+    sapling?: string
+    transparent?: string
+  }>
+}
+
+let zalletAccountsCache: { accounts: ZalletAccount[]; fetchedAt: number } | null = null
+
+async function resolveZalletAccountUuid(
+  accountRef: number | string | null | undefined,
+  address: string,
+  network: ZcashNetwork
+): Promise<string | null> {
+  if (typeof accountRef === 'string' && accountRef.length > 0) return accountRef
+
+  if (!zalletAccountsCache || Date.now() - zalletAccountsCache.fetchedAt > 60_000) {
+    zalletAccountsCache = {
+      accounts: await rpcCall<ZalletAccount[]>('z_listaccounts', [true], network),
+      fetchedAt: Date.now(),
+    }
+  }
+
+  const match = zalletAccountsCache.accounts.find((account) =>
+    account.account === accountRef ||
+    account.zip32_account_index === accountRef ||
+    account.addresses?.some((candidate) =>
+      candidate.ua === address ||
+      candidate.sapling === address ||
+      candidate.transparent === address
+    )
+  )
+
+  return match?.account_uuid ?? null
+}
+
 export async function listAddressTransactions(
   address: string,
   count: number = 100,
-  network: ZcashNetwork = DEFAULT_NETWORK
+  network: ZcashNetwork = DEFAULT_NETWORK,
+  accountRef?: number | string | null
 ): Promise<ZcashTransaction[]> {
   try {
+    if (IS_ZALLET) {
+      const accountUuid = await resolveZalletAccountUuid(accountRef, address, network)
+      if (!accountUuid) {
+        throw new Error(`Unable to resolve Zallet account for ${address.slice(0, 16)}...`)
+      }
+
+      const [txs, status] = await Promise.all([
+        rpcCall<Array<{
+          txid: string
+          mined_height?: number
+          account_balance_delta: number
+          block_time?: number
+          outputs: Array<{
+            to_account?: string
+            to_address?: string
+            value: number
+            is_change: boolean
+            memo?: string
+          }>
+        }>>('z_listtransactions', [accountUuid, null, null, 0, count], network),
+        rpcCall<{ node_tip: { height: number } }>('getwalletstatus', [], network),
+      ])
+
+      return txs.flatMap((tx) => {
+        const receivedOutputs = tx.outputs.filter((output) =>
+          output.to_account === accountUuid && !output.is_change
+        )
+        const receivedZats = receivedOutputs.reduce((sum, output) => sum + output.value, 0)
+        const fallbackZats = Math.max(0, tx.account_balance_delta)
+        const amountZats = receivedZats || fallbackZats
+        if (amountZats <= 0) return []
+
+        const confirmations = tx.mined_height === undefined
+          ? 0
+          : Math.max(0, status.node_tip.height - tx.mined_height + 1)
+        const blocktime = tx.block_time
+
+        return [{
+          txid: tx.txid,
+          address,
+          category: 'receive' as const,
+          amount: amountZats / 1e8,
+          confirmations,
+          time: blocktime ?? Math.floor(Date.now() / 1000),
+          blocktime,
+          memo: receivedOutputs.find((output) => output.memo)?.memo,
+        }]
+      })
+    }
+
     if (address.startsWith('z') || address.startsWith('u')) {
       // Shielded address transactions
       const txs = await rpcCall<Array<{
@@ -565,6 +724,26 @@ export async function getTransaction(
   blocktime?: number
 } | null> {
   try {
+    if (IS_ZALLET) {
+      const tx = await rpcCall<{
+        confirmations: number
+        fee?: number
+        blocktime?: number
+        outputs: Array<{ value: number; outgoing?: boolean }>
+      }>('z_viewtransaction', [txid], network)
+      const amount = tx.outputs
+        .filter((output) => output.outgoing !== false)
+        .reduce((sum, output) => sum + Number(output.value), 0)
+
+      return {
+        confirmations: tx.confirmations,
+        amount: Math.abs(amount),
+        fee: Math.abs(Number(tx.fee ?? 0)),
+        time: tx.blocktime ?? Math.floor(Date.now() / 1000),
+        blocktime: tx.blocktime,
+      }
+    }
+
     const tx = await rpcCall<{
       confirmations: number
       amount?: number
@@ -627,13 +806,14 @@ export async function sendZec(
     try {
       const opid = await rpcCall<string>(
         'z_sendmany',
-        [fromAddress, [recipient], minconf, normalizedFee, privacyPolicy],
+        [fromAddress, [recipient], minconf, IS_ZALLET ? null : normalizedFee, privacyPolicy],
         network
       )
 
       return { operationId: opid }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
+      if (IS_ZALLET) throw error
       const nextFee = nextFeeForUnpaidActionError(normalizedFee, message)
 
       if (!nextFee || nextFee <= normalizedFee || attempt === MAX_UNPAID_ACTION_RETRIES) {
@@ -663,8 +843,8 @@ export async function getOperationStatus(
 }> {
   const results = await rpcCall<Array<{
     id: string
-    status: 'queued' | 'executing' | 'success' | 'failed'
-    result?: { txid: string }
+    status: 'queued' | 'executing' | 'success' | 'failed' | 'cancelled'
+    result?: { txid?: string; txids?: string[] }
     error?: { message: string }
   }>>('z_getoperationstatus', [[operationId]], network)
 
@@ -675,8 +855,8 @@ export async function getOperationStatus(
   }
 
   return {
-    status: op.status,
-    txid: op.result?.txid,
+    status: op.status === 'cancelled' ? 'failed' : op.status,
+    txid: op.result?.txid ?? op.result?.txids?.[0],
     error: op.error?.message,
   }
 }
@@ -714,7 +894,7 @@ export async function waitForOperation(
 }
 
 /**
- * Validate an address via zcashd RPC (checksum + network check).
+ * Validate an address via wallet RPC (checksum + network check).
  * More reliable than prefix-only validation — catches invalid checksums.
  * Falls back to true if RPC is unavailable (testnet) to avoid blocking.
  */
@@ -727,16 +907,19 @@ export async function validateAddressViaRPC(
     const isShielded = address.startsWith('zs') || address.startsWith('ztestsapling') ||
       address.startsWith('u1') || address.startsWith('utest')
 
-    if (isShielded) {
+    if (isShielded && !IS_ZALLET) {
       const result = await rpcCall<{ isvalid: boolean; type?: string }>(
         'z_validateaddress', [address], network
       )
       return { isvalid: result.isvalid, type: result.type }
     } else {
-      const result = await rpcCall<{ isvalid: boolean }>(
+      const result = await rpcCall<{ isvalid: boolean; type?: string; address_type?: string }>(
         'validateaddress', [address], network
       )
-      return { isvalid: result.isvalid, type: 'transparent' }
+      return {
+        isvalid: result.isvalid,
+        type: result.type ?? result.address_type ?? (isShielded ? 'shielded' : 'transparent'),
+      }
     }
   } catch (err) {
     // If RPC fails, don't block the operation — log and return uncertain

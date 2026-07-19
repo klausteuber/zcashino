@@ -9,12 +9,11 @@
 # 4. Wallet backup stored off-site (encrypted)
 #
 # FIRST RUN:
-# 1. Start zcashd first: docker compose -f docker-compose.mainnet.yml up -d zcashd
-# 2. Wait for full sync (15-24 hours): docker compose -f docker-compose.mainnet.yml exec zcashd zcash-cli getblockchaininfo
-# 3. Generate house wallet: docker compose -f docker-compose.mainnet.yml exec zcashd zcash-cli z_getnewaddress sapling
-# 4. Back up wallet immediately: see DEPLOYMENT.md
-# 5. Fund house wallet, set HOUSE_ZADDR_MAINNET in .env.mainnet
-# 6. Start app: docker compose -f docker-compose.mainnet.yml up -d app
+# 1. Start Zebra and wait for its health endpoint to become ready.
+# 2. Initialize Zallet encryption and create/import the wallet (DEPLOYMENT.md).
+# 3. Back up wallet.db plus encryption-identity.txt immediately.
+# 4. Fund the house wallet, set HOUSE_ZADDR_MAINNET in .env.mainnet.
+# 5. Start the app only after Zebra and the Zallet wallet are fully synced.
 
 services:
   app:
@@ -26,13 +25,14 @@ services:
     environment:
       - NODE_ENV=production
       - DATABASE_URL=file:/app/data/zcashino.db
-      - ZCASH_RPC_URL=http://zcashd:8232
+      - ZCASH_RPC_URL=http://zallet:8232
+      - ZCASH_WALLET_BACKEND=zallet
       - TRUST_PROXY_HEADERS=true
     volumes:
       - app-data:/app/data
     restart: unless-stopped
     depends_on:
-      zcashd:
+      zallet:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
@@ -54,49 +54,90 @@ services:
         max-size: "50m"
         max-file: "5"
 
-  zcashd:
-    # Emergency predisclosure build required after the June 2026 Zcash fork.
-    # Pin the digest instead of the mutable latest tag.
-    image: electriccoinco/zcashd@sha256:745098bbec91b7d0ae013c44bcd2400b660b3c7ad80935396df4848af529bfc0
-    user: "0:0" # Existing mainnet chain/wallet volume was created by root-run zcashd images.
-    entrypoint: ["zcashd"]
-    command:
-      - -datadir=/srv/zcashd/.zcash
-      - -printtoconsole
-      - -par=6
-      - -dbcache=2000              # 2GB UTXO cache — helps with 770+ shielded notes
-      - -rpcuser=${ZCASH_RPC_USER:-zcashrpc}
-      - -rpcpassword=${ZCASH_RPC_PASSWORD:?ZCASH_RPC_PASSWORD is required}
-      - -rpcallowip=172.16.0.0/12    # Docker internal network only
-      - -rpcbind=0.0.0.0
-      - -rpcport=8232
-      - -rpcthreads=16
-      - -rpcworkqueue=64
-      - -experimentalfeatures=1
-      - -txindex=1
-      - -i-am-aware-zcashd-will-be-replaced-by-zebrad-and-zallet-in-2025=1
-    # NOTE: No -testnet flag — this runs MAINNET
-    # NOTE: No ports exposed — RPC accessible only from Docker network
+  zebra:
+    # Zebra 6.0.0 is the first stable node with NU6.3/Ironwood mainnet support.
+    image: zfnd/zebra@sha256:78a10b7f24b83a86e6223d97e857094a353454e3268f84a87bd987e7140a33bb
+    environment:
+      - ZEBRA_NETWORK__NETWORK=Mainnet
+      - ZEBRA_RPC__LISTEN_ADDR=0.0.0.0:8232
+      - ZEBRA_RPC__ENABLE_COOKIE_AUTH=false
+      - ZEBRA_HEALTH__LISTEN_ADDR=0.0.0.0:8080
+      - ZEBRA_HEALTH__MIN_CONNECTED_PEERS=1
+      - ZEBRA_HEALTH__READY_MAX_BLOCKS_BEHIND=2
     volumes:
-      - zcash-mainnet-data:/srv/zcashd/.zcash
+      - zebra-mainnet-data:/home/zebra/.cache/zebra
     restart: unless-stopped
     deploy:
       resources:
         limits:
-          memory: 4G               # Post-IBD: zcashd needs ~2-3G steady state
+          memory: 6G
         reservations:
           memory: 2G
     healthcheck:
-      test: ["CMD", "zcash-cli", "-datadir=/srv/zcashd/.zcash", "-rpcuser=${ZCASH_RPC_USER:-zcashrpc}", "-rpcpassword=${ZCASH_RPC_PASSWORD}", "getblockchaininfo"]
-      interval: 60s
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/healthy"]
+      interval: 30s
       timeout: 10s
-      start_period: 300s    # 5 min grace for startup
-      retries: 3
+      start_period: 120s
+      retries: 5
     logging:
       driver: "json-file"
       options:
         max-size: "100m"
         max-file: "3"
+
+  zallet:
+    # Zallet replaces zcashd's embedded wallet and connects to Zebra over the
+    # private Compose network. The image contains both wallet backends; the
+    # generated config selects the container-friendly Zaino backend.
+    image: zodlinc/zallet@sha256:1849b4469875dc0165942c06d15fa6a7da76b2d43bade578cc8e5903a639869d
+    user: "1000:1000"
+    environment:
+      - SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+    command: ["-d", "/var/lib/zallet", "start"]
+    configs:
+      - source: zallet-mainnet-config
+        target: /var/lib/zallet/zallet.toml
+        uid: "1000"
+        gid: "1000"
+        mode: 0400
+    volumes:
+      - zallet-mainnet-data:/var/lib/zallet
+      # The beta.1 distroless image omits its own CA bundle, but its Zaino
+      # HTTP client requires one even for the private plain-HTTP Zebra RPC.
+      - /etc/ssl/certs:/etc/ssl/certs:ro
+    restart: unless-stopped
+    depends_on:
+      zebra:
+        condition: service_started
+      zallet-init:
+        condition: service_completed_successfully
+    deploy:
+      resources:
+        limits:
+          memory: 5G
+        reservations:
+          memory: 1G
+    healthcheck:
+      test: ["CMD", "zallet", "-d", "/var/lib/zallet", "rpc", "getwalletstatus"]
+      interval: 30s
+      timeout: 20s
+      start_period: 120s
+      retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "3"
+
+  zallet-init:
+    # Named volumes are root-owned on first creation; Zallet deliberately runs
+    # unprivileged, so make only its data volume writable before it starts.
+    image: busybox@sha256:9532d8c39891ca2ecde4d30d7710e01fb739c87a8b9299685c63704296b16028
+    user: "0:0"
+    command: ["chown", "-R", "1000:1000", "/var/lib/zallet"]
+    volumes:
+      - zallet-mainnet-data:/var/lib/zallet
+    restart: "no"
 
   migrate:
     build:
@@ -114,10 +155,49 @@ services:
 volumes:
   app-data:
     driver: local
-  zcash-mainnet-data:
+  zebra-mainnet-data:
     driver: local
-    # To use a separate mount point for chain data (if disk add-on is a block device):
-    # driver_opts:
-    #   type: none
-    #   o: bind
-    #   device: /mnt/zcash-data
+  zallet-mainnet-data:
+    driver: local
+
+configs:
+  zallet-mainnet-config:
+    content: |
+      backend = "zaino"
+
+      [builder.limits]
+
+      [consensus]
+      network = "main"
+
+      [database]
+
+      [external]
+
+      [features]
+      as_of_version = "0.1.0-beta.1"
+      legacy_pool_seed_fingerprint = "${ZALLET_LEGACY_POOL_SEED_FINGERPRINT:?ZALLET_LEGACY_POOL_SEED_FINGERPRINT is required}"
+
+      [features.deprecated]
+
+      [features.experimental]
+
+      [indexer]
+      validator_address = "zebra:8232"
+      db_path = "zaino"
+
+      [keystore]
+      require_backup = false
+
+      [note_management]
+
+      [rpc]
+      bind = ["0.0.0.0:8232"]
+      timeout = 60
+
+      [[rpc.auth]]
+      user = "${ZCASH_RPC_USER:-zcashrpc}"
+      password = "${ZCASH_RPC_PASSWORD:?ZCASH_RPC_PASSWORD is required}"
+
+      [sync]
+      recover_batch_size = 100

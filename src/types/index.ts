@@ -216,6 +216,7 @@ export interface WalletInfo {
   transparentAddress: string  // Backup t-address
   network: ZcashNetwork
   accountIndex: number
+  accountUuid?: string | null
   createdAt: Date
 }
 
@@ -336,5 +337,6 @@ export interface WalletBalance {
     transparent: number
     sapling: number
     orchard: number
+    ironwood?: number
   }
 }

@@ -21,7 +21,7 @@ export async function GET() {
   const checks: Record<string, unknown> = {}
   let severity: 'ok' | 'warning' | 'critical' = 'ok'
 
-  // Run all checks in parallel so a slow zcashd RPC doesn't block the
+  // Run all checks in parallel so a slow wallet RPC doesn't block the
   // entire response.  Each check has its own error handling.
 
   const [dbResult, nodeResult, poolResult, balanceResult, withdrawalResult, veilstoneResult] =
@@ -46,7 +46,7 @@ export async function GET() {
       })(),
 
       // 4. House wallet balance — short timeout so the health endpoint
-      //    responds quickly even when zcashd is overloaded.
+      //    responds quickly even when the wallet service is overloaded.
       raceTimeout(
         getWalletBalanceCached(DEFAULT_NETWORK, 3, {
           timeoutMs: HEALTH_RPC_TIMEOUT_MS,

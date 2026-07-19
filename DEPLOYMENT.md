@@ -45,7 +45,7 @@ curl http://localhost:3000/api/health
 | `ZCASH_NETWORK` | `testnet` or `mainnet` | `testnet` |
 | `ZCASH_RPC_USER` | Zcash node RPC username | `zcashrpc` |
 | `ZCASH_RPC_PASSWORD` | Zcash node RPC password (strong random) | `<64-char random>` |
-| `ZCASH_RPC_URL` | RPC endpoint for mainnet | `http://zcashd:8232` |
+| `ZCASH_RPC_URL` | Wallet RPC endpoint for mainnet | `http://zallet:8232` |
 | `ZCASH_TESTNET_RPC_URL` | RPC endpoint for testnet | `http://zcashd:18232` |
 | `HOUSE_ZADDR_TESTNET` | House shielded address (testnet) | `ztestsapling1...` |
 | `HOUSE_ZADDR_MAINNET` | House unified address (mainnet, must include Orchard receiver) | `u1...` |
@@ -232,16 +232,19 @@ Production is already live. Use this section and `notes/mainnet-guarded-live-run
 
 ## Zcash Node Setup
 
-### Why zcashd (not Zebra + Zallet)
+### Mainnet: Zebra + Zallet
 
-We use zcashd because the replacement stack (Zebra + Zallet) cannot yet support our needs:
-- **Zallet is alpha** (v0.1.0-alpha.3, Dec 2025). Missing critical RPCs: `z_getbalance`, `z_listreceivedbyaddress`, `listtransactions`.
-- **`z_sendmany` exists but is being deprecated** in favor of an unimplemented replacement (`z_sendfromaccount`).
-- **Address model is changing** from address-based to account-based (`z_getnewaccount` + `z_getaddressforaccount` instead of `getnewaddress`).
-- **No Docker image, no security audit, no production deployments** of Zallet exist.
-- **No stable release timeline** (GitHub issue #346 "Stable Release version estimation date" is still open).
+Mainnet uses Zebra 6.0.0 for consensus and Zallet 0.1.0-beta.1 for wallet RPC. `zcashd`
+reached its mandatory end-of-support height at block 3417100 and cannot follow NU6.3.
+The production images are pinned by digest in `docker-compose.mainnet.yml`.
 
-zcashd is deprecated but functional. When Zallet reaches beta (all wallet RPCs exist), we'll evaluate migration. The RPC calls are isolated in `src/lib/wallet/rpc.ts` for easy swapping.
+Zallet is still beta software. Keep maintenance mode enabled during migration or recovery,
+retain the original `wallet.dat`, and always back up both `wallet.db` and
+`encryption-identity.txt`. The application adapter uses Zallet's UUID account model and
+fails closed if an individual account cannot be resolved.
+
+The development/testnet Compose file continues to use zcashd until its test workflow is
+migrated separately.
 
 ### Docker Setup (Recommended)
 
@@ -309,7 +312,7 @@ zcash-cli -testnet getblockchaininfo
 
 ### Cloud Hosting
 
-No hosted RPC provider supports the wallet methods we need (`z_sendmany`, `z_getnewaddress`, etc.) — these require private keys on the node. Self-hosted is the only option.
+Wallet RPC requires private spending keys, so the Zebra/Zallet stack is self-hosted.
 
 **Recommended VPS providers:**
 - **1984.hosting** (~€149/month, 16 GB RAM, 6 CPU, 320 GB SSD, Iceland, no-KYC) — current deployment
@@ -323,7 +326,7 @@ No hosted RPC provider supports the wallet methods we need (`z_sendmany`, `z_get
 - **Copy native modules to production stage**: `node_modules/.prisma`, `node_modules/@prisma`, `node_modules/@libsql`
 - **SQLite file permissions**: App runs as uid 1001 (nextjs user). DB file AND parent directory must be owned by 1001: `chown -R 1001:1001 /data`
 - **CSP + Next.js**: `script-src` must include `'unsafe-inline'` — Next.js uses inline scripts for hydration that CSP blocks otherwise
-- **Firewall**: Only expose ports 22 (SSH), 80 (HTTP), 443 (HTTPS). Block app port 3000 and zcashd RPC port (18232/8232) externally — app is only accessible via Nginx reverse proxy
+- **Firewall**: Only expose ports 22 (SSH), 80 (HTTP), 443 (HTTPS). Block app port 3000 and wallet/node RPC ports externally — app is only accessible via Nginx reverse proxy
 - **House UA must include Orchard receiver**: `z_sendmany` from a UA only spends from pools with receivers in that UA. Without an Orchard receiver, funds that migrate to Orchard (via internal change outputs) become unspendable. Generate with `z_getaddressforaccount 0 '["sapling","orchard"]'`
 - **`--env-file` required**: `docker compose -f docker-compose.mainnet.yml` requires `--env-file .env.mainnet` or env vars won't be interpolated (e.g., `ZCASH_RPC_PASSWORD is required` error)
 
@@ -331,7 +334,7 @@ No hosted RPC provider supports the wallet methods we need (`z_sendmany`, `z_get
 
 ### Prerequisites
 
-- VPS with 16 GB RAM, 6 CPU, 420 GB+ disk (zcashd mainnet chain is ~300 GB)
+- VPS with 16 GB RAM, 6 CPU, 420 GB+ disk (Zebra mainnet state is ~300 GB)
 - Docker & Docker Compose v2
 - Nginx with TLS (Let's Encrypt)
 - UFW firewall: only ports 22, 80, 443
@@ -343,49 +346,36 @@ No hosted RPC provider supports the wallet methods we need (`z_sendmany`, `z_get
 cp .env.mainnet.example .env.mainnet
 # Edit .env.mainnet with real values (see file for generation instructions)
 
-# 2. Start zcashd first (sync takes 15-24h)
-docker compose -p mainnet -f docker-compose.mainnet.yml up -d zcashd
+# 2. Start Zebra and monitor its readiness endpoint
+docker compose --env-file .env.mainnet -p mainnet -f docker-compose.mainnet.yml up -d zebra
+docker compose --env-file .env.mainnet -p mainnet -f docker-compose.mainnet.yml \
+  exec zebra curl -fsS http://localhost:8080/ready
 
-# 3. Monitor sync progress
-docker compose -p mainnet -f docker-compose.mainnet.yml exec zcashd zcash-cli getblockchaininfo
-# Wait until verificationprogress >= 0.9999
+# 3. Initialize Zallet's encryption identity, then create or migrate the wallet.
+# For an existing zcashd wallet, follow the guarded migration runbook and keep
+# the original wallet.dat permanently. Do not start real-money traffic yet.
+# The pinned beta.1 image omits db_dump: build Oracle Berkeley DB 6.2.32's
+# helper from its checksum-verified source, verify `db_dump -V` inside the
+# Zallet image, and mount the helper only for migrate-zcashd-wallet.
 
-# 4. Generate house wallet addresses (unified account model — getnewaddress is deprecated)
-docker compose -p mainnet -f docker-compose.mainnet.yml exec zcashd zcash-cli z_getnewaccount
-# → {"account": 0}
-docker compose -p mainnet -f docker-compose.mainnet.yml exec zcashd \
-  zcash-cli z_getaddressforaccount 0 '["p2pkh","sapling","orchard"]'
-# → {"address": "u1...", "account": 0, "receiver_types": ["p2pkh", "sapling", "orchard"]}
-# CRITICAL: The UA MUST include an Orchard receiver! Without it, z_sendmany
-# cannot spend funds in the Orchard pool. Wallet change from withdrawals and
-# other operations often lands in Orchard (NU5 default), making those funds
-# unspendable from a Sapling-only UA.
-# Extract receivers:
-docker compose -p mainnet -f docker-compose.mainnet.yml exec zcashd \
-  zcash-cli z_listunifiedreceivers "u1..."
-# → {"p2pkh": "t1...", "sapling": "zs1...", "orchard": "u1..."}
-# Set the FULL UA (u1...) as HOUSE_ZADDR_MAINNET in .env.mainnet
-# t1... is used for deposit sweeps
+# 4. Start Zallet and inspect wallet scan status
+docker compose --env-file .env.mainnet -p mainnet -f docker-compose.mainnet.yml up -d zallet
+docker compose --env-file .env.mainnet -p mainnet -f docker-compose.mainnet.yml exec zallet \
+  zallet -d /var/lib/zallet rpc getwalletstatus
 
-# 5. IMMEDIATELY back up the wallet
-docker compose -p mainnet -f docker-compose.mainnet.yml exec zcashd \
-  zcash-cli z_exportwallet /srv/zcashd/.zcash/wallet-export.txt
-docker cp $(docker compose -p mainnet -f docker-compose.mainnet.yml ps -q zcashd):/srv/zcashd/.zcash/wallet.dat ./wallet.dat
-gpg --symmetric --cipher-algo AES256 wallet.dat
-# Store encrypted copy in 2+ geographically separate locations
-rm wallet.dat  # Remove unencrypted copy
+# 5. Back up wallet.db + encryption-identity.txt as one encrypted archive
+COMPOSE_FILE=docker-compose.mainnet.yml COMPOSE_PROJECT_NAME=mainnet scripts/backup-wallet.sh
+# Store the encrypted copy and passphrase in separate, off-site locations.
 
-# 6. Fund house wallet with initial bankroll
+# 6. Start the app only when node_tip, wallet_tip, and fully_synced_height match
+docker compose --env-file .env.mainnet -p mainnet -f docker-compose.mainnet.yml up -d
 
-# 7. Start the app
-docker compose -p mainnet -f docker-compose.mainnet.yml up -d
-
-# 8. Verify health
+# 7. Verify health
 curl https://cypherjester.com/api/health
 
-# 9. Install monitoring cron jobs (see Monitoring section)
+# 8. Install monitoring cron jobs (see Monitoring section)
 
-# 10. Smoke test: deposit small amount, play one hand, withdraw
+# 9. Smoke test: deposit small amount, play one hand, withdraw
 ```
 
 ### Mainnet vs Testnet Differences
@@ -394,16 +384,16 @@ curl https://cypherjester.com/api/health
 |--------|---------|---------|
 | Compose file | `docker-compose.yml` | `docker-compose.mainnet.yml` |
 | Env file | `.env` | `.env.mainnet` |
-| zcashd flag | `-testnet` | (none) |
+| Consensus node | zcashd testnet | Zebra 6.0.0 |
 | RPC port | 18232 | 8232 |
-| zcashd image | `:latest` | `:latest` (v6.11.0, protocol 170140 required for peers) |
+| Wallet service | zcashd | Zallet 0.1.0-beta.1 |
 | RPC exposure | Host-mapped | Docker-internal only |
 | `rpcallowip` | `0.0.0.0/0` | `172.16.0.0/12` |
 | App port | `3000:3000` | `127.0.0.1:3000:3000` |
 | Fake addresses | Allowed (testnet) | Blocked (fail-closed) |
 | Mock commitments | Allowed | Blocked |
 | Disk | ~60 GB | ~300+ GB |
-| RAM (zcashd) | 8 GB | 12 GB limit |
+| RAM (node + wallet) | 8 GB | 11 GB combined limits |
 
 ## Monitoring
 
@@ -411,7 +401,7 @@ curl https://cypherjester.com/api/health
 
 `GET /api/health` returns:
 - Database connectivity
-- zcashd node status (connected, synced, block height)
+- Zebra node and Zallet wallet scan status (connected, synced, block height)
 - Commitment pool count and warning threshold
 - House wallet balance (confirmed/pending)
 - Pending withdrawal count
@@ -454,11 +444,11 @@ crontab -e
 
 | Script | Schedule | What it checks |
 |--------|----------|----------------|
-| `check-node.sh` | Every 5 min | zcashd running, synced, block age < 10 min |
+| `check-node.sh` | Every 5 min | Zebra reachable and Zallet fully scanned to the node tip |
 | `check-balance.sh` | Every 15 min | House balance above threshold |
 | `check-disk.sh` | Hourly | Disk usage below 85% |
 | `backup-db.sh` | Daily 3am | SQLite backup, gzipped, 30-day retention |
-| `backup-wallet.sh` | Weekly Sun 4am | wallet.dat backup, GPG encrypted, 4-copy retention |
+| `backup-wallet.sh` | Weekly Sun 4am | Zallet database + encryption identity, GPG encrypted, 4-copy retention |
 | `guarded-live-baseline.js` | Manual at launch | Captures day-zero invariants for diffing |
 | `guarded-live-monitor.js` | 15 min (first 6h), then hourly | Checks `/api/health`, `/api/admin/overview`, and DB invariants against alert gates |
 | `guarded-live-reconcile.js` | Daily | Logs liabilities vs house balance + withdrawal queues |

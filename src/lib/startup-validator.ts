@@ -120,7 +120,7 @@ export function validateStartupConfig(): StartupValidationResult {
   const rpcPassword = process.env.ZCASH_RPC_PASSWORD
   if (!rpcPassword || rpcPassword.trim().length === 0) {
     if (isMainnet) {
-      errors.push('ZCASH_RPC_PASSWORD is empty. Cannot connect to zcashd securely.')
+      errors.push('ZCASH_RPC_PASSWORD is empty. Cannot connect to the wallet RPC securely.')
     } else {
       warnings.push('ZCASH_RPC_PASSWORD is empty. RPC calls may fail.')
     }

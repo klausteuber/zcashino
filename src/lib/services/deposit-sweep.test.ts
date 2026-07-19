@@ -42,6 +42,7 @@ import { sweepDeposits } from './deposit-sweep'
 describe('deposit sweep service', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    delete process.env.ZCASH_WALLET_BACKEND
     process.env.HOUSE_ZADDR_MAINNET = 'u-house'
     mocks.checkNodeStatusMock.mockResolvedValue({ connected: true, synced: true })
     mocks.getAddressBalanceMock.mockResolvedValue({ confirmed: 0.02, pending: 0, total: 0.02 })
@@ -56,6 +57,7 @@ describe('deposit sweep service', () => {
         id: 'wallet-legacy',
         transparentAddr: 't-legacy',
         unifiedAddr: null,
+        cachedBalance: 0.02,
       },
     ])
 
@@ -68,7 +70,7 @@ describe('deposit sweep service', () => {
     })
     expect(result.details[0]).toMatchObject({
       address: 't-legacy',
-      amount: 0.0199,
+      amount: 0.02,
       status: 'legacy-missing-unified-address',
     })
     expect(mocks.sendZecMock).not.toHaveBeenCalled()
@@ -108,5 +110,32 @@ describe('deposit sweep service', () => {
         status: 'pending',
       }),
     })
+  })
+
+  it('uses the isolated transparent receiver when sweeping with Zallet', async () => {
+    process.env.ZCASH_WALLET_BACKEND = 'zallet'
+    mocks.prismaMock.depositWallet.findMany.mockResolvedValue([{
+      id: 'wallet-zallet',
+      transparentAddr: 't-zallet',
+      unifiedAddr: 'u-zallet',
+      accountIndex: 12,
+      accountUuid: 'account-uuid',
+    }])
+
+    await sweepDeposits()
+
+    expect(mocks.getAddressBalanceMock).toHaveBeenCalledWith(
+      't-zallet',
+      'mainnet',
+      3,
+      'account-uuid'
+    )
+    expect(mocks.sendZecMock).toHaveBeenCalledWith(
+      't-zallet',
+      'u-house',
+      0.0199,
+      undefined,
+      'mainnet'
+    )
   })
 })

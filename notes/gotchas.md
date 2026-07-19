@@ -1027,6 +1027,47 @@ Also ignored the user's own statement ("I thought we changed the architecture") 
 
 ---
 
+### zcashd hard-stops at block 3417100 and cannot serve NU6.3 (2026-07-19)
+
+**Symptom:** Telegram reported `NODE ERROR: Cannot reach zcash-cli`, and the
+zcashd container repeatedly restarted even though it was not out of memory.
+
+**Root Cause:** The pinned zcashd 6.20.0 predisclosure build reached its mandatory
+deprecation height, logged that the version was deprecated as of block 3417100,
+and exited normally. There is no later zcashd release that supports NU6.3.
+
+**Fix:** Enable the production kill switch, stop the restart loop, and take a
+hash-verified root-only copy of `wallet.dat`. Replace mainnet with digest-pinned
+Zebra 6.0.0 and Zallet 0.1.0-beta.1, migrate the wallet under maintenance, and
+reopen only after Zebra and the Zallet wallet scan are at the same tip. Monitoring
+must use `getwalletstatus`; encrypted backups must contain both `wallet.db` and
+`encryption-identity.txt`.
+
+**Key files:** `docker-compose.mainnet.yml`, `src/lib/wallet/rpc.ts`,
+`scripts/check-node.sh`, `scripts/backup-wallet.sh`
+
+---
+
+### Zallet beta.1 container omits two host dependencies (2026-07-19)
+
+**Symptom:** `migrate-zcashd-wallet` reported that `db_dump` was missing, and
+the Zaino backend later failed with `No CA certificates were loaded from the
+system` even though it was connecting to Zebra over private HTTP.
+
+**Root Cause:** The digest-pinned beta.1 image is a fully static distroless
+runtime. It does not contain the Berkeley DB 6.2 `db_dump` migration helper,
+a dynamic loader, or a CA certificate bundle.
+
+**Fix:** For the one-time migration, build `db_dump` from checksum-verified
+Oracle Berkeley DB 6.2.32 source and mount it with its matching musl loader;
+verify `db_dump -V` inside the pinned Zallet image before exposing the wallet.
+For runtime, mount the host's `/etc/ssl/certs` read-only and set
+`SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt`.
+
+**Key file:** `docker-compose.mainnet.yml`
+
+---
+
 ### Legacy SQLite migration history cannot be validated by a clean database alone (2026-07-09)
 
 **Symptom:** Clean bootstrap and fully migrated database tests pass, but a production database with partial/manual schema changes may still fail a pending historical migration.

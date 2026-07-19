@@ -87,7 +87,25 @@ export async function sweepDeposits(
 
   for (const wallet of wallets) {
     try {
-      const balance = await getAddressBalance(wallet.transparentAddr, network)
+      // These four early production rows predate unified-account tracking.
+      // Keep them manual-only until their exact Zallet legacy account mapping
+      // is verified; do not query or spend them through account 0 by accident.
+      if (!wallet.unifiedAddr) {
+        skipped++
+        details.push({
+          address: wallet.transparentAddr,
+          amount: wallet.cachedBalance,
+          status: 'legacy-missing-unified-address',
+        })
+        continue
+      }
+
+      const balance = await getAddressBalance(
+        wallet.transparentAddr,
+        network,
+        3,
+        wallet.accountUuid ?? wallet.accountIndex
+      )
       // Reserve the tx fee so z_sendmany has enough for amount + fee.
       // Without this, the send would fail with "Insufficient funds" because
       // the t-addr balance exactly equals the send amount with nothing left
@@ -117,21 +135,13 @@ export async function sweepDeposits(
         continue
       }
 
-      if (!wallet.unifiedAddr) {
-        skipped++
-        details.push({
-          address: wallet.transparentAddr,
-          amount: sweepAmount,
-          status: 'legacy-missing-unified-address',
-        })
-        continue
-      }
-
-      // Send from deposit address → house z-address.
-      // zcashd v6 requires the full UA as fromAddress — bare transparent
-      // receivers are rejected with "Invalid from address".
+      // zcashd requires the full UA, while Zallet intentionally spends only
+      // the named transparent receiver when sweeping transparent deposits.
+      const sweepSource = process.env.ZCASH_WALLET_BACKEND === 'zallet'
+        ? wallet.transparentAddr
+        : wallet.unifiedAddr
       const { operationId } = await sendZec(
-        wallet.unifiedAddr,
+        sweepSource,
         houseAddress,
         sweepAmount,
         undefined,
