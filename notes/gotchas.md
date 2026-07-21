@@ -1107,6 +1107,25 @@ isolated, backed-up wallet database before cutover.
 
 ---
 
+### Production monitoring must select Zallet explicitly and parse stdout only (2026-07-21)
+
+**Symptom:** Telegram repeatedly reports `NODE DOWN: zcashd container is not
+running` after production has successfully migrated to Zebra and Zallet. The
+monitor log also contains `jq` parse errors.
+
+**Root Cause:** The monitor inferred its backend from a fallible Compose probe,
+so a failed probe fell through to the retired zcashd check. It also merged
+Zallet's informational stderr log with its JSON stdout before passing the result
+to `jq`.
+
+**Fix:** Select Zallet deterministically for the mainnet Compose file, keep the
+legacy zcashd path only for non-mainnet stacks, and capture RPC stderr separately
+so only JSON stdout is parsed.
+
+**Key files:** `scripts/check-node.sh`, `.env.monitoring`
+
+---
+
 ### Legacy SQLite migration history cannot be validated by a clean database alone (2026-07-09)
 
 **Symptom:** Clean bootstrap and fully migrated database tests pass, but a production database with partial/manual schema changes may still fail a pending historical migration.

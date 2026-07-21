@@ -639,6 +639,11 @@ In-memory limits and remote font fetches are acceptable in dev, but must be call
    the migrated account and diversifier, then ensure the exact UA is registered
    before changing production over to the migrated wallet.
 
+5. **Monitoring backend selection is production configuration, not discovery.**
+   Mainnet should select Zallet from its configured Compose file even if a
+   runtime service-discovery command fails. Keep Zallet CLI stderr separate from
+   JSON stdout before parsing wallet status.
+
 **Key files:** `src/app/api/health/route.ts`, `scripts/backup-wallet.sh`
 
 ## Comprehensive Site Remediation Learnings (2026-07-09)

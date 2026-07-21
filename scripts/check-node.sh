@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# check-node.sh — Monitor zcashd node sync status
+# check-node.sh — Monitor the configured Zcash node and wallet backend
 # Schedule: Every 5 minutes
 # Cron: */5 * * * * /opt/zcashino/scripts/check-node.sh
 #
@@ -69,8 +69,21 @@ if [[ "$SUPPRESS_NODE_ALERTS_DURING_KILL_SWITCH" == "true" && "${KILL_SWITCH:-}"
 fi
 
 # Zebra + Zallet replaced zcashd at its mandatory end-of-support height.
+# Production must never fall through to the legacy zcashd check just because a
+# transient `docker compose config` probe fails.
+WALLET_BACKEND="${NODE_WALLET_BACKEND:-}"
+if [[ -z "$WALLET_BACKEND" && "$COMPOSE_FILE" == "docker-compose.mainnet.yml" ]]; then
+  WALLET_BACKEND="zallet"
+elif [[ -z "$WALLET_BACKEND" ]]; then
+  if compose config --services 2>/dev/null | grep -qx 'zallet'; then
+    WALLET_BACKEND="zallet"
+  else
+    WALLET_BACKEND="zcashd"
+  fi
+fi
+
 # Zallet's wallet status covers both the backing Zebra tip and the wallet scan.
-if compose config --services 2>/dev/null | grep -qx 'zallet'; then
+if [[ "$WALLET_BACKEND" == "zallet" ]]; then
   CONTAINER_ID=$(compose ps zallet --status running -q 2>/dev/null | head -n 1 || true)
   if [[ -z "$CONTAINER_ID" ]]; then
     alert "NODE DOWN: Zallet wallet container is not running"
@@ -78,12 +91,15 @@ if compose config --services 2>/dev/null | grep -qx 'zallet'; then
   fi
 
   RPC_STATUS=0
-  WALLET_STATUS=$(compose exec -T zallet zallet -d /var/lib/zallet rpc getwalletstatus 2>&1) || RPC_STATUS=$?
+  RPC_ERROR_FILE=$(mktemp)
+  WALLET_STATUS=$(compose exec -T zallet zallet -d /var/lib/zallet rpc getwalletstatus 2>"$RPC_ERROR_FILE") || RPC_STATUS=$?
+  WALLET_ERROR=$(<"$RPC_ERROR_FILE")
+  rm -f "$RPC_ERROR_FILE"
   if [[ "$RPC_STATUS" -ne 0 || -z "$WALLET_STATUS" ]]; then
     STARTED_AT=$(docker inspect --format '{{.State.StartedAt}}' "$CONTAINER_ID" 2>/dev/null || true)
     STARTED_EPOCH=$(date -d "$STARTED_AT" +%s 2>/dev/null || echo 0)
     UPTIME_SECONDS=$(( $(date +%s) - STARTED_EPOCH ))
-    CLEAN_ERROR=$(printf '%s' "$WALLET_STATUS" | tr '\n' ' ' | cut -c1-180)
+    CLEAN_ERROR=$(printf '%s %s' "$WALLET_STATUS" "$WALLET_ERROR" | tr '\n' ' ' | cut -c1-180)
     if [[ "$STARTED_EPOCH" -gt 0 && "$UPTIME_SECONDS" -lt "$NODE_STARTUP_GRACE_SECONDS" ]]; then
       echo "[$(date -u)] Node check skipped: Zallet still starting (${UPTIME_SECONDS}s/${NODE_STARTUP_GRACE_SECONDS}s): ${CLEAN_ERROR}"
       exit 0
