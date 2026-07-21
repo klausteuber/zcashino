@@ -102,4 +102,18 @@ describe('/api/health', () => {
       ledgerInvariantStatus: 'ok',
     })
   })
+
+  it('reports warning while the wallet is still syncing', async () => {
+    checkNodeStatusMock.mockResolvedValue({ connected: true, synced: false, blockHeight: 12345 })
+
+    const response = await GET()
+    expect(response.status).toBe(200)
+
+    const payload = await response.json()
+    expect(payload.status).toBe('warning')
+    expect(payload.zcashNode).toEqual({ connected: true, synced: false, blockHeight: 12345 })
+    expect(payload.zcashNodeWarning).toBe(
+      'Wallet is still syncing and is not ready for mainnet operations'
+    )
+  })
 })

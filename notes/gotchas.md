@@ -1068,6 +1068,45 @@ For runtime, mount the host's `/etc/ssl/certs` read-only and set
 
 ---
 
+### `--no-scan` can create a wallet that reaches tip but never becomes ready (2026-07-20)
+
+**Symptom:** Zallet's wallet and fully-synced heights match Zebra, but
+`getwalletstatus.sync_work_remaining.progress` remains far below 100%.
+
+**Root Cause:** The offline migration could not resolve transaction birthdays
+or fetch the prior block's Sapling and Orchard tree state. Migrated accounts were
+stored with zero birthday tree sizes, so scan progress counted incompatible ranges.
+
+**Fix:** Keep the original `wallet.dat`, perform a fresh chain-aware migration
+without `--no-scan` in a separate volume, initialize wallet encryption first, and
+do not swap it into production until scan readiness, balances, account mappings,
+SQLite integrity, and encrypted recovery artifacts all pass.
+
+**Key files:** `src/lib/wallet/rpc.ts`, `scripts/backup-wallet.sh`
+
+---
+
+### Migrated accounts do not prove published Unified Addresses are registered (2026-07-20)
+
+**Symptom:** Account indices, seed fingerprints, and balances migrate correctly,
+but `z_getaccount` and `listaddresses` do not contain the deposit UAs stored by
+the application.
+
+**Root Cause:** The Zallet beta importer can generate a new default receiver set
+at a zcashd diversifier index instead of preserving the original
+`unifiedaddrmeta` receiver set. The underlying Sapling and transparent receivers
+remain derivable, but the exact published UA is not registered for scanning and
+attribution.
+
+**Fix:** Preserve the original `wallet.dat`; extract its `unifiedaccount` and
+`unifiedaddrmeta` records; verify every stored UA's decoded receivers against the
+migrated account and diversifier; and register or repair the exact UA in an
+isolated, backed-up wallet database before cutover.
+
+**Key files:** `src/lib/wallet/rpc.ts`, `prisma/schema.prisma`
+
+---
+
 ### Legacy SQLite migration history cannot be validated by a clean database alone (2026-07-09)
 
 **Symptom:** Clean bootstrap and fully migrated database tests pass, but a production database with partial/manual schema changes may still fail a pending historical migration.

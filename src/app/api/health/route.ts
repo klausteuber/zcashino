@@ -86,9 +86,15 @@ export async function GET() {
     }
     if (!nodeStatus.connected) {
       checks.zcashNodeWarning = 'Node not connected (demo mode may be active)'
+      if (severity === 'ok') severity = 'warning'
+    } else if (!nodeStatus.synced) {
+      checks.zcashNodeWarning = 'Wallet is still syncing and is not ready for mainnet operations'
+      if (severity === 'ok') severity = 'warning'
     }
   } else {
     checks.zcashNode = { connected: false, synced: false, blockHeight: 0 }
+    checks.zcashNodeWarning = 'Node status check failed'
+    if (severity === 'ok') severity = 'warning'
   }
 
   // Seed / commitment pool

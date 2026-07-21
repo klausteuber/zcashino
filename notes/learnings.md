@@ -616,6 +616,31 @@ In-memory limits and remote font fetches are acceptable in dev, but must be call
 
 **Key files:** `docker-compose.mainnet.yml`, `src/lib/wallet/rpc.ts`,
 `scripts/check-node.sh`, `scripts/backup-wallet.sh`
+
+## Zallet Migration Verification Learnings (2026-07-20)
+
+1. **A matching scan height does not prove a migrated wallet is usable.**
+   `getwalletstatus` must also omit `sync_work_remaining`. A migration performed
+   with `--no-scan` can leave birthday commitment-tree sizes at zero, making the
+   progress denominator permanently disagree with its numerator even at chain tip.
+
+2. **Rehearse chain-aware migration in an isolated volume.**
+   Preserve `wallet.dat`, migrate without `--no-scan`, verify nonzero birthday
+   tree sizes and account/transaction counts, then let the replacement wallet
+   fully scan before changing production account UUID mappings.
+
+3. **Health severity must include wallet readiness.**
+   A reachable Zebra node with an unsynced Zallet is operationally degraded;
+   `/api/health` should report `warning`, not `ok`.
+
+4. **Verify every published Unified Address after migration.** Zallet beta can
+   preserve account keys while replacing zcashd's saved receiver-set metadata
+   at a diversifier index. Decode each published UA, prove its receivers against
+   the migrated account and diversifier, then ensure the exact UA is registered
+   before changing production over to the migrated wallet.
+
+**Key files:** `src/app/api/health/route.ts`, `scripts/backup-wallet.sh`
+
 ## Comprehensive Site Remediation Learnings (2026-07-09)
 
 1. **Marketing language must match the exact fairness lifecycle.** `session_nonce_v1` anchors a seed-session commitment that can cover multiple nonce-derived hands; it is not a per-hand precommit/reveal system.

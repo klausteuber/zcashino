@@ -7,6 +7,7 @@
 # Legacy zcashd/testnet: backs up wallet.dat.
 
 set -euo pipefail
+umask 077
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="${SCRIPT_DIR}/.."
