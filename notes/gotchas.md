@@ -1135,3 +1135,37 @@ so only JSON stdout is parsed.
 **Fix:** Empty databases use the current Prisma schema and baseline all historical migrations; non-empty databases without history fail closed; databases with history use normal deploy/status. Before the first rollout of automatic migration gating, back up production and inspect its migration rows and schema, then explicitly resolve or forward-repair any drift.
 
 **Key files:** `scripts/migrate-safe.js`, `scripts/check-migrations.js`, `docker-compose.mainnet.yml`, `prisma/migrations/`
+
+---
+
+### Alternating NODE DOWN / NODE SYNCING-wallet-0 alerts are a Zallet restart loop the monitor couldn't explain (2026-08-07)
+
+**Symptom:** Telegram pages every 5 minutes, alternating between `NODE DOWN:
+Zallet wallet container is not running` and `NODE SYNCING: Zebra <tip>, Zallet
+wallet 0, fully scanned 0` while Zebra's height keeps advancing normally.
+
+**Root Cause:** The Zallet container is repeatedly leaving the `running` state
+(crash/restart loop — e.g. OOM kill or a beta panic). Each cron run caught it
+either mid-restart (`compose ps --status running` empty → DOWN) or freshly
+started, when `getwalletstatus` legitimately reports absent/zero `wallet_tip`
+and `fully_synced_height` before the scanner loads (→ "SYNCING wallet 0").
+The monitor had three gaps: the container-down and scan-state branches ignored
+`NODE_STARTUP_GRACE_SECONDS` (only the RPC-error branch used it), the DOWN
+alert carried no evidence of *why* the container was gone, and identical alerts
+re-fired every 5 minutes with no dedup.
+
+**Fix:** `check-node.sh` now (a) attaches `docker inspect` state (exit code,
+`OOMKilled`, restart count) plus the last log lines to DOWN alerts, (b) applies
+the startup grace to zero scan-state readings and raises a distinct
+`NODE ERROR: wallet DB may be empty or rebuilding` only beyond the grace
+window, (c) tolerates `NODE_SYNC_LAG_TOLERANCE` (2) blocks of scan lag,
+(d) rate-limits same-class alerts via `NODE_ALERT_COOLDOWN_SECONDS` (30 min)
+in `.node-monitor-alerts` and sends one `NODE OK` recovery message, and
+(e) reports a failed `docker compose ps` probe as its own error instead of
+NODE DOWN. Diagnose the loop itself on the VPS with `docker inspect
+mainnet-zallet-1 --format '{{.State.Status}} {{.State.ExitCode}}
+{{.State.OOMKilled}} {{.RestartCount}}'` and `docker logs --tail 100
+mainnet-zallet-1`; if `OOMKilled=true`, raise the zallet memory limit in
+`docker-compose.mainnet.yml`.
+
+**Key files:** `scripts/check-node.sh`, `DEPLOYMENT.md`, `.gitignore`
