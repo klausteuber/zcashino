@@ -489,8 +489,14 @@ body[data-brand="21z"] .btn-gold-shimmer:active {
   clip-path: polygon(0 0, 100% 0, 100% 100%, 12px 100%, 0 calc(100% - 12px));
 }
 
-.cyber-panel {
-  position: relative;
+/* Must live in @layer components so Tailwind positioning utilities
+   (.absolute, .fixed) can override it. Unlayered, this rule beats every
+   layered utility and forces absolutely-positioned elements (e.g. the
+   DEMO badge tooltip) back into flex flow inside the header. */
+@layer components {
+  .cyber-panel {
+    position: relative;
+  }
 }
 
 body[data-brand="21z"] .cyber-panel {
