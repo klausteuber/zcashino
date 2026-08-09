@@ -223,6 +223,12 @@ if [[ "$WALLET_BACKEND" == "zallet" ]]; then
   WALLET_LAG=$((NODE_HEIGHT - WALLET_HEIGHT))
   SCAN_LAG=$((WALLET_HEIGHT - FULLY_SYNCED_HEIGHT))
   if [[ "$WALLET_LAG" -gt "$NODE_SYNC_LAG_TOLERANCE" || "$SCAN_LAG" -gt "$NODE_SYNC_LAG_TOLERANCE" || -n "$SYNC_REMAINING" ]]; then
+    # A recently (re)started wallet catching up to the tip is expected — the
+    # weekly backup stop/start and every deploy produce this window.
+    if [[ "$UPTIME_SECONDS" -gt 0 && "$UPTIME_SECONDS" -lt "$NODE_STARTUP_GRACE_SECONDS" ]]; then
+      echo "[$(date -u)] Node check skipped: Zallet catching up after restart (${UPTIME_SECONDS}s/${NODE_STARTUP_GRACE_SECONDS}s): Zebra ${NODE_HEIGHT}, wallet ${WALLET_HEIGHT}, fully scanned ${FULLY_SYNCED_HEIGHT}"
+      exit 0
+    fi
     alert "NODE SYNCING: Zebra ${NODE_HEIGHT}, Zallet wallet ${WALLET_HEIGHT}, fully scanned ${FULLY_SYNCED_HEIGHT}${SYNC_PROGRESS:+, progress ${SYNC_PROGRESS}}"
     exit 0
   fi
