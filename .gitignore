@@ -31,6 +31,10 @@ yarn-error.log*
 .env.monitoring
 .env.mainnet
 
+# Node monitor state (written by scripts/check-node.sh on the VPS)
+.node-monitor-paused
+.node-monitor-alerts
+
 # Sensitive files
 cookies.txt
 kill-switch.json

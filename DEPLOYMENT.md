@@ -420,6 +420,11 @@ BACKUP_PASSPHRASE=your-gpg-passphrase
 MIN_HOUSE_BALANCE=0.5
 DISK_THRESHOLD=85
 APP_BASE_URL=http://127.0.0.1:3000
+
+# Optional node-alert tuning (defaults shown):
+# NODE_ALERT_COOLDOWN_SECONDS=1800  # repeat same-class node alerts at most every 30 min (0 disables)
+# NODE_STARTUP_GRACE_SECONDS=1800   # no sync/RPC alerts while a container is starting/restarting
+# NODE_SYNC_LAG_TOLERANCE=2         # blocks of wallet-scan lag tolerated before NODE SYNCING
 ```
 
 Install cron jobs:
@@ -444,7 +449,7 @@ crontab -e
 
 | Script | Schedule | What it checks |
 |--------|----------|----------------|
-| `check-node.sh` | Every 5 min | Zebra reachable and Zallet fully scanned to the node tip |
+| `check-node.sh` | Every 5 min | Zebra reachable and Zallet fully scanned to the node tip; container-down alerts include exit code/OOM/restart diagnostics; same-class alerts rate-limited with a `NODE OK` recovery message |
 | `check-balance.sh` | Every 15 min | House balance above threshold |
 | `check-disk.sh` | Hourly | Disk usage below 85% |
 | `backup-db.sh` | Daily 3am | SQLite backup, gzipped, 30-day retention |

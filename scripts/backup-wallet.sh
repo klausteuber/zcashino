@@ -29,6 +29,7 @@ BACKUP_DIR="${BACKUP_DIR:-/opt/zcashino/backups/wallet}"
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.yml}"
 COMPOSE_ENV_FILE="${COMPOSE_ENV_FILE:-}"
 COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-}"
+NODE_MONITOR_PAUSE_FILE="${NODE_MONITOR_PAUSE_FILE:-${PROJECT_DIR}/.node-monitor-paused}"
 KEEP_COUNT="${BACKUP_KEEP_COUNT:-4}"
 TIMESTAMP=$(date -u '+%Y%m%d-%H%M%S')
 
@@ -71,18 +72,34 @@ if compose ps "$BACKEND" --status running -q 2>/dev/null | grep -q .; then
   SERVICE_WAS_RUNNING=true
 fi
 
-restart_wallet_if_needed() {
+# Pause check-node.sh while the wallet is intentionally stopped so the planned
+# backup window doesn't page as NODE DOWN. Only remove the pause file if this
+# script created it — an operator-placed pause must survive the backup.
+PAUSE_FILE_CREATED=false
+pause_node_monitor() {
+  if [[ ! -f "$NODE_MONITOR_PAUSE_FILE" ]]; then
+    touch "$NODE_MONITOR_PAUSE_FILE"
+    PAUSE_FILE_CREATED=true
+  fi
+}
+
+cleanup() {
   if [[ "$SERVICE_WAS_RUNNING" == "true" ]]; then
     echo "[$(date -u)] Restarting ${BACKEND}..."
     compose start "$BACKEND" >/dev/null
   fi
+  if [[ "$PAUSE_FILE_CREATED" == "true" ]]; then
+    rm -f "$NODE_MONITOR_PAUSE_FILE"
+    PAUSE_FILE_CREATED=false
+  fi
 }
 
-trap restart_wallet_if_needed EXIT
+trap cleanup EXIT
 
 echo "[$(date -u)] Starting ${BACKEND} wallet backup..."
 if [[ "$SERVICE_WAS_RUNNING" == "true" ]]; then
   echo "[$(date -u)] Stopping ${BACKEND} for a consistent copy..."
+  pause_node_monitor
   compose stop "$BACKEND" >/dev/null
 else
   echo "[$(date -u)] ${BACKEND} is not running; backing up its current wallet files"
@@ -167,7 +184,7 @@ else
     "$WALLET_FILE"
 fi
 
-restart_wallet_if_needed
+cleanup
 trap - EXIT
 
 BACKUP_PATH="${BACKUP_DIR}/${BACKUP_NAME}"

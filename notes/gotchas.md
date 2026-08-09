@@ -1135,3 +1135,67 @@ so only JSON stdout is parsed.
 **Fix:** Empty databases use the current Prisma schema and baseline all historical migrations; non-empty databases without history fail closed; databases with history use normal deploy/status. Before the first rollout of automatic migration gating, back up production and inspect its migration rows and schema, then explicitly resolve or forward-repair any drift.
 
 **Key files:** `scripts/migrate-safe.js`, `scripts/check-migrations.js`, `docker-compose.mainnet.yml`, `prisma/migrations/`
+
+---
+
+### Alternating NODE DOWN / NODE SYNCING-wallet-0 alerts are a Zallet restart loop the monitor couldn't explain (2026-08-07)
+
+**Symptom:** Telegram pages every 5 minutes, alternating between `NODE DOWN:
+Zallet wallet container is not running` and `NODE SYNCING: Zebra <tip>, Zallet
+wallet 0, fully scanned 0` while Zebra's height keeps advancing normally.
+
+**Root Cause:** The Zallet container is repeatedly leaving the `running` state.
+Each cron run caught it either mid-restart (`compose ps --status running` empty
+→ DOWN) or freshly started, when `getwalletstatus` legitimately reports
+absent/zero `wallet_tip` and `fully_synced_height` before the scanner loads
+(→ "SYNCING wallet 0"). Later confirmed on the VPS as *planned* stops — see the
+2026-08-09 entry below — not an OOM kill or crash loop.
+The monitor had three gaps: the container-down and scan-state branches ignored
+`NODE_STARTUP_GRACE_SECONDS` (only the RPC-error branch used it), the DOWN
+alert carried no evidence of *why* the container was gone, and identical alerts
+re-fired every 5 minutes with no dedup.
+
+**Fix:** `check-node.sh` now (a) attaches `docker inspect` state (exit code,
+`OOMKilled`, restart count) plus the last log lines to DOWN alerts, (b) applies
+the startup grace to zero scan-state readings and raises a distinct
+`NODE ERROR: wallet DB may be empty or rebuilding` only beyond the grace
+window, (c) tolerates `NODE_SYNC_LAG_TOLERANCE` (2) blocks of scan lag,
+(d) rate-limits same-class alerts via `NODE_ALERT_COOLDOWN_SECONDS` (30 min)
+in `.node-monitor-alerts` and sends one `NODE OK` recovery message, and
+(e) reports a failed `docker compose ps` probe as its own error instead of
+NODE DOWN. Diagnose the loop itself on the VPS with `docker inspect
+mainnet-zallet-1 --format '{{.State.Status}} {{.State.ExitCode}}
+{{.State.OOMKilled}} {{.RestartCount}}'` and `docker logs --tail 100
+mainnet-zallet-1`; if `OOMKilled=true`, raise the zallet memory limit in
+`docker-compose.mainnet.yml`.
+
+**Key files:** `scripts/check-node.sh`, `DEPLOYMENT.md`, `.gitignore`
+
+---
+
+### The weekly wallet backup stops Zallet — planned maintenance paged as NODE DOWN (2026-08-09)
+
+**Symptom:** Follow-up to the 2026-08-07 entry. On the VPS, `docker inspect
+mainnet-zallet-1` showed `exit=0 oom=false restarts=0
+started=2026-08-09T04:00:11Z` (a Sunday), kernel logs had no OOM kills, and
+the wallet was healthily re-scanning toward the tip.
+
+**Root Cause:** `backup-wallet.sh` (cron: Sunday 04:00 UTC) intentionally runs
+`compose stop zallet`, encrypts `wallet.db` + `encryption-identity.txt`, then
+`compose start zallet`. `check-node.sh` (cron: every 5 min, including :00)
+races the stop window and pages NODE DOWN, then pages NODE SYNCING while the
+restarted wallet re-scans blocks to catch up. Two cooperating cron jobs, no
+coordination.
+
+**Fix:** (a) `backup-wallet.sh` now creates the monitor's existing pause file
+(`.node-monitor-paused`) before stopping the wallet and removes it in its EXIT
+cleanup — only if the backup itself created it, so an operator-placed pause
+survives. (b) `check-node.sh` treats scan lag while container uptime is inside
+`NODE_STARTUP_GRACE_SECONDS` as expected catch-up (logged, not paged), covering
+the post-backup re-scan and every deploy restart.
+
+**Rule:** Any script that intentionally stops a monitored service must pause
+the monitor for the duration (pause file), and monitors must treat the
+post-restart catch-up window as startup, not degradation.
+
+**Key files:** `scripts/backup-wallet.sh`, `scripts/check-node.sh`
