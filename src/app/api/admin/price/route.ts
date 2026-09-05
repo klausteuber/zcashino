@@ -72,7 +72,7 @@ export async function GET(request: NextRequest) {
     return createRateLimitResponse(readLimit)
   }
 
-  const adminCheck = requireAdmin(request, 'view_overview')
+  const adminCheck = await requireAdmin(request, 'view_overview')
   if (!adminCheck.ok) {
     return adminCheck.response
   }

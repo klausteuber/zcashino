@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { BrandWordmark } from '@/components/brand/BrandWordmark'
 import type {
-  BlackjackGameState,
+  PublicBlackjackGameState,
   BlackjackAction,
   BlockchainCommitment,
   HandHistoryEntry
@@ -14,7 +14,7 @@ import { Hand } from '@/components/game/Card'
 import { ChipStack } from '@/components/game/Chip'
 import { HandHistory } from '@/components/game/HandHistory'
 import { calculateHandValue } from '@/lib/game/deck'
-import { MIN_BET, MAX_BET, getAvailableActions } from '@/lib/game/blackjack'
+import { MIN_BET, MAX_BET } from '@/lib/game/blackjack'
 import JesterLogo from '@/components/ui/JesterLogo'
 import { useGameSounds } from '@/hooks/useGameSounds'
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
@@ -70,7 +70,7 @@ export default function BlackjackGame() {
   const pathname = usePathname()
   const onboardingDeepLinkHandled = useRef(false)
 
-  const [gameState, setGameState] = useState<Partial<BlackjackGameState> | null>(null)
+  const [gameState, setGameState] = useState<Partial<PublicBlackjackGameState> | null>(null)
   const [gameId, setGameId] = useState<string | null>(null)
   const [commitment, setCommitment] = useState<BlockchainCommitment | null>(null)
   const [revealBundle, setRevealBundle] = useState<FairnessRevealBundle | null>(null)
@@ -783,17 +783,17 @@ export default function BlackjackGame() {
   ])
 
   // Calculate available actions
-  const availableActions = gameState ? getAvailableActions(gameState as BlackjackGameState) : []
+  const availableActions = gameState ? (gameState.availableActions ?? []) : []
 
   // Calculate hand values
   const playerValue = gameState?.playerHands?.[0]
     ? calculateHandValue(gameState.playerHands[0].cards)
     : 0
   const dealerValue = gameState?.dealerHand?.cards?.length
-    ? calculateHandValue(gameState.dealerHand.cards.filter(c => c.faceUp))
+    ? calculateHandValue(gameState.dealerHand.cards.filter((c): c is import('@/types').Card => c.rank !== undefined && c.faceUp))
     : 0
   const fullDealerValue = gameState?.dealerHand?.cards?.length
-    ? calculateHandValue(gameState.dealerHand.cards)
+    ? calculateHandValue(gameState.dealerHand.cards.filter((c): c is import('@/types').Card => c.rank !== undefined))
     : 0
 
   // Determine hand results for animations

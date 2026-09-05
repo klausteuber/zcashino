@@ -33,7 +33,7 @@ export async function GET(
     return createRateLimitResponse(readLimit)
   }
 
-  const adminCheck = requireAdmin(request, 'view_players')
+  const adminCheck = await requireAdmin(request, 'view_players')
   if (!adminCheck.ok) {
     await logAdminEvent({
       request,
@@ -226,7 +226,7 @@ export async function PATCH(
     return createRateLimitResponse(writeLimit)
   }
 
-  const adminCheck = requireAdmin(request, 'update_player_limits')
+  const adminCheck = await requireAdmin(request, 'update_player_limits')
   if (!adminCheck.ok) {
     await logAdminEvent({
       request,

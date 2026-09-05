@@ -1,3 +1,4 @@
+import { RpcRejectedError } from '@/lib/wallet/rpc-errors'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NextRequest } from 'next/server'
 
@@ -337,25 +338,35 @@ describe('/api/admin/pool', () => {
     expect(sendZecMock).not.toHaveBeenCalled()
   })
 
+  it('keeps an approval reserved when the RPC response is lost', async () => {
+    hasPermissionMock.mockReturnValue(true)
+    prismaMock.transaction.findFirst.mockResolvedValue(makePendingApprovalWithdrawal())
+    prismaMock.transaction.updateMany.mockResolvedValue({ count: 1 })
+    sendZecMock.mockRejectedValueOnce(new Error('transport timeout'))
+    const response = await approveWithdrawal()
+    expect(response.status).toBe(503)
+    expect(releaseFundsMock).not.toHaveBeenCalled()
+  })
+
   it('refunds a claimed withdrawal exactly once when the send RPC fails', async () => {
     hasPermissionMock.mockReturnValue(true)
     prismaMock.transaction.findFirst.mockResolvedValue(makePendingApprovalWithdrawal())
     prismaMock.transaction.updateMany
       .mockResolvedValueOnce({ count: 1 })
       .mockResolvedValueOnce({ count: 1 })
-    sendZecMock.mockRejectedValue(new Error('RPC offline'))
+    sendZecMock.mockRejectedValue(new RpcRejectedError(-6, 'Insufficient funds'))
 
     const response = await approveWithdrawal()
     const payload = await response.json()
 
     expect(response.status).toBe(500)
     expect(payload).toMatchObject({
-      error: 'RPC failed: RPC offline',
+      error: 'RPC failed: RPC error -6: Insufficient funds',
       refunded: true,
     })
     expect(prismaMock.transaction.updateMany.mock.calls[1]?.[0]).toMatchObject({
       where: { id: 'tx-1', type: 'withdrawal', status: 'processing_approval' },
-      data: { status: 'failed', failReason: 'RPC offline' },
+      data: { status: 'failed', failReason: 'RPC error -6: Insufficient funds' },
     })
     expect(releaseFundsMock).toHaveBeenCalledTimes(1)
     expect(releaseFundsMock).toHaveBeenCalledWith(

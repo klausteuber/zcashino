@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 
 interface VeilstoneSeat {
@@ -52,6 +53,7 @@ const firstMatchTips = [
 ]
 
 export default function VeilstoneLobbyClient({ playtestMode = false }: { playtestMode?: boolean }) {
+  const router = useRouter()
   const [session, setSession] = useState<SessionPayload | null>(null)
   const [tables, setTables] = useState<VeilstoneTable[]>([])
   const [loading, setLoading] = useState(true)
@@ -98,7 +100,7 @@ export default function VeilstoneLobbyClient({ playtestMode = false }: { playtes
       setError(payload.error || 'Unable to create table')
       return
     }
-    window.location.href = `/veilstone/table/${payload.table.id}${playtestMode ? '?playtest=1' : ''}`
+    router.push(`/veilstone/table/${payload.table.id}${playtestMode ? '?playtest=1' : ''}`)
   }
 
   if (loading) {

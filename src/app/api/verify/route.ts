@@ -392,7 +392,8 @@ async function verifyGameById(gameId: string, gameType: 'blackjack' | 'video_pok
     }
 
     const result: FullVerificationResult = {
-      valid: steps.hashMatches && steps.outcomeValid && (steps.onChainConfirmed || !game.commitmentTxHash),
+      verificationScope: game.commitmentTxHash ? 'recorded-game' : 'recorded-outcome',
+      valid: steps.hashMatches && steps.outcomeValid && (!game.commitmentTxHash || (steps.onChainConfirmed && steps.timestampValid)),
       data: {
         gameId: game.id,
         serverSeed: resolvedServerSeed,
@@ -552,13 +553,15 @@ async function verifyGameById(gameId: string, gameType: 'blackjack' | 'video_pok
       steps.outcomeValid = false
     }
   } catch (replayError) {
+    steps.outcomeValid = false
     errors.push(
       `Game replay failed: ${replayError instanceof Error ? replayError.message : 'Unknown error'}`
     )
   }
 
   const result: FullVerificationResult = {
-    valid: steps.hashMatches && steps.outcomeValid && (steps.onChainConfirmed || !game.commitmentTxHash),
+    verificationScope: game.commitmentTxHash ? 'recorded-game' : 'recorded-outcome',
+    valid: steps.hashMatches && steps.outcomeValid && (!game.commitmentTxHash || (steps.onChainConfirmed && steps.timestampValid)),
     data: {
       gameId: game.id,
       serverSeed: resolvedServerSeed,
@@ -657,7 +660,8 @@ async function verifyManual(
   }
 
   const result: FullVerificationResult = {
-    valid: steps.hashMatches && steps.outcomeValid,
+    verificationScope: txHash ? 'shuffle-and-chain' : 'shuffle',
+    valid: steps.hashMatches && steps.outcomeValid && (!txHash || steps.onChainConfirmed),
     data: {
       gameId: 'manual-verification',
       serverSeed,

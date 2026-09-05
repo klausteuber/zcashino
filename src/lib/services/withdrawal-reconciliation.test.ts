@@ -96,6 +96,28 @@ describe('withdrawal reconciliation service', () => {
     txContext.transaction.updateMany.mockResolvedValue({ count: 1 })
   })
 
+  it.each(['transport', 'persistence'])('holds uncertain retry submissions after %s failure', async failure => {
+    prismaMock.transaction.findFirst.mockResolvedValue(pendingWithdrawal())
+    getOperationStatusMock.mockResolvedValue({ status: 'failed', error: 'tx unpaid action limit exceeded: 2 action(s) exceeds limit of 0' })
+    if (failure === 'transport') sendZecMock.mockRejectedValueOnce(new Error('timeout'))
+    else {
+      sendZecMock.mockResolvedValueOnce({ operationId: 'retry-op' })
+      prismaMock.transaction.updateMany.mockResolvedValueOnce({ count: 1 }).mockRejectedValueOnce(new Error('post-send persistence failure'))
+    }
+    const result = await reconcileWithdrawalById('tx-1')
+    expect(result.outcome).toBe('unknown')
+    expect(releaseFundsMock).not.toHaveBeenCalled()
+  })
+
+  it('never resends or refunds a previously uncertain submission', async () => {
+    prismaMock.transaction.findFirst.mockResolvedValue(pendingWithdrawal({ failReason: 'submission_unknown: manual review' }))
+    const result = await reconcileWithdrawalById('tx-1')
+    expect(result.outcome).toBe('unknown')
+    expect(sendZecMock).not.toHaveBeenCalled()
+    expect(releaseFundsMock).not.toHaveBeenCalled()
+    expect(getOperationStatusMock).not.toHaveBeenCalled()
+  })
+
   it('marks pending withdrawals confirmed when the operation succeeds', async () => {
     prismaMock.transaction.findMany.mockResolvedValue([pendingWithdrawal()])
     getOperationStatusMock.mockResolvedValue({ status: 'success', txid: 'a'.repeat(64) })

@@ -8,6 +8,13 @@ export interface Card {
   faceUp: boolean
 }
 
+export type PublicCard = Card | { faceUp: false; rank?: never; suit?: never }
+
+export type PublicBlackjackGameState = Omit<BlackjackGameState, 'deck' | 'dealerHand'> & {
+  dealerHand: Omit<Hand, 'cards'> & { cards: PublicCard[] }
+  availableActions: BlackjackAction[]
+}
+
 // Hand types
 export interface Hand {
   cards: Card[]
@@ -145,6 +152,7 @@ export interface VerificationSteps {
 }
 
 export interface FullVerificationResult {
+  verificationScope?: 'recorded-game' | 'recorded-outcome' | 'shuffle' | 'shuffle-and-chain'
   valid: boolean
   data: GameVerificationData
   steps: VerificationSteps

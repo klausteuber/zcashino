@@ -73,7 +73,9 @@ async function main() {
   }
 
   console.log('Empty SQLite database detected; creating the current schema and baselining legacy migrations.')
-  runPrisma(['db', 'push', '--accept-data-loss'])
+  // This branch has positively verified an empty database. No destructive
+  // override is necessary; schema drift must still fail closed.
+  runPrisma(['db', 'push'])
 
   for (const migration of migrations) {
     runPrisma(['migrate', 'resolve', '--applied', migration])

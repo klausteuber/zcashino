@@ -356,7 +356,13 @@ function VerifyPageContent() {
                     {result.pendingReveal
                       ? 'This game is committed on-chain, but server seed reveal is pending.'
                       : result.valid
-                      ? 'This game was provably fair.'
+                      ? result.verificationScope === 'shuffle'
+                        ? 'The supplied seed matches and the shuffle is reproducible. No recorded outcome or blockchain proof was checked.'
+                        : result.verificationScope === 'shuffle-and-chain'
+                        ? 'The supplied shuffle and blockchain commitment match. No recorded outcome was checked.'
+                        : result.verificationScope === 'recorded-outcome'
+                        ? 'The recorded outcome matches the replay. This historical game has no blockchain commitment.'
+                        : 'The recorded outcome and blockchain commitment passed verification.'
                       : 'Some verification steps failed.'}
                   </p>
                 </div>

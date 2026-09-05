@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 interface Seat {
@@ -46,6 +47,7 @@ export default function VeilstoneTableClient({
   tableId: string
   playtestMode?: boolean
 }) {
+  const router = useRouter()
   const [session, setSession] = useState<SessionPayload | null>(null)
   const [table, setTable] = useState<TablePayload | null>(null)
   const [publicStartZats, setPublicStartZats] = useState('35000000')
@@ -106,8 +108,8 @@ export default function VeilstoneTableClient({
       return payload
     }
     if (payload.table) setTable(payload.table)
-    if (payload.table?.match) window.location.href = `/veilstone/match/${payload.table.match.id}${playtestMode ? '?playtest=1' : ''}`
-    if (payload.match) window.location.href = `/veilstone/match/${payload.match.id}${playtestMode ? '?playtest=1' : ''}`
+    if (payload.table?.match) router.push(`/veilstone/match/${payload.table.match.id}${playtestMode ? '?playtest=1' : ''}`)
+    if (payload.match) router.push(`/veilstone/match/${payload.match.id}${playtestMode ? '?playtest=1' : ''}`)
     return payload
   }
 

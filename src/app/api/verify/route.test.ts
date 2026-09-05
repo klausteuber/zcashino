@@ -89,6 +89,25 @@ describe('/api/verify versioned replay selection', () => {
     })
   })
 
+  it.each(['late-commitment', 'replay-exception'])('fails recorded-game verification for %s', async failure => {
+    prismaMock.blackjackGame.findUnique.mockResolvedValueOnce({
+      id: 'game-1', status: 'completed', serverSeed: 'server-seed', serverSeedHash: 'server-hash', clientSeed: 'client', nonce: 0,
+      commitmentTxHash: 'tx', commitmentTimestamp: new Date(failure === 'late-commitment' ? '2026-03-02' : '2026-02-01'),
+      createdAt: new Date('2026-03-01'), actionHistory: '[]', mainBet: 0.1, perfectPairsBet: 0, insuranceBet: 0, payout: 0.2,
+    })
+    if (failure === 'replay-exception') replayGameMock.mockImplementationOnce(() => { throw new Error('invalid replay') })
+    const response = await POST(makeRequest({ gameId: 'game-1', gameType: 'blackjack' }))
+    expect((await response.json()).valid).toBe(false)
+    expect(prismaMock.blackjackGame.update).not.toHaveBeenCalled()
+  })
+
+  it('fails manual verification when a requested chain proof fails', async () => {
+    verifyCommitmentMock.mockResolvedValueOnce({ valid: false, error: 'Commitment mismatch' })
+    const response = await POST(makeRequest({ serverSeed: 'server-seed', serverSeedHash: 'server-hash', clientSeed: 'client', nonce: 0, gameType: 'blackjack', txHash: 'bad-tx' }))
+    expect(response.status).toBe(200)
+    expect((await response.json()).valid).toBe(false)
+  })
+
   it('uses stored fairnessVersion for verify-by-gameId replay', async () => {
     prismaMock.blackjackGame.findUnique.mockResolvedValueOnce({
       id: 'game-1',

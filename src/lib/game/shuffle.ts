@@ -15,7 +15,11 @@ export function normalizeFairnessVersion(
 }
 
 export function getDefaultFairnessVersion(): FairnessVersion {
-  return normalizeFairnessVersion(process.env.FAIRNESS_DEFAULT_VERSION, LEGACY_FAIRNESS_VERSION)
+  const configured = process.env.FAIRNESS_DEFAULT_VERSION
+  if (configured && configured !== HMAC_FAIRNESS_VERSION) {
+    throw new Error('New games require hmac_sha256_v1 fairness')
+  }
+  return HMAC_FAIRNESS_VERSION
 }
 
 export function shuffleDeck(

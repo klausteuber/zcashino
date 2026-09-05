@@ -5,7 +5,7 @@
   "description": "CypherJester - Provably fair privacy casino powered by Zcash",
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build && node scripts/prepare-standalone-release.mjs && node scripts/validate-standalone-artifact.mjs",
     "start": "next start",
     "lint": "eslint .",
     "lint:ci": "eslint . --max-warnings=0",
@@ -20,7 +20,8 @@
     "veilstone:sweep": "tsx src/lib/veilstone/sim/sweep-cli.ts",
     "ops:baseline": "node scripts/guarded-live-baseline.js",
     "ops:monitor": "node scripts/guarded-live-monitor.js",
-    "ops:reconcile": "node scripts/guarded-live-reconcile.js"
+    "ops:reconcile": "node scripts/guarded-live-reconcile.js",
+    "admin:bootstrap": "tsx scripts/bootstrap-admin.ts"
   },
   "keywords": [
     "zcash",
@@ -33,29 +34,31 @@
   "author": "",
   "license": "UNLICENSED",
   "overrides": {
-    "@hono/node-server": "1.19.13",
-    "ip-address": "10.2.0",
-    "next": {
-      "postcss": "8.5.16"
-    }
+    "@hono/node-server": "^1.19.17",
+    "ip-address": "^10.7.0",
+    "postcss": "$postcss",
+    "deepmerge-ts": "^8.0.2",
+    "mysql2": "^3.23.1",
+    "sharp": "^0.35.4"
   },
   "dependencies": {
     "@libsql/client": "^0.17.0",
-    "@prisma/adapter-libsql": "^7.8.0",
-    "@prisma/client": "^7.8.0",
+    "@prisma/adapter-libsql": "^7.10.0",
+    "@prisma/client": "^7.10.0",
     "@sentry/nextjs": "^10.53.1",
     "@tailwindcss/postcss": "^4.1.18",
     "@types/geoip-lite": "^1.4.4",
     "bcryptjs": "^3.0.3",
     "dotenv": "^17.2.3",
     "geoip-lite": "^1.4.10",
-    "next": "^16.2.6",
+    "next": "^16.3.4",
     "otpauth": "^9.5.0",
-    "prisma": "^7.8.0",
+    "prisma": "^7.10.0",
     "qrcode": "^1.5.4",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
-    "recharts": "^3.7.0"
+    "recharts": "^3.7.0",
+    "zod": "^4.3.5"
   },
   "devDependencies": {
     "@playwright/test": "^1.60.0",
@@ -71,9 +74,9 @@
     "@vitejs/plugin-react": "^5.1.2",
     "autoprefixer": "^10.4.23",
     "eslint": "^9.39.2",
-    "eslint-config-next": "^16.1.4",
+    "eslint-config-next": "^16.3.4",
     "jsdom": "^27.4.0",
-    "postcss": "^8.5.14",
+    "postcss": "^8.5.28",
     "tailwindcss": "^4.1.18",
     "tsx": "^4.22.0",
     "typescript": "^5.9.3",

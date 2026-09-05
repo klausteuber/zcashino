@@ -84,15 +84,13 @@ export function validateStartupConfig(): StartupValidationResult {
         `Current length: ${playerSessionSecret?.length ?? 0}`
       )
     }
-    if (!playerAuthMode) {
-      errors.push(
-        'PLAYER_SESSION_AUTH_MODE must be set on mainnet ("compat" or "strict").'
-      )
-    } else if (playerAuthMode !== 'compat' && playerAuthMode !== 'strict') {
-      errors.push(
-        `PLAYER_SESSION_AUTH_MODE="${playerAuthMode}" is invalid. Must be "compat" or "strict".`
-      )
+    if (playerAuthMode !== 'strict') {
+      errors.push('PLAYER_SESSION_AUTH_MODE must be "strict" on mainnet; ID-only authentication is disabled.')
     }
+    if (process.env.FAIRNESS_DEFAULT_VERSION !== 'hmac_sha256_v1') {
+      errors.push('FAIRNESS_DEFAULT_VERSION must be "hmac_sha256_v1" on mainnet.')
+    }
+
   } else {
     if (!adminPassword) {
       warnings.push('ADMIN_PASSWORD not set. Admin dashboard will be inaccessible.')
@@ -109,9 +107,9 @@ export function validateStartupConfig(): StartupValidationResult {
         'Use 32+ characters in production.'
       )
     }
-    if (playerAuthMode && playerAuthMode !== 'compat' && playerAuthMode !== 'strict') {
+    if (playerAuthMode && playerAuthMode !== 'strict') {
       warnings.push(
-        `PLAYER_SESSION_AUTH_MODE="${playerAuthMode}" is invalid. Use "compat" or "strict".`
+        'Only strict player authentication is supported; legacy ID-only access is disabled.'
       )
     }
   }

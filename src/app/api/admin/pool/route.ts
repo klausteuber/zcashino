@@ -1,3 +1,5 @@
+import { RpcRejectedError } from '@/lib/wallet/rpc-errors'
+import { holdUnknownWithdrawal } from '@/lib/services/withdrawal-submission'
 import { NextRequest, NextResponse } from 'next/server'
 import {
   getPoolStatus,
@@ -153,7 +155,7 @@ export async function GET(request: NextRequest) {
     return createRateLimitResponse(readLimit)
   }
 
-  const adminCheck = requireAdmin(request, 'view_overview')
+  const adminCheck = await requireAdmin(request, 'view_overview')
   if (!adminCheck.ok) {
     await logAdminEvent({
       request,
@@ -222,7 +224,7 @@ export async function POST(request: NextRequest) {
     return createRateLimitResponse(actionLimit)
   }
 
-  const adminCheck = requireAdmin(request)
+  const adminCheck = await requireAdmin(request)
   if (!adminCheck.ok) {
     await logAdminEvent({
       request,
@@ -620,6 +622,10 @@ export async function POST(request: NextRequest) {
             )
             approveOpId = result.operationId
           } catch (rpcErr) {
+            if (!(rpcErr instanceof RpcRejectedError)) {
+              await holdUnknownWithdrawal(approveId, WITHDRAWAL_APPROVAL_PROCESSING_STATUS)
+              return NextResponse.json({ error: 'Submission outcome uncertain. Funds remain reserved for manual wallet review.', requiresReview: true }, { status: 503 })
+            }
             const reason = rpcErr instanceof Error ? rpcErr.message : 'RPC call failed'
             const refunded = await failClaimedWithdrawal(
               txToApprove,
@@ -667,7 +673,7 @@ export async function POST(request: NextRequest) {
           await new Promise((r) => setTimeout(r, 3000))
           const opCheck = await getOperationStatus(approveOpId, network)
 
-          if (opCheck.status === 'failed') {
+          if (opCheck.status === 'failed' && !opCheck.error?.toLowerCase().includes('operation not found')) {
             // Refund the user — the z_sendmany failed before hitting the blockchain
             const refunded = await failClaimedWithdrawal(
               txToApprove,

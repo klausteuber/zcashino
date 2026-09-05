@@ -25,6 +25,13 @@ describe('player session auth versioning', () => {
     delete process.env.PLAYER_SESSION_AUTH_MODE
   })
 
+  it.each(['compat', 'strict', 'invalid'])('rejects an ID without a cookie even in %s mode', async mode => {
+    process.env.PLAYER_SESSION_AUTH_MODE = mode
+    const result = await requirePlayerSession({ cookies: { get: () => undefined } } as never, 'known-victim-id')
+    expect(result.ok).toBe(false)
+    expect(mocks.prismaMock.session.findUnique).not.toHaveBeenCalled()
+  })
+
   it('accepts legacy signed cookies without authVersion and defaults them to version 1', () => {
     const legacyPayload = Buffer.from(JSON.stringify({
       sessionId: 'session-1',

@@ -1,15 +1,14 @@
+import prisma from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
 import {
   clearAdminSessionCookie,
   createAdminSessionToken,
   createTotpTempToken,
-  ensureBootstrapAdmin,
+  requireAdmin,
   getAdminConfigStatus,
-  parseAdminSessionToken,
   setAdminSessionCookie,
   verifyAdminCredentials,
   verifyTotpStep,
-  ADMIN_SESSION_COOKIE,
 } from '@/lib/admin/auth'
 import {
   checkAdminRateLimit,
@@ -51,8 +50,8 @@ export async function GET(request: NextRequest) {
     )
   }
 
-  const token = request.cookies.get(ADMIN_SESSION_COOKIE)?.value
-  const session = parseAdminSessionToken(token)
+  const authenticated = await requireAdmin(request)
+  const session = authenticated.ok ? authenticated.session : null
 
   if (!session) {
     return NextResponse.json({
@@ -72,8 +71,7 @@ export async function GET(request: NextRequest) {
 
 /**
  * POST /api/admin/auth
- * Login — authenticates against AdminUser table with env var fallback.
- * On first call, bootstraps a super_admin from env vars if no DB users exist.
+ * Login against initialized AdminUser credentials. Database failures fail closed.
  */
 export async function POST(request: NextRequest) {
   const hostGuard = guardCypherAdminRequest(request)
@@ -148,9 +146,6 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Bootstrap super_admin from env vars on first login attempt
-    await ensureBootstrapAdmin()
-
     const result = await verifyAdminCredentials(username, password)
     if (!result.ok) {
       if (result.reason === 'not-configured') {
@@ -197,7 +192,7 @@ export async function POST(request: NextRequest) {
 
     // If user has 2FA enabled, return temp token and require TOTP step
     if (result.totpRequired) {
-      const tempTk = createTotpTempToken(result.userId)
+      const tempTk = createTotpTempToken(result.userId, result.authVersion)
 
       await logAdminEvent({
         request,
@@ -215,7 +210,7 @@ export async function POST(request: NextRequest) {
     }
 
     // No 2FA — issue session directly
-    const token = createAdminSessionToken(result.username, result.role)
+    const token = createAdminSessionToken(result.username, result.role, result.userId, result.authVersion)
     const response = NextResponse.json({
       success: true,
       username: result.username,
@@ -264,10 +259,16 @@ export async function DELETE(request: NextRequest) {
     return createRateLimitResponse(readLimit)
   }
 
-  const token = request.cookies.get(ADMIN_SESSION_COOKIE)?.value
-  const session = parseAdminSessionToken(token)
+  const authenticated = await requireAdmin(request)
+  const session = authenticated.ok ? authenticated.session : null
 
   const response = NextResponse.json({ success: true })
+  if (session?.userId) {
+    await prisma.adminUser.updateMany({
+      where: { id: session.userId, authVersion: session.authVersion },
+      data: { authVersion: { increment: 1 } },
+    })
+  }
   clearAdminSessionCookie(response)
 
   await logAdminEvent({

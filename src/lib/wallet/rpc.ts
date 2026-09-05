@@ -1,3 +1,4 @@
+import { RpcRejectedError } from './rpc-errors'
 /**
  * Zcash RPC Client
  *
@@ -108,7 +109,7 @@ async function rpcCall<T = unknown>(
     const data = (await response.json()) as RpcResponse<T>
 
     if (data.error) {
-      throw new Error(`RPC error ${data.error.code}: ${data.error.message}`)
+      throw new RpcRejectedError(data.error.code, data.error.message)
     }
 
     if (!response.ok) {
@@ -810,10 +811,13 @@ export async function sendZec(
         network
       )
 
+      if (typeof opid !== 'string' || !opid.trim()) {
+        throw new Error('Wallet returned no operation ID; submission outcome unknown')
+      }
       return { operationId: opid }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      if (IS_ZALLET) throw error
+      if (IS_ZALLET || !(error instanceof RpcRejectedError)) throw error
       const nextFee = nextFeeForUnpaidActionError(normalizedFee, message)
 
       if (!nextFee || nextFee <= normalizedFee || attempt === MAX_UNPAID_ACTION_RETRIES) {

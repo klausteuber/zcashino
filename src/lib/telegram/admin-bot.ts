@@ -1,3 +1,5 @@
+import prisma from '@/lib/db'
+import { type AdminRole } from '@/lib/admin/rbac'
 import { createHash, randomBytes, timingSafeEqual } from 'crypto'
 import { NextRequest, NextResponse } from 'next/server'
 
@@ -199,13 +201,16 @@ function telegramChatRateLimitIp(chatId: string): string {
   return `fd00:${groups.join(':')}::1`
 }
 
-function buildInternalAdminRequest(opts: {
+async function buildInternalAdminRequest(opts: {
   chatId: string
   method: 'GET' | 'POST'
   path: '/api/admin/overview' | '/api/admin/pool'
   body?: Record<string, unknown>
-}): NextRequest {
-  const token = createAdminSessionToken('telegram-bot', 'super_admin')
+}): Promise<NextRequest> {
+  // Provisioned explicitly by bootstrap-admin; disabling this account revokes bot access.
+  const user = await prisma.adminUser.findUnique({ where: { username: 'telegram-bot' } })
+  if (!user?.isActive) throw new Error('Telegram admin account is not provisioned or is disabled')
+  const token = createAdminSessionToken(user.username, user.role as AdminRole, user.id, user.authVersion)
 
   const headers: Record<string, string> = {
     host: 'localhost',
@@ -237,7 +242,7 @@ async function callInternalAdmin(opts: {
 }): Promise<InternalAdminResult> {
   let res: Response
 
-  const req = buildInternalAdminRequest(opts)
+  const req = await buildInternalAdminRequest(opts)
 
   if (opts.path === '/api/admin/overview' && opts.method === 'GET') {
     res = await adminOverviewGET(req)

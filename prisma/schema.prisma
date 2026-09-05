@@ -110,6 +110,8 @@ model BlackjackGame {
   sessionId String
   session   Session @relation(fields: [sessionId], references: [id])
 
+  version   Int @default(0) // Optimistic concurrency for each blackjack action
+
   // Bet amounts
   mainBet         Float
   perfectPairsBet Float @default(0)
@@ -406,6 +408,7 @@ model AdminUser {
   id           String    @id @default(cuid())
   username     String    @unique
   passwordHash String // bcrypt hash
+  authVersion  Int       @default(1)
   role         String    @default("analyst") // analyst, operator, super_admin
   isActive     Boolean   @default(true)
   totpSecret   String? // For TOTP 2FA

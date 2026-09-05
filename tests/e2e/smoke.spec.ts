@@ -37,6 +37,31 @@ test.describe('Brand routing', () => {
 })
 
 test.describe('Core casino routes', () => {
+  test('signed demo play hides dealer cards and rejects cookie-free session access', async ({ page, request }) => {
+    await useBrandHost(page, 'cypherjester.com')
+    await page.goto('/')
+    const played = await page.evaluate(async () => {
+      const sessionResponse = await fetch('/api/session')
+      const session = await sessionResponse.json()
+      const response = await fetch('/api/game', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'start', sessionId: session.id, bet: 0.01 }),
+      })
+      return { sessionId: session.id, status: response.status, body: await response.json() }
+    })
+    expect(played.status).toBe(200)
+    expect(played.body.gameState).not.toHaveProperty('deck')
+    expect(played.body.gameState).not.toHaveProperty('serverSeed')
+    for (const card of played.body.gameState.dealerHand.cards) {
+      if (!card.faceUp) expect(card).toEqual({ faceUp: false })
+    }
+    // Playwright's request fixture has a separate cookie jar from the page.
+    const unauthorized = await request.post('/api/session', {
+      data: { sessionId: played.sessionId, action: 'update-limits', depositLimit: 100 },
+    })
+    expect(unauthorized.status()).toBe(401)
+  })
+
   test('blackjack page renders gameplay shell and SEO section', async ({ page }) => {
     await useBrandHost(page, 'cypherjester.com')
     await page.goto('/blackjack')

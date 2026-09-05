@@ -187,6 +187,20 @@ describe('/api/wallet POST withdrawal-status transitions', () => {
     })
   })
 
+  it('keeps funds reserved after a successful send when persistence fails', async () => {
+    prismaMock.session.findUnique.mockResolvedValue({ id: 'session-1', balance: 2, walletAddress: 'real-wallet', isAuthenticated: true, withdrawalAddress: 't1dest', wallet: { network: 'testnet' } })
+    prismaMock.transaction.findFirst.mockResolvedValue(null)
+    prismaMock.transaction.create.mockResolvedValue({ id: 'tx-audit', status: 'pending' })
+    reserveFundsMock.mockResolvedValue(true)
+    getAddressBalanceMock.mockResolvedValue({ confirmed: 10 })
+    prismaMock.transaction.update.mockRejectedValueOnce(new Error('write failed after send'))
+    const response = await POST(makeRequest({ action: 'withdraw', sessionId: 'session-1', amount: 0.25, idempotencyKey: 'audit-persistence-001' }))
+    expect(response.status).toBe(503)
+    expect(sendZecMock).toHaveBeenCalledOnce()
+    expect(releaseFundsMock).not.toHaveBeenCalled()
+    expect(prismaMock.transaction.updateMany).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ operationId: 'op-1', failReason: expect.stringContaining('submission_unknown:') }) }))
+  })
+
   it('marks pending withdrawals confirmed when operation succeeds', async () => {
     prismaMock.transaction.findFirst.mockResolvedValue({
       id: 'tx-1',

@@ -60,7 +60,7 @@ curl http://localhost:3000/api/health
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `FORCE_HTTPS` | Set to `true` for secure cookies (required behind TLS proxy) | `false` |
-| `PLAYER_SESSION_AUTH_MODE` | Player auth rollout mode: `compat` or `strict` | `compat` |
+| `PLAYER_SESSION_AUTH_MODE` | Mandatory signed-cookie authentication | `strict` |
 | `WITHDRAWAL_APPROVAL_THRESHOLD` | Withdrawals >= this amount require admin approval (ZEC) | `1.0` |
 | `KILL_SWITCH` | Set to `true` to block new games/withdrawals at startup | `false` |
 | `NEXT_PUBLIC_SENTRY_DSN` | Sentry error tracking DSN | (disabled) |
@@ -203,23 +203,11 @@ docker compose exec app node scripts/dedupe-transaction-txhash.js --apply
 docker compose exec app npx prisma migrate deploy
 ```
 
-3. Deploy app with compatibility auth mode:
-- `PLAYER_SESSION_AUTH_MODE=compat`
-- Keep clients sending `sessionId` while new signed player cookie is being adopted
-- Wallet withdraw clients must send `idempotencyKey` on every withdrawal request
-
-4. Monitor `/admin` and `/api/admin/overview` for 24-48h:
-- `transactions.raceRejections24h`
-- `transactions.raceRejectionsAllTime`
-- `transactions.idempotencyReplays24h`
-- `transactions.idempotencyReplaysAllTime`
-- `security.legacyPlayerAuthFallback24h`
-- `security.legacyPlayerAuthFallbackAllTime`
-- Negative balances must remain zero
-
-5. Flip to strict mode after metrics are clean:
-- Set `PLAYER_SESSION_AUTH_MODE=strict`
-- Reject legacy body/query-only player session access
+3. Deploy with `PLAYER_SESSION_AUTH_MODE=strict` and `FAIRNESS_DEFAULT_VERSION=hmac_sha256_v1`.
+   Signed cookies are mandatory; session IDs alone are never credentials. Players without a current cookie must use their recovery key.
+4. Apply the new admin/game version migration using the backed-up and rehearsed migration flow below. Existing admin cookies will require a fresh login.
+5. For a fresh installation only, initialize the administrator explicitly with `npm run admin:bootstrap`. If Telegram administration is enabled, run `npm run admin:bootstrap -- --telegram` to provision its revocable service account. This preserves existing credentials and disabled accounts.
+6. Monitor reconciliation, negative balances, rejected stale game actions, and authentication errors. See [security remediation release notes](notes/security-remediation-2026-09-04.md) for this release's required checks.
 
 ## Live Guardrails (2026-02-16 onward)
 
@@ -228,7 +216,7 @@ Production is already live. Use this section and `notes/mainnet-guarded-live-run
 - Initial real-money smoke test (deposit -> play -> verify -> withdraw) has passed.
 - Commitment pool refill is intentionally one commitment per cycle (~5 minutes) because fresh Sapling notes cannot be spent until witness data is anchored in a block.
 - Health balance warning logic uses confirmed + pending house balance totals to avoid false alerts during commitment self-send cycles.
-- Keep `PLAYER_SESSION_AUTH_MODE=compat` until strict cutover preconditions pass for a full 48-hour window.
+- Keep `PLAYER_SESSION_AUTH_MODE=strict`; compatibility authentication has been removed.
 
 ## Zcash Node Setup
 
@@ -680,7 +668,7 @@ Use this checklist when launching a new environment or restoring to a fresh host
 ### Application
 - [ ] DB dedupe + migration completed (`scripts/dedupe-transaction-txhash.js --apply`, `prisma migrate deploy`)
 - [ ] `WITHDRAWAL_APPROVAL_THRESHOLD` set (recommend 1.0 ZEC initially)
-- [ ] `PLAYER_SESSION_AUTH_MODE=compat` on first deployment
+- [ ] `PLAYER_SESSION_AUTH_MODE=strict` on every deployment
 - [ ] Sentry DSN configured
 - [ ] Admin dashboard accessible
 - [ ] Client withdrawal requests include `idempotencyKey`
@@ -692,7 +680,7 @@ Use this checklist when launching a new environment or restoring to a fresh host
 - [ ] Daily canary for first 7 days: deposit tiny amount, play one hand, verify, withdraw
 - [ ] Monitor race/idempotency counters in admin overview for first 48h
 - [ ] Monitor legacy compat-auth fallback counter (`security.legacyPlayerAuthFallback24h`) before strict cutover
-- [ ] Flip `PLAYER_SESSION_AUTH_MODE=strict` after clean metrics
+- [ ] Verify current cookies and recovery keys work with strict authentication
 - [ ] Weekly dependency/security patch review
 - [ ] Backup restore drill completed at least once
 - [ ] Credential rotation at 90 days

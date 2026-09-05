@@ -33,7 +33,7 @@ export async function PATCH(
     return createRateLimitResponse(actionLimit)
   }
 
-  const adminCheck = requireAdmin(request, 'manage_admin_users')
+  const adminCheck = await requireAdmin(request, 'manage_admin_users')
   if (!adminCheck.ok) {
     await logAdminEvent({
       request,
@@ -136,7 +136,7 @@ export async function PATCH(
 
     const updated = await prisma.adminUser.update({
       where: { id },
-      data: updateData,
+      data: { ...updateData, authVersion: { increment: 1 } },
       select: {
         id: true,
         username: true,
@@ -198,7 +198,7 @@ export async function DELETE(
     return createRateLimitResponse(actionLimit)
   }
 
-  const adminCheck = requireAdmin(request, 'manage_admin_users')
+  const adminCheck = await requireAdmin(request, 'manage_admin_users')
   if (!adminCheck.ok) {
     await logAdminEvent({
       request,
@@ -241,7 +241,7 @@ export async function DELETE(
 
     await prisma.adminUser.update({
       where: { id },
-      data: { isActive: false },
+      data: { isActive: false, authVersion: { increment: 1 } },
     })
 
     await logAdminEvent({

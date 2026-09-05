@@ -1199,3 +1199,12 @@ the monitor for the duration (pause file), and monitors must treat the
 post-restart catch-up window as startup, not degradation.
 
 **Key files:** `scripts/backup-wallet.sh`, `scripts/check-node.sh`
+## Security audit remediation (2026-09-04)
+
+**Symptom:** Hidden dealer cards leaked through JSON; concurrent game actions and uncertain withdrawal sends could corrupt accounting; stale admin tokens remained usable.
+
+**Root cause:** Internal state was serialized directly, accounting writes were separate, transport failures were treated as definitive rejections, and authorization trusted token snapshots.
+
+**Fix:** Explicit public game serialization, versioned atomic game transactions, held withdrawals on uncertain sends, strict signed player sessions, database-bound admin token versions and explicit provisioning, HMAC shuffle defaults, scoped verification, and patched dependencies. Rehearse additive migrations on an online production backup before rollout.
+
+**Key files:** `src/lib/game/public-blackjack.ts`, `src/lib/services/blackjack-action.ts`, `src/lib/services/withdrawal-submission.ts`, `src/lib/admin/auth.ts`, `scripts/bootstrap-admin.ts`, `prisma/migrations/20260905050000_security_session_and_game_versions/migration.sql`. Full closure and validation: `notes/security-remediation-2026-09-04.md`.

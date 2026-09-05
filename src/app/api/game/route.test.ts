@@ -216,7 +216,7 @@ function buildGameState(phase: 'playerTurn' | 'complete', lastPayout = 0) {
 
 describe('/api/game POST race/idempotency', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
+    vi.resetAllMocks()
 
     checkPublicRateLimitMock.mockReturnValue({ allowed: true })
     createRateLimitResponseMock.mockReturnValue(new Response('rate-limited', { status: 429 }))
@@ -257,6 +257,20 @@ describe('/api/game POST race/idempotency', () => {
     prismaMock.blackjackGame.findFirst.mockResolvedValue(null)
     prismaMock.blackjackGame.create.mockResolvedValue({ id: 'game-1' })
     prismaMock.blackjackGame.updateMany.mockResolvedValue({ count: 1 })
+  })
+
+  it('does not serialize dealer secrets in active action responses', async () => {
+    const state = buildGameState('playerTurn')
+    state.dealerHand.cards[1].faceUp = false
+    startRoundMock.mockReturnValue(state)
+    executeActionMock.mockReturnValue(state)
+    prismaMock.session.findUnique.mockResolvedValue({ id: 'session-1', balance: 10, walletAddress: 'demo_audit', totalWagered: 0, totalWon: 0 })
+    prismaMock.blackjackGame.findUnique.mockResolvedValue({ id: 'game-1', version: 0, sessionId: 'session-1', status: 'active', mainBet: 0.1, perfectPairsBet: 0, insuranceBet: 0, serverSeed: 'seed', serverSeedHash: 'hash', clientSeed: 'client', nonce: 0, actionHistory: '[]' })
+    const response = await POST(makeRequest({ action: 'hit', sessionId: 'session-1', gameId: 'game-1' }))
+    const payload = await response.json()
+    expect(response.status).toBe(200)
+    expect(payload.gameState.dealerHand.cards[1]).toEqual({ faceUp: false })
+    expect(payload.gameState).not.toHaveProperty('deck')
   })
 
   it('rejects start when atomic reserve fails (concurrent spend protection)', async () => {
@@ -393,7 +407,7 @@ describe('/api/game POST race/idempotency', () => {
 
 describe('/api/game GET session auth', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
+    vi.resetAllMocks()
     checkPublicRateLimitMock.mockReturnValue({ allowed: true })
     createRateLimitResponseMock.mockReturnValue(new Response('rate-limited', { status: 429 }))
     requirePlayerSessionMock.mockReturnValue({
@@ -552,6 +566,7 @@ describe('/api/game GET session auth', () => {
 
     prismaMock.blackjackGame.findUnique.mockResolvedValueOnce({
       id: 'game-1',
+      version: 0,
       sessionId: 'session-1',
       status: 'active',
       mainBet: 0.1,
@@ -604,12 +619,8 @@ describe('/api/game GET session auth', () => {
 
     expect(response.status).toBe(200)
     expect(prismaMock.blackjackGame.updateMany).toHaveBeenCalledWith({
-      where: { id: 'game-1', status: 'active' },
-      data: {
-        status: 'completed',
-        completedAt: expect.any(Date),
-        payout: 0.15,
-      },
+      where: { id: 'game-1', sessionId: 'session-1', status: 'active', version: 0 },
+      data: { version: { increment: 1 } },
     })
     expect(creditFundsMock).toHaveBeenCalledTimes(1)
     expect(prismaMock.blackjackGame.update).toHaveBeenCalledWith({
@@ -636,6 +647,7 @@ describe('/api/game GET session auth', () => {
     }
     const gameRow = {
       id: 'game-1',
+      version: 0,
       sessionId: 'session-1',
       status: 'active',
       mainBet: 0.1,
@@ -651,7 +663,7 @@ describe('/api/game GET session auth', () => {
 
     startRoundMock.mockReturnValue({
       ...buildGameState('playerTurn'),
-      dealerPeeked: true,
+      dealerPeeked: false,
       dealerHand: {
         cards: [
           { rank: 'A', suit: 'spades', faceUp: true },

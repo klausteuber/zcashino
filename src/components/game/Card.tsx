@@ -1,10 +1,10 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import type { Card as CardType, Suit } from '@/types'
+import type { Card as CardType, PublicCard, Suit } from '@/types'
 
 interface CardProps {
-  card: CardType
+  card: PublicCard
   size?: 'sm' | 'md' | 'lg' | 'xl'
   className?: string
   dealDelay?: number // Delay in ms before card deals in
@@ -152,8 +152,8 @@ export default function Card({ card, size = 'md', className = '', dealDelay = 0,
   )
 
   // Render card face
-  const symbol = suitSymbols[card.suit]
-  const suitClass = suitClasses[card.suit]
+  const symbol = card.suit ? suitSymbols[card.suit] : ''
+  const suitClass = card.suit ? suitClasses[card.suit] : ''
 
   const renderCardFace = () => (
     <>
@@ -177,7 +177,7 @@ export default function Card({ card, size = 'md', className = '', dealDelay = 0,
   )
 
   // Card is face down (and not flipping to face up)
-  if (!showFace) {
+  if (!showFace || !card.rank || !card.suit) {
     return (
       <div
         className={`${sizeClasses[size]} playing-card-back bg-gradient-to-br from-jester-purple-dark via-jester-purple to-jester-purple-dark rounded-lg shadow-lg flex items-center justify-center border-2 border-masque-gold/40 ${transitionClass} ${dealAnimationClass} ${flipAnimationClass} ${className}`}
@@ -218,7 +218,7 @@ const overlapClasses = {
 }
 
 interface HandProps {
-  cards: CardType[]
+  cards: PublicCard[]
   size?: 'sm' | 'md' | 'lg' | 'xl'
   label?: string
   value?: number

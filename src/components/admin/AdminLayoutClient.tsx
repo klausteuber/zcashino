@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { usePathname } from 'next/navigation'
+import { redirect, usePathname, useRouter } from 'next/navigation'
 import AdminSidebar from './AdminSidebar'
 
 export default function AdminLayoutClient({
@@ -10,6 +10,7 @@ export default function AdminLayoutClient({
   children: React.ReactNode
 }) {
   const pathname = usePathname()
+  const router = useRouter()
   const isOverviewPage = pathname === '/admin'
 
   const [authChecked, setAuthChecked] = useState(false)
@@ -43,7 +44,8 @@ export default function AdminLayoutClient({
   const handleLogout = async () => {
     await fetch('/api/admin/auth', { method: 'DELETE' })
     setIsAuthenticated(false)
-    window.location.href = '/admin'
+    router.replace('/admin')
+    router.refresh()
   }
 
   // The overview page (/admin) handles its own auth gate + login form.
@@ -75,15 +77,7 @@ export default function AdminLayoutClient({
   }
 
   if (!isAuthenticated) {
-    // Redirect to main admin page for login
-    if (typeof window !== 'undefined') {
-      window.location.href = '/admin'
-    }
-    return (
-      <div className="min-h-screen bg-midnight-black flex items-center justify-center">
-        <div className="text-venetian-gold/50 text-sm">Redirecting to login...</div>
-      </div>
-    )
+    redirect('/admin')
   }
 
   return (

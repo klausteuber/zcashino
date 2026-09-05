@@ -1,3 +1,5 @@
+import { RpcRejectedError } from '@/lib/wallet/rpc-errors'
+import { holdUnknownWithdrawal, UNKNOWN_SUBMISSION_PREFIX } from '@/lib/services/withdrawal-submission'
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import {
@@ -719,6 +721,7 @@ async function handleWithdraw(
         isShielded: !isDemo && !destinationAddress.startsWith('t'),
         memo,
         status: holdForApproval ? 'pending_approval' : 'pending',
+        failReason: holdForApproval ? null : 'submitting',
         idempotencyKey,
       },
     })
@@ -766,6 +769,7 @@ async function handleWithdraw(
         txHash: transaction.txHash,
         operationId: transaction.operationId,
       },
+      requiresReview: transaction.failReason?.startsWith(UNKNOWN_SUBMISSION_PREFIX) ?? false,
       message: 'Duplicate request detected. Returning existing withdrawal transaction.',
       idempotentReplay: true,
     })
@@ -859,6 +863,7 @@ async function handleWithdraw(
     }, { status: 503 })
   }
 
+  let submittedOperationId: string | undefined
   try {
     const { operationId } = await sendZec(
       houseAddress,
@@ -868,9 +873,10 @@ async function handleWithdraw(
       network
     )
 
+    submittedOperationId = operationId
     await prisma.transaction.update({
       where: { id: transaction.id },
-      data: { operationId },
+      data: { operationId, failReason: null },
     })
 
     return NextResponse.json({
@@ -886,7 +892,15 @@ async function handleWithdraw(
       message: 'Withdrawal submitted. Track progress with the withdrawal-status action.',
     })
   } catch (rpcError) {
-    const reason = rpcError instanceof Error ? rpcError.message : 'RPC call failed'
+    if (submittedOperationId || !(rpcError instanceof RpcRejectedError)) {
+      await holdUnknownWithdrawal(transaction.id, 'pending', submittedOperationId)
+      return NextResponse.json({
+        error: 'Payment status is uncertain. Your funds remain reserved while we review the wallet.',
+        transactionId: transaction.id,
+        requiresReview: true,
+      }, { status: 503 })
+    }
+    const reason = rpcError.message
     await refundWithdrawal(session.id, transaction.id, totalAmount, amount, reason)
     return NextResponse.json({
       error: 'Withdrawal failed. Balance has been refunded.',
@@ -905,11 +919,13 @@ async function refundWithdrawal(
   reason: string
 ) {
   await prisma.$transaction(async (tx) => {
-    await releaseFunds(tx, sessionId, totalAmount, 'totalWithdrawn', withdrawnAmount)
-    await tx.transaction.update({
-      where: { id: transactionId },
+    const claimed = await tx.transaction.updateMany({
+      where: { id: transactionId, type: 'withdrawal', status: 'pending', operationId: null },
       data: { status: 'failed', failReason: reason },
     })
+    if (claimed.count === 1) {
+      await releaseFunds(tx, sessionId, totalAmount, 'totalWithdrawn', withdrawnAmount)
+    }
   })
 }
 
@@ -945,6 +961,14 @@ async function handleWithdrawalStatus(request: NextRequest, sessionId: string, t
     })
   }
 
+  if (transaction.failReason?.startsWith(UNKNOWN_SUBMISSION_PREFIX)) {
+    return NextResponse.json({
+      success: true, requiresReview: true,
+      transaction: { id: transaction.id, status: transaction.status, amount: transaction.amount },
+      message: 'Your payment is under review. Funds remain reserved.',
+    })
+  }
+
   // Pending with operation ID: poll shared reconciliation path
   if (transaction.operationId) {
     const result = await reconcileWithdrawalById(transaction.id, { request, sessionId })
@@ -968,6 +992,7 @@ async function handleWithdrawalStatus(request: NextRequest, sessionId: string, t
         retryAttempt: result.retryAttempt,
         message: result.message,
       },
+      requiresReview: result.outcome === 'unknown',
       ...(result.message ? { message: result.message } : {}),
     })
   }

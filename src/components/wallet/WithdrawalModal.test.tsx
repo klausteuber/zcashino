@@ -13,6 +13,17 @@ describe('WithdrawalModal', () => {
     onBalanceUpdate: vi.fn(),
   }
 
+  it('shows reserved funds under review instead of offering an immediate retry', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({ ok: false, json: async () => ({ requiresReview: true, transactionId: 'review-1' }) } as Response)
+    render(<WithdrawalModal {...baseProps} />)
+    fireEvent.change(screen.getByPlaceholderText('Min: 0.01 ZEC'), { target: { value: '0.1' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Review Withdrawal' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm Withdrawal' }))
+    expect(await screen.findByText('Withdrawal Under Review')).toBeInTheDocument()
+    expect(baseProps.onBalanceUpdate).toHaveBeenCalledWith(0.4499)
+    expect(screen.queryByRole('button', { name: /try again/i })).not.toBeInTheDocument()
+  })
+
   it('allows exact-balance withdrawal after fee without precision rejection', () => {
     render(<WithdrawalModal {...baseProps} />)
 

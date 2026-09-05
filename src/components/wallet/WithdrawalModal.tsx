@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { generateClientSeedHex } from '@/lib/game/client-fairness'
 
-type WithdrawalStep = 'set-address' | 'form' | 'confirm' | 'processing' | 'pending_approval' | 'success' | 'error'
+type WithdrawalStep = 'set-address' | 'form' | 'confirm' | 'processing' | 'pending_approval' | 'review' | 'success' | 'error'
 
 interface WithdrawalModalProps {
   isOpen: boolean
@@ -165,6 +165,13 @@ export function WithdrawalModal({
 
       const data = await res.json()
 
+      if (data.requiresReview) {
+        setTransactionId(data.transactionId ?? data.transaction?.id ?? null)
+        onBalanceUpdate(fromZats(Math.max(0, balanceZats - totalDeductedZats)))
+        setStep('review')
+        return
+      }
+
       if (!res.ok) {
         setError(data.error || 'Withdrawal failed')
         setStep('error')
@@ -214,7 +221,11 @@ export function WithdrawalModal({
         const data = await res.json()
         const tx = data.transaction
 
-        if (tx?.status === 'confirmed') {
+        if (data.requiresReview) {
+          setStep('review')
+          if (pollRef.current) clearInterval(pollRef.current)
+          pollRef.current = null
+        } else if (tx?.status === 'confirmed') {
           setTxHash(tx.txHash)
           setStep('success')
           if (pollRef.current) {
@@ -480,6 +491,17 @@ export function WithdrawalModal({
             <p className="text-sm text-venetian-gold/50">
               This may take a few minutes for shielded transactions.
             </p>
+          </div>
+        )}
+
+        {step === 'review' && (
+          <div className="p-8 text-center">
+            <h2 className="text-xl font-display font-bold text-bone-white mb-4">Withdrawal Under Review</h2>
+            <p className="text-sm text-venetian-gold/60 mb-4">
+              We are checking whether your payment was sent. Your funds remain reserved while we confirm its status.
+            </p>
+            {transactionId && <p className="text-xs text-venetian-gold/50 break-all mb-6">Reference: {transactionId}</p>}
+            <button onClick={onClose} className="w-full py-3 btn-gold-shimmer text-midnight-black font-semibold rounded-lg">Close</button>
           </div>
         )}
 

@@ -1,3 +1,5 @@
+import { RpcRejectedError } from '@/lib/wallet/rpc-errors'
+import { holdUnknownWithdrawal, UNKNOWN_SUBMISSION_PREFIX } from './withdrawal-submission'
 import type { NextRequest } from 'next/server'
 import type { Prisma } from '@prisma/client'
 import type { ZcashNetwork } from '@/types'
@@ -238,6 +240,7 @@ async function retryUnpaidActionWithdrawal(
     }
   }
 
+  let submittedOperationId: string | undefined
   try {
     const { operationId } = await sendZec(
       houseAddress,
@@ -249,6 +252,7 @@ async function retryUnpaidActionWithdrawal(
       retryFee
     )
 
+    submittedOperationId = operationId
     const updated = await prisma.transaction.updateMany({
       where: {
         id: transaction.id,
@@ -308,6 +312,14 @@ async function retryUnpaidActionWithdrawal(
       message: `Withdrawal retry ${retryAttempt}/${MAX_UNPAID_ACTION_OPERATION_RETRIES} submitted with adjusted fee.`,
     }
   } catch (retryError) {
+    if (submittedOperationId || !(retryError instanceof RpcRejectedError)) {
+      await holdUnknownWithdrawal(transaction.id, 'pending', submittedOperationId)
+      return {
+        id: transaction.id, outcome: 'unknown',
+        transaction: toTransactionSummary({ ...transaction, operationId: submittedOperationId ?? transaction.operationId, failReason: `${UNKNOWN_SUBMISSION_PREFIX} Manual wallet review required.` }),
+        message: 'Submission outcome uncertain. Funds remain reserved for manual wallet review.',
+      }
+    }
     console.error('[Withdrawal] Unpaid-action retry failed:', retryError)
     const reason = retryError instanceof Error
       ? `Retry submission failed: ${retryError.message}`
@@ -359,6 +371,10 @@ async function reconcilePendingWithdrawal(
       transaction: toTransactionSummary(transaction),
       message: 'Withdrawal is no longer pending.',
     }
+  }
+
+  if (transaction.failReason?.startsWith(UNKNOWN_SUBMISSION_PREFIX)) {
+    return { id: transaction.id, outcome: 'unknown', transaction: toTransactionSummary(transaction), message: 'Manual wallet reconciliation required before refund or retry.' }
   }
 
   if (!transaction.operationId) {

@@ -34,7 +34,7 @@ export async function POST(
   }
 
   // Any authenticated admin can set up their own 2FA
-  const adminCheck = requireAdmin(request)
+  const adminCheck = await requireAdmin(request)
   if (!adminCheck.ok) {
     await logAdminEvent({
       request,
@@ -124,7 +124,7 @@ export async function PATCH(
     return createRateLimitResponse(actionLimit)
   }
 
-  const adminCheck = requireAdmin(request)
+  const adminCheck = await requireAdmin(request)
   if (!adminCheck.ok) {
     await logAdminEvent({
       request,
@@ -190,7 +190,7 @@ export async function PATCH(
 
     await prisma.adminUser.update({
       where: { id },
-      data: { totpEnabled: true },
+      data: { totpEnabled: true, authVersion: { increment: 1 } },
     })
 
     await logAdminEvent({
@@ -240,7 +240,7 @@ export async function DELETE(
     return createRateLimitResponse(actionLimit)
   }
 
-  const adminCheck = requireAdmin(request, 'manage_admin_users')
+  const adminCheck = await requireAdmin(request, 'manage_admin_users')
   if (!adminCheck.ok) {
     await logAdminEvent({
       request,
@@ -265,7 +265,7 @@ export async function DELETE(
 
     await prisma.adminUser.update({
       where: { id },
-      data: { totpSecret: null, totpEnabled: false },
+      data: { totpSecret: null, totpEnabled: false, authVersion: { increment: 1 } },
     })
 
     await logAdminEvent({

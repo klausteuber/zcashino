@@ -1,3 +1,5 @@
+import { commitBlackjackAction, BlackjackActionConflict, BlackjackFundsUnavailable } from '@/lib/services/blackjack-action'
+import { sanitizeGameState } from '@/lib/game/public-blackjack'
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import {
@@ -562,7 +564,7 @@ async function handleStartGameSessionNonce(
 }
 
 async function handleGameAction(
-  request: NextRequest,
+  _request: NextRequest,
   session: {
     id: string
     balance: number
@@ -620,32 +622,15 @@ async function handleGameAction(
     gameState.dealerHand.cards[0]?.rank === 'A' &&
     gameState.dealerHand.isBlackjack
 
+  let additionalBet = 0
   // Check if action requires additional funds (double, split)
   // Only charge for the NEW action, not replayed ones
   const canTakeAction = getAvailableActions(gameState).includes(action)
   if ((action === 'double' || action === 'split') && canTakeAction && !dealerPeekWillAutoComplete) {
-    const additionalBet = roundZec(game.mainBet)
+    additionalBet = roundZec(game.mainBet)
     const wagerCheck = checkWagerAllowed(session, additionalBet)
     if (!wagerCheck.allowed) {
       return createWagerLimitResponse(wagerCheck)
-    }
-
-    const reserved = await prisma.$transaction((tx) =>
-      reserveFunds(tx, session.id, additionalBet, 'totalWagered')
-    )
-    if (!reserved) {
-      await logPlayerCounterEvent({
-        request,
-        action: PLAYER_COUNTER_ACTIONS.BLACKJACK_RESERVE_REJECTED,
-        details: 'Conditional action reserve rejected',
-        metadata: {
-          sessionId: session.id,
-          gameId,
-          action,
-          additionalBet,
-        },
-      })
-      return NextResponse.json({ error: 'Insufficient balance' }, { status: 400 })
     }
   }
 
@@ -670,19 +655,8 @@ async function handleGameAction(
     })
   }
 
-  if (gameState.phase === 'complete') {
-    // processGameCompletion atomically transitions status 'active' → 'completed'
-    // and credits payout. It also sets status, completedAt, and payout on the game row.
-    await processGameCompletion(request, gameId, session.id, gameState)
-
-    // Set remaining fields that processGameCompletion doesn't handle
-    updateData.outcome = determineOutcome(gameState)
-  }
-
-  await prisma.blackjackGame.update({
-    where: { id: gameId },
-    data: updateData
-  })
+  const commitError = await persistPlayerAction(game, session.id, gameState, updateData, additionalBet)
+  if (commitError) return commitError
 
   // Get updated balance
   const updatedSession = await prisma.session.findUnique({
@@ -699,7 +673,7 @@ async function handleGameAction(
 }
 
 async function handleInsuranceAction(
-  request: NextRequest,
+  _request: NextRequest,
   session: {
     id: string
     balance: number
@@ -746,6 +720,8 @@ async function handleInsuranceAction(
     game,
     sessionBalance: session.balance,
     resolvedServerSeed,
+    replayPersistedProgress: true,
+    actionHistory: parseBlackjackActionHistory(game.actionHistory),
   })
 
   // Check if insurance can be taken (dealer showing Ace, no insurance yet)
@@ -753,7 +729,7 @@ async function handleInsuranceAction(
     return NextResponse.json({ error: 'Insurance not available' }, { status: 400 })
   }
 
-  if (game.insuranceBet > 0) {
+  if (game.insuranceBet > 0 || gameState.dealerPeeked || parseBlackjackActionHistory(game.actionHistory).length > 0) {
     return NextResponse.json({ error: 'Insurance already taken' }, { status: 400 })
   }
 
@@ -761,23 +737,6 @@ async function handleInsuranceAction(
   const wagerCheck = checkWagerAllowed(session, insuranceAmount)
   if (!wagerCheck.allowed) {
     return createWagerLimitResponse(wagerCheck)
-  }
-
-  const reserved = await prisma.$transaction((tx) =>
-    reserveFunds(tx, session.id, insuranceAmount, 'totalWagered')
-  )
-  if (!reserved) {
-    await logPlayerCounterEvent({
-      request,
-      action: PLAYER_COUNTER_ACTIONS.BLACKJACK_RESERVE_REJECTED,
-      details: 'Conditional insurance reserve rejected',
-      metadata: {
-        sessionId: session.id,
-        gameId,
-        insuranceAmount,
-      },
-    })
-    return NextResponse.json({ error: 'Insufficient balance for insurance' }, { status: 400 })
   }
 
   gameState = takeInsurance(gameState, insuranceAmount)
@@ -795,15 +754,8 @@ async function handleInsuranceAction(
     })
   }
 
-  if (gameState.phase === 'complete') {
-    await processGameCompletion(request, gameId, session.id, gameState)
-    updateData.outcome = determineOutcome(gameState)
-  }
-
-  await prisma.blackjackGame.update({
-    where: { id: gameId },
-    data: updateData
-  })
+  const commitError = await persistPlayerAction(game, session.id, gameState, updateData, insuranceAmount)
+  if (commitError) return commitError
 
   // Get updated balance
   const updatedSession = await prisma.session.findUnique({
@@ -820,7 +772,7 @@ async function handleInsuranceAction(
 }
 
 async function handleDeclineInsurance(
-  request: NextRequest,
+  _request: NextRequest,
   session: {
     id: string
     balance: number
@@ -863,6 +815,8 @@ async function handleDeclineInsurance(
     game,
     sessionBalance: session.balance,
     resolvedServerSeed,
+    replayPersistedProgress: true,
+    actionHistory: parseBlackjackActionHistory(game.actionHistory),
   })
 
   // Insurance should not have been taken yet if declining
@@ -892,15 +846,8 @@ async function handleDeclineInsurance(
     })
   }
 
-  if (gameState.phase === 'complete') {
-    await processGameCompletion(request, gameId, session.id, gameState)
-    updateData.outcome = determineOutcome(gameState)
-  }
-
-  await prisma.blackjackGame.update({
-    where: { id: gameId },
-    data: updateData
-  })
+  const commitError = await persistPlayerAction(game, session.id, gameState, updateData, 0)
+  if (commitError) return commitError
 
   const updatedSession = await prisma.session.findUnique({
     where: { id: session.id }
@@ -913,6 +860,31 @@ async function handleDeclineInsurance(
     totalWagered: roundZec(updatedSession?.totalWagered ?? 0),
     totalWon: roundZec(updatedSession?.totalWon ?? 0)
   })
+}
+
+async function persistPlayerAction(
+  game: { id: string; version: number },
+  sessionId: string,
+  state: BlackjackGameState,
+  data: Record<string, unknown>,
+  additionalBet: number
+): Promise<NextResponse | null> {
+  try {
+    await commitBlackjackAction({
+      gameId: game.id, expectedVersion: game.version, sessionId, additionalBet,
+      payout: state.phase === 'complete' ? roundZec(state.lastPayout) : null,
+      data: { ...data, ...(state.phase === 'complete' ? { outcome: determineOutcome(state) } : {}) },
+    })
+    return null
+  } catch (error) {
+    if (error instanceof BlackjackActionConflict || (error instanceof Error && /SQLITE_BUSY|database is locked/.test(error.message))) {
+      return NextResponse.json({ error: 'This hand changed. Refresh before taking another action.' }, { status: 409 })
+    }
+    if (error instanceof BlackjackFundsUnavailable) {
+      return NextResponse.json({ error: 'Insufficient balance or wagering limit reached.' }, { status: 400 })
+    }
+    throw error
+  }
 }
 
 async function processGameCompletion(
@@ -977,29 +949,6 @@ function determineOutcome(gameState: BlackjackGameState): string {
   if (net === 0) return 'push'
   if (net > 0) return 'win'
   return 'lose'
-}
-
-// Remove sensitive data before sending to client
-function sanitizeGameState(state: BlackjackGameState): Partial<BlackjackGameState> {
-  return {
-    phase: state.phase,
-    playerHands: state.playerHands,
-    dealerHand: state.dealerHand,
-    currentHandIndex: state.currentHandIndex,
-    balance: roundZec(state.balance),
-    currentBet: state.currentBet,
-    perfectPairsBet: state.perfectPairsBet,
-    insuranceBet: state.insuranceBet,
-    dealerPeeked: state.dealerPeeked,
-    serverSeedHash: state.serverSeedHash,
-    clientSeed: state.clientSeed,
-    nonce: state.nonce,
-    lastPayout: state.lastPayout,
-    message: state.message,
-    perfectPairsResult: state.perfectPairsResult,
-    settlement: state.settlement
-    // Note: deck and serverSeed are NOT sent to client
-  }
 }
 
 // GET /api/game - Get active game or game history

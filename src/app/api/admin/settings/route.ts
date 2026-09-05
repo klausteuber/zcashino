@@ -147,7 +147,7 @@ export async function GET(request: NextRequest) {
     return createRateLimitResponse(readLimit)
   }
 
-  const adminCheck = requireAdmin(request, 'manage_settings')
+  const adminCheck = await requireAdmin(request, 'manage_settings')
   if (!adminCheck.ok) {
     await logAdminEvent({
       request,
@@ -215,7 +215,7 @@ export async function PATCH(request: NextRequest) {
     return createRateLimitResponse(actionLimit)
   }
 
-  const adminCheck = requireAdmin(request, 'manage_settings')
+  const adminCheck = await requireAdmin(request, 'manage_settings')
   if (!adminCheck.ok) {
     await logAdminEvent({
       request,

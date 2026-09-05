@@ -47,8 +47,7 @@ function unauthorizedResponse(message: string): NextResponse {
 }
 
 export function getPlayerSessionAuthMode(): PlayerSessionAuthMode {
-  const raw = process.env.PLAYER_SESSION_AUTH_MODE
-  return raw === 'strict' ? 'strict' : 'compat'
+  return 'strict'
 }
 
 export function createPlayerSessionToken(payload: PlayerSessionPayload): string {
@@ -139,11 +138,7 @@ export function clearPlayerSessionCookie(response: NextResponse): void {
   })
 }
 
-/**
- * Compatibility behavior:
- * - compat: valid cookie preferred; if absent, legacy sessionId body/query is allowed
- * - strict: valid cookie required; sessionId must match cookie if provided
- */
+/** Signed cookies are mandatory; public identifiers are never credentials. */
 async function loadCurrentSessionAuthState(sessionId: string) {
   return prisma.session.findUnique({
     where: { id: sessionId },
@@ -159,7 +154,6 @@ export async function requirePlayerSession(
   request: NextRequest,
   requestedSessionId?: string
 ): Promise<PlayerSessionAuthResult> {
-  const mode = getPlayerSessionAuthMode()
   const cookieSession = parsePlayerSessionFromRequest(request)
 
   if (cookieSession) {
@@ -186,26 +180,6 @@ export async function requirePlayerSession(
       ok: true,
       session: cookieSession,
       legacyFallback: false,
-    }
-  }
-
-  if (mode === 'strict') {
-    return {
-      ok: false,
-      response: unauthorizedResponse('Player session expired. Please refresh your session.'),
-    }
-  }
-
-  if (requestedSessionId) {
-    return {
-      ok: true,
-      session: {
-        sessionId: requestedSessionId,
-        walletAddress: 'legacy',
-        exp: Date.now() + 60_000,
-        authVersion: 1,
-      },
-      legacyFallback: true,
     }
   }
 

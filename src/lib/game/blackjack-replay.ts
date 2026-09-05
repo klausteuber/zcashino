@@ -4,6 +4,7 @@ import {
   executeAction,
   startRound,
   takeInsurance,
+  declineInsurance,
 } from './blackjack'
 import { normalizeFairnessVersion } from './shuffle'
 
@@ -12,6 +13,7 @@ export interface PersistedBlackjackReplayData {
   perfectPairsBet: number
   insuranceBet: number
   initialState?: string | null
+  finalState?: string | null
   actionHistory?: string | null
   serverSeedHash: string
   clientSeed: string
@@ -53,6 +55,7 @@ export function reconstructBlackjackGameState({
     + game.mainBet
     + game.perfectPairsBet
     + (replayPersistedProgress ? game.insuranceBet : 0)
+    + (replayPersistedProgress ? actionHistory.filter(action => action === 'double' || action === 'split').length * game.mainBet : 0)
   const initialState = createInitialState(initialBalance)
   const storedInitial = JSON.parse(game.initialState || '{}') as {
     gameRules?: BlackjackGameRules
@@ -79,6 +82,11 @@ export function reconstructBlackjackGameState({
   // Insurance is persisted separately from actionHistory and happened first.
   if (game.insuranceBet > 0) {
     gameState = takeInsurance(gameState, game.insuranceBet)
+  }
+
+  const persistedFinal = JSON.parse(game.finalState || '{}') as { dealerPeeked?: boolean }
+  if (!game.insuranceBet && persistedFinal.dealerPeeked && !gameState.dealerPeeked) {
+    gameState = declineInsurance(gameState)
   }
 
   for (const previousAction of actionHistory) {

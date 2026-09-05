@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual } from 'crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
-import { type AdminRole, type Permission, hasPermission, verifyPassword, hashPassword } from './rbac'
+import { type AdminRole, type Permission, hasPermission, verifyPassword } from './rbac'
 import { verifyTotpCode } from './totp'
 
 export const ADMIN_SESSION_COOKIE = 'zcashino_admin_session'
@@ -9,6 +9,8 @@ const ADMIN_SESSION_TTL_MS = 8 * 60 * 60 * 1000 // 8 hours
 const TOTP_TEMP_TOKEN_TTL_MS = 5 * 60 * 1000 // 5 minutes for TOTP step
 
 export interface AdminSessionPayload {
+  userId?: string
+  authVersion?: number
   role: AdminRole
   username: string
   exp: number
@@ -38,7 +40,7 @@ function getEnv(name: string): string | undefined {
 
 /**
  * Check whether admin auth is configured.
- * Requires ADMIN_SESSION_SECRET at minimum. DB users or env fallback provide credentials.
+ * Requires ADMIN_SESSION_SECRET; credentials are held in the initialized database.
  */
 export function getAdminConfigStatus(): AdminConfigStatus {
   const sessionSecret = getEnv('ADMIN_SESSION_SECRET')
@@ -58,44 +60,15 @@ export function getAdminConfigStatus(): AdminConfigStatus {
 }
 
 /**
- * Bootstrap: ensure at least one super_admin exists.
- * If no AdminUser rows exist and ADMIN_USERNAME/ADMIN_PASSWORD are set,
- * auto-create a super_admin user from env vars.
- */
-export async function ensureBootstrapAdmin(): Promise<void> {
-  try {
-    const count = await prisma.adminUser.count()
-    if (count > 0) return
-
-    const username = getEnv('ADMIN_USERNAME') || 'admin'
-    const password = getEnv('ADMIN_PASSWORD')
-    if (!password) return
-
-    const passwordHash = await hashPassword(password)
-    await prisma.adminUser.create({
-      data: {
-        username,
-        passwordHash,
-        role: 'super_admin',
-        isActive: true,
-        createdBy: 'bootstrap',
-      },
-    })
-  } catch {
-    // AdminUser table may not exist yet (pre-migration). Fall through to env var auth.
-  }
-}
-
-/**
- * Verify credentials against AdminUser table, with env var fallback.
+ * Verify credentials only against the initialized AdminUser table.
  * When the user has TOTP 2FA enabled, returns totpRequired instead of a full session.
  */
 export async function verifyAdminCredentials(
   inputUsername: string,
   inputPassword: string
 ): Promise<
-  | { ok: true; username: string; role: AdminRole; userId: string; totpRequired?: false }
-  | { ok: true; username: string; role: AdminRole; userId: string; totpRequired: true }
+  | { ok: true; username: string; role: AdminRole; userId: string; authVersion: number; totpRequired?: false }
+  | { ok: true; username: string; role: AdminRole; userId: string; authVersion: number; totpRequired: true }
   | { ok: false; reason: 'invalid-credentials' | 'not-configured' | 'account-disabled'; missing?: string[] }
 > {
   const status = getAdminConfigStatus()
@@ -103,7 +76,7 @@ export async function verifyAdminCredentials(
     return { ok: false, reason: 'not-configured', missing: status.missing }
   }
 
-  // Try DB-backed auth first (may fail if AdminUser table hasn't been migrated)
+  // Fail closed if the initialized credential store is unavailable.
   try {
     const user = await prisma.adminUser.findUnique({
       where: { username: inputUsername },
@@ -120,8 +93,9 @@ export async function verifyAdminCredentials(
       }
 
       // If 2FA is enabled, don't issue session yet — require TOTP step
-      if (user.totpEnabled && user.totpSecret) {
-        return { ok: true, username: user.username, role: user.role as AdminRole, userId: user.id, totpRequired: true }
+      if (user.totpEnabled) {
+        if (!user.totpSecret) return { ok: false, reason: 'not-configured', missing: ['Admin MFA configuration'] }
+        return { ok: true, username: user.username, role: user.role as AdminRole, userId: user.id, authVersion: user.authVersion, totpRequired: true }
       }
 
       // Update last login
@@ -130,21 +104,11 @@ export async function verifyAdminCredentials(
         data: { lastLoginAt: new Date() },
       })
 
-      return { ok: true, username: user.username, role: user.role as AdminRole, userId: user.id }
+      return { ok: true, username: user.username, role: user.role as AdminRole, userId: user.id, authVersion: user.authVersion }
     }
   } catch {
-    // AdminUser table may not exist yet — fall through to env var auth
-  }
-
-  // Env var fallback (for bootstrapping before first DB user is created)
-  const envUsername = getEnv('ADMIN_USERNAME') || 'admin'
-  const envPassword = getEnv('ADMIN_PASSWORD')
-  if (envPassword) {
-    const usernameValid = safeEqual(inputUsername, envUsername)
-    const passwordValid = safeEqual(inputPassword, envPassword)
-    if (usernameValid && passwordValid) {
-      return { ok: true, username: envUsername, role: 'super_admin', userId: 'env-fallback' }
-    }
+    // Database failures must never downgrade authentication or bypass MFA.
+    return { ok: false, reason: 'not-configured', missing: ['Admin database unavailable'] }
   }
 
   return { ok: false, reason: 'invalid-credentials' }
@@ -182,14 +146,14 @@ export function verifySignedAdminToken(
   }
 }
 
-export function createAdminSessionToken(username: string, role: AdminRole): string {
+export function createAdminSessionToken(username: string, role: AdminRole, userId: string, authVersion: number): string {
   const status = getAdminConfigStatus()
   if (!status.configured || !status.sessionSecret) {
     throw new Error('Admin auth is not configured')
   }
 
   return createSignedAdminToken(
-    { role, username, exp: Date.now() + ADMIN_SESSION_TTL_MS },
+    { role, username, userId, authVersion, exp: Date.now() + ADMIN_SESSION_TTL_MS },
     status.sessionSecret
   )
 }
@@ -207,6 +171,7 @@ export function parseAdminSessionToken(token?: string): AdminSessionPayload | nu
 
 interface TotpTempPayload {
   purpose: 'totp-step'
+  authVersion: number
   userId: string
   exp: number
 }
@@ -215,7 +180,7 @@ interface TotpTempPayload {
  * Create a short-lived temp token for the 2FA step.
  * Valid for 5 minutes — just enough time to enter the TOTP code.
  */
-export function createTotpTempToken(userId: string): string {
+export function createTotpTempToken(userId: string, authVersion: number): string {
   const status = getAdminConfigStatus()
   if (!status.configured || !status.sessionSecret) {
     throw new Error('Admin auth is not configured')
@@ -223,6 +188,7 @@ export function createTotpTempToken(userId: string): string {
 
   const payload: TotpTempPayload = {
     purpose: 'totp-step',
+    authVersion,
     userId,
     exp: Date.now() + TOTP_TEMP_TOKEN_TTL_MS,
   }
@@ -234,7 +200,7 @@ export function createTotpTempToken(userId: string): string {
 /**
  * Parse and validate a TOTP temp token. Returns userId if valid.
  */
-export function parseTotpTempToken(token: string): string | null {
+export function parseTotpTempToken(token: string): TotpTempPayload | null {
   const status = getAdminConfigStatus()
   if (!status.configured || !status.sessionSecret) return null
 
@@ -250,7 +216,8 @@ export function parseTotpTempToken(token: string): string | null {
     if (payload.purpose !== 'totp-step') return null
     if (typeof payload.userId !== 'string') return null
     if (typeof payload.exp !== 'number' || payload.exp <= Date.now()) return null
-    return payload.userId
+    if (!Number.isInteger(payload.authVersion) || payload.authVersion < 1) return null
+    return payload
   } catch {
     return null
   }
@@ -266,13 +233,13 @@ export async function verifyTotpStep(
   | { ok: true; username: string; role: AdminRole; sessionToken: string }
   | { ok: false; reason: 'invalid-token' | 'invalid-code' | 'account-disabled' }
 > {
-  const userId = parseTotpTempToken(tempToken)
-  if (!userId) {
+  const pending = parseTotpTempToken(tempToken)
+  if (!pending) {
     return { ok: false, reason: 'invalid-token' }
   }
 
-  const user = await prisma.adminUser.findUnique({ where: { id: userId } })
-  if (!user || !user.isActive) {
+  const user = await prisma.adminUser.findUnique({ where: { id: pending.userId } })
+  if (!user || !user.isActive || user.authVersion !== pending.authVersion) {
     return { ok: false, reason: 'account-disabled' }
   }
 
@@ -291,7 +258,7 @@ export async function verifyTotpStep(
     data: { lastLoginAt: new Date() },
   })
 
-  const sessionToken = createAdminSessionToken(user.username, user.role as AdminRole)
+  const sessionToken = createAdminSessionToken(user.username, user.role as AdminRole, user.id, user.authVersion)
   return { ok: true, username: user.username, role: user.role as AdminRole, sessionToken }
 }
 
@@ -342,12 +309,13 @@ function notConfiguredResponse(missing: string[]) {
  * Require admin authentication.
  * Optionally checks a specific permission against the admin's role.
  */
-export function requireAdmin(
+export async function requireAdmin(
   request: NextRequest,
   requiredPermission?: Permission
-):
+): Promise<
   | { ok: true; session: AdminSessionPayload }
-  | { ok: false; response: NextResponse } {
+  | { ok: false; response: NextResponse }
+> {
   const status = getAdminConfigStatus()
   if (!status.configured) {
     return { ok: false, response: notConfiguredResponse(status.missing) }
@@ -360,9 +328,17 @@ export function requireAdmin(
     return { ok: false, response: unauthorizedResponse() }
   }
 
-  // Normalize legacy role: pre-RBAC tokens used 'admin' instead of 'super_admin'
-  if (session.role === ('admin' as AdminRole)) {
-    session.role = 'super_admin' as AdminRole
+  if (!session.userId || !Number.isInteger(session.authVersion)) {
+    return { ok: false, response: unauthorizedResponse() }
+  }
+  try {
+    const user = await prisma.adminUser.findUnique({ where: { id: session.userId } })
+    if (!user || !user.isActive || user.username !== session.username || user.authVersion !== session.authVersion) {
+      return { ok: false, response: unauthorizedResponse() }
+    }
+    session.role = user.role as AdminRole
+  } catch {
+    return { ok: false, response: unauthorizedResponse() }
   }
 
   // Check permission if specified

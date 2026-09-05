@@ -8,13 +8,13 @@ const localStorageMock = {
   removeItem: vi.fn(),
   clear: vi.fn(),
 }
-Object.defineProperty(window, 'localStorage', { value: localStorageMock })
+if (typeof window !== 'undefined') Object.defineProperty(window, 'localStorage', { value: localStorageMock })
 
 // Mock fetch
 global.fetch = vi.fn()
 
 // Mock clipboard API
-Object.assign(navigator, {
+if (typeof navigator !== 'undefined') Object.assign(navigator, {
   clipboard: {
     writeText: vi.fn(),
   },

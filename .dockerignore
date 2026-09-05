@@ -28,3 +28,6 @@ cookies.txt
 scripts/*
 !scripts/migrate-safe.js
 !scripts/validate-standalone-artifact.mjs
+
+!scripts/bootstrap-admin.ts
+!scripts/prepare-standalone-release.mjs

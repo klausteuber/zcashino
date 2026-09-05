@@ -49,7 +49,7 @@ async function authorizeAdmin(
     return { ok: false as const, response: createRateLimitResponse(limit) }
   }
 
-  const adminCheck = requireAdmin(request, permission)
+  const adminCheck = await requireAdmin(request, permission)
   if (!adminCheck.ok) {
     await logAdminEvent({
       request,

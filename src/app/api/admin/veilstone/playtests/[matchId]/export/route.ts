@@ -21,7 +21,7 @@ export async function GET(
   const limit = checkAdminRateLimit(request, 'admin-read')
   if (!limit.allowed) return createRateLimitResponse(limit)
 
-  const admin = requireAdmin(request, 'view_games')
+  const admin = await requireAdmin(request, 'view_games')
   if (!admin.ok) return admin.response
 
   const { matchId } = await context.params
