@@ -1208,3 +1208,7 @@ post-restart catch-up window as startup, not degradation.
 **Fix:** Explicit public game serialization, versioned atomic game transactions, held withdrawals on uncertain sends, strict signed player sessions, database-bound admin token versions and explicit provisioning, HMAC shuffle defaults, scoped verification, and patched dependencies. Rehearse additive migrations on an online production backup before rollout.
 
 **Key files:** `src/lib/game/public-blackjack.ts`, `src/lib/services/blackjack-action.ts`, `src/lib/services/withdrawal-submission.ts`, `src/lib/admin/auth.ts`, `scripts/bootstrap-admin.ts`, `prisma/migrations/20260905050000_security_session_and_game_versions/migration.sql`. Full closure and validation: `notes/security-remediation-2026-09-04.md`.
+
+### Production admin schema gap (2026-09-04)
+
+**Symptom:** Pre-deploy inspection found no `AdminUser` table in production despite its presence in the Prisma model. **Root cause:** Prior admin/price/promotion schema additions had no migration. **Fix:** Add forward-only `20260905045900_add_missing_admin_schema` with conditional table/index creation, followed by the version migration; rehearse on the production backup and explicitly provision admin/Telegram accounts. **Key files:** `prisma/migrations/20260905045900_add_missing_admin_schema/migration.sql`, `scripts/bootstrap-admin.ts`, `src/lib/services/blackjack-action.test.ts`.

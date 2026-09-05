@@ -54,6 +54,28 @@ describe('blackjack transaction integrity with SQLite', () => {
     expect(await context.db!.$queryRawUnsafe('PRAGMA integrity_check')).toEqual([{ integrity_check: 'ok' }])
   })
 
+  it('repairs missing historical admin tables and preserves already provisioned accounts', async () => {
+    const repair = readFileSync('prisma/migrations/20260905045900_add_missing_admin_schema/migration.sql', 'utf8')
+    const applyRepair = async () => {
+      for (const sql of repair.split(';').filter(sql => sql.trim())) await context.db!.$executeRawUnsafe(sql)
+    }
+    await applyRepair()
+    expect((await context.db!.adminUser.findUniqueOrThrow({ where: { id: 'admin' } })).passwordHash).toBe('unused')
+    for (const table of ['PromotionRedemption', 'Promotion', 'ZecPriceSnapshot', 'AdminUser']) {
+      await context.db!.$executeRawUnsafe(`DROP TABLE "${table}"`)
+    }
+    await context.db!.$executeRawUnsafe('ALTER TABLE "BlackjackGame" DROP COLUMN "version"')
+    await applyRepair()
+    const security = readFileSync('prisma/migrations/20260905050000_security_session_and_game_versions/migration.sql', 'utf8')
+    for (const sql of security.split(';').filter(sql => sql.trim())) await context.db!.$executeRawUnsafe(sql)
+    await context.db!.adminUser.create({ data: { username: 'new-admin', passwordHash: 'unused' } })
+    expect(await context.db!.adminUser.count()).toBe(1)
+    expect(await context.db!.promotion.count()).toBe(0)
+    expect(await context.db!.zecPriceSnapshot.count()).toBe(0)
+    expect((await context.db!.session.findUniqueOrThrow({ where: { id: 'player' } })).balance).toBe(1)
+    expect(await context.db!.$queryRawUnsafe('PRAGMA integrity_check')).toEqual([{ integrity_check: 'ok' }])
+  })
+
   it('accepts only one concurrent action against the same version', async () => {
     const results = await Promise.allSettled([commitBlackjackAction(action), commitBlackjackAction(action)])
     expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1)
