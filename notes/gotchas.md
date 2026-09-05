@@ -1212,3 +1212,14 @@ post-restart catch-up window as startup, not degradation.
 ### Production admin schema gap (2026-09-04)
 
 **Symptom:** Pre-deploy inspection found no `AdminUser` table in production despite its presence in the Prisma model. **Root cause:** Prior admin/price/promotion schema additions had no migration. **Fix:** Add forward-only `20260905045900_add_missing_admin_schema` with conditional table/index creation, followed by the version migration; rehearse on the production backup and explicitly provision admin/Telegram accounts. **Key files:** `prisma/migrations/20260905045900_add_missing_admin_schema/migration.sql`, `scripts/bootstrap-admin.ts`, `src/lib/services/blackjack-action.test.ts`.
+
+### Casino SEO and guide styling (2026-09-05)
+
+- Sitemap dates previously used the request time, falsely implying all content had changed. For CypherJester and 21z, omit `lastModified` until a reliable per-page update date exists.
+- Shared game copy implied immediate verification. Session-mode hands require seed rotation/reveal; distinguish this from legacy reveal timing and mock demo commitments.
+- Tailwind `@theme` aliases can resolve brand variables at the root and retain Cypher colors on 21z. New guide components reference semantic CSS variables directly at the element (for example `text-[var(--accent-primary)]`). Check both hosts visually before changing shared theme definitions.
+- Keep guide lookup, metadata, and sitemap selection behind the same brand filter so one casino cannot publish the other casino’s guides.
+
+### Casino SEO release and browser imports (2026-09-05)
+
+**Symptom:** The alternate production builder failed on `node:crypto` in the browser bundle. **Root cause:** BlackjackGame imported betting limits from the server game engine, and PaytableDisplay imported tables from the poker engine; both engines import the server shuffle implementation. **Fix:** Extract browser-safe limits and paytables, share them with the engines, and preserve existing server exports. **Key files:** `src/lib/game/blackjack-limits.ts`, `src/lib/game/video-poker-paytables.ts`, `src/components/game/BlackjackGame.tsx`, `src/components/game/PaytableDisplay.tsx`.

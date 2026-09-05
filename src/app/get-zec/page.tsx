@@ -1,3 +1,4 @@
+import PlayerGuideLinks from '@/components/seo/PlayerGuideLinks'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { FAQJsonLd, BreadcrumbJsonLd } from '@/components/seo/JsonLd'
@@ -223,6 +224,7 @@ export default async function GetZecPage() {
           <p>{brand.config.name} &mdash; {brand.config.tagline}</p>
         </div>
       </footer>
+      <PlayerGuideLinks brandId={brand.id} />
     </main>
     </>
   )

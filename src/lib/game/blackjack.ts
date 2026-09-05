@@ -1,3 +1,5 @@
+import { MIN_BET, MAX_BET } from './blackjack-limits'
+export { MIN_BET, MAX_BET } from './blackjack-limits'
 import type {
   BlackjackGameState,
   BlackjackGameRules,
@@ -25,8 +27,6 @@ export const BLACKJACK_PAYOUT = 1.5  // 3:2 for blackjack
 export const INSURANCE_PAYOUT = 2    // 2:1 for insurance
 export const DEALER_STANDS_ON = 17   // Dealer stands on S17
 export const NUM_DECKS = 6
-export const MIN_BET = 0.01          // 0.01 ZEC
-export const MAX_BET = 1             // 1 ZEC
 
 /**
  * Create initial game state

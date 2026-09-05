@@ -8,7 +8,7 @@ export const BRAND_CONFIGS: Record<BrandId, BrandConfig> = {
     tagline: 'Play in Private. Verify in Public.',
     origin: 'https://cypherjester.com',
     description:
-      'Provably fair Zcash blackjack and video poker. Play in private, verify in public.',
+      'Play Zcash blackjack and video poker at CypherJester. Explore demo play, understand the paytables, and verify your hands after seed reveal.',
     ogImagePath: '/images/og-image.png',
     logoPath: '/images/jester-logo.png',
     themeColor: '#C9A227',
@@ -26,7 +26,7 @@ export const BRAND_CONFIGS: Record<BrandId, BrandConfig> = {
     tagline: 'Prove Everything. Reveal Nothing.',
     origin: 'https://21z.cash',
     description:
-      'Provably fair Zcash blackjack and video poker. Verify every outcome without sacrificing privacy.',
+      'Play provably fair Zcash blackjack on 21z. Learn the rules, inspect seed commitments, and verify recorded hands after the seed session is revealed.',
     ogImagePath: '/branding/21z/og-image.png',
     logoPath: '/branding/21z/icon.svg',
     themeColor: '#00F0FF',

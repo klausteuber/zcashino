@@ -1,3 +1,4 @@
+import PlayerGuideLinks from '@/components/seo/PlayerGuideLinks'
 import Image from 'next/image'
 import { BrandWordmark } from '@/components/brand/BrandWordmark'
 import { BreadcrumbJsonLd } from '@/components/seo/JsonLd'
@@ -51,6 +52,7 @@ export default async function Home() {
         <section className="container mx-auto px-4 py-12 md:py-20">
           <div className="flex flex-col md:flex-row items-center gap-8 md:gap-12">
             <div className="flex-1 text-center md:text-left">
+              <p className="mb-4 text-lg font-semibold text-masque-gold">Zcash casino · Blackjack &amp; video poker</p>
               <h1 className="text-5xl md:text-7xl font-display font-bold mb-6 tracking-tight">
                 <span className="text-gold-gradient">
                   {is21z ? 'Prove Everything.' : 'Play in Private.'}
@@ -63,7 +65,7 @@ export default async function Home() {
               <p className="text-xl md:text-2xl text-venetian-gold/70 mb-8 max-w-xl">
                 {is21z
                   ? 'A cyber-minimal blackjack floor where every outcome can be verified on-chain.'
-                  : 'The first casino where every hand is verifiable on-chain. Play with Zcash for maximum privacy.'}
+                  : 'Play blackjack and video poker with Zcash. Try the tables in demo mode, learn the rules, and verify your recorded hands after seed reveal.'}
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center md:justify-start">
                 <a
@@ -125,8 +127,8 @@ export default async function Home() {
               </div>
               <h3 className="text-xl font-display font-semibold mb-2 text-bone-white">Provably Fair</h3>
               <p className="text-venetian-gold/60">
-                Every game outcome is verifiable. Seeds are committed on-chain before you bet,
-                and you can verify any hand yourself.
+                Every game outcome is verifiable. Real-play seed sessions are committed to Zcash before betting.
+                Rotate the seed session to reveal its seed and verify completed hands.
               </p>
             </div>
 
@@ -208,6 +210,8 @@ export default async function Home() {
             <VerifiedHandsFeed limit={5} compact />
           </div>
         </section>
+
+        <PlayerGuideLinks brandId={brand.id} />
 
         <footer className="border-t border-masque-gold/20 bg-midnight-black/40 mt-16">
           <div className="container mx-auto px-4 py-8">

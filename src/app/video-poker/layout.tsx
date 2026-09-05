@@ -1,9 +1,11 @@
+import { getCasinoGameMetadata } from '@/lib/seo/game-metadata'
 import type { Metadata } from 'next'
 import { getBrandUrlForPath, getCanonicalUrlForPath } from '@/lib/brand/config'
 import { getServerBrand } from '@/lib/brand/server'
 
 export async function generateMetadata(): Promise<Metadata> {
   const brand = await getServerBrand()
+  if (brand.id !== 'veilstone') return getCasinoGameMetadata(brand.id, 'video-poker')
   const brandUrl = getBrandUrlForPath(brand.id, '/video-poker')
   const canonicalUrl = getCanonicalUrlForPath(brand.id, '/video-poker')
   const brandTitle = brand.config.name

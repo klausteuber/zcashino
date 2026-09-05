@@ -69,11 +69,11 @@ function getRootMetadataForBrand(brandId: 'cypher' | '21z' | 'veilstone'): Metad
         }
       : brandId === '21z'
       ? {
-          default: '21z - Provably Fair Zcash Blackjack Casino',
+          default: 'Provably Fair Zcash Blackjack | 21z',
           template: '%s | 21z',
         }
       : {
-          default: 'CypherJester - Provably Fair Zcash Blackjack Casino',
+          default: 'Zcash Casino: Blackjack & Video Poker | CypherJester',
           template: '%s | CypherJester',
         }
 

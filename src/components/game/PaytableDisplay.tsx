@@ -1,7 +1,7 @@
 'use client'
 
 import type { VideoPokerVariant, VideoPokerHandRank } from '@/types'
-import { getPaytable, getHandRankDisplayNames } from '@/lib/game/video-poker'
+import { getPaytable, getHandRankDisplayNames } from '@/lib/game/video-poker-paytables'
 
 interface PaytableDisplayProps {
   variant: VideoPokerVariant

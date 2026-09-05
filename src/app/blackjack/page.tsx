@@ -1,3 +1,4 @@
+import PlayerGuideLinks from '@/components/seo/PlayerGuideLinks'
 import BlackjackGame from '@/components/game/BlackjackGame'
 import { BreadcrumbJsonLd } from '@/components/seo/JsonLd'
 import { getBrandUrlForPath } from '@/lib/brand/config'
@@ -25,6 +26,12 @@ export default async function BlackjackPage() {
           <h2 className="text-3xl font-display font-bold text-bone-white mb-8 text-center">
             How to Play Blackjack at {brand.config.name}
           </h2>
+
+          {brand.id !== 'veilstone' && (
+            <p className="mb-8 text-lg leading-relaxed text-[var(--text-secondary)]">
+              {brand.id === '21z' ? 'Play Zcash blackjack with a record you can inspect. Review the dealer rules and available decisions below, then follow the guide to check a hand after seed reveal.' : 'New to Zcash blackjack? Learn the controls in demo mode, read the rules below, and use our getting-started guide before funding a session.'}
+            </p>
+          )}
 
           <div className="grid md:grid-cols-2 gap-8 mb-12">
             <div className="bg-midnight-black/40 rounded-xl p-6 border border-masque-gold/20">
@@ -84,8 +91,9 @@ export default async function BlackjackPage() {
                   Provably Fair
                 </h4>
                 <p>
-                  Every deal uses blockchain-committed seeds. Verify any hand
-                  yourself after the game using our{' '}
+                  {brand.id === 'veilstone'
+                    ? 'Every deal uses blockchain-committed seeds. Verify any hand yourself after the game using our'
+                    : 'Real-play seed sessions are committed to Zcash before betting. After you rotate the seed session, check a completed hand using our'}{' '}
                   <a
                     href="/verify"
                     className="text-masque-gold hover:underline"
@@ -188,6 +196,7 @@ export default async function BlackjackPage() {
           </div>
         </div>
       </section>
+      <PlayerGuideLinks brandId={brand.id} />
     </>
   )
 }

@@ -1,3 +1,4 @@
+import PlayerGuideLinks from '@/components/seo/PlayerGuideLinks'
 import Link from 'next/link'
 import VerifiedHandsFeed from '@/components/feed/VerifiedHandsFeed'
 
@@ -151,7 +152,7 @@ export default function Home21z() {
           <div>
             <div className="z21-eyebrow">
               <span className="dot" aria-hidden="true" />
-              Provably fair · Zcash mainnet · No accounts
+              Provably fair Zcash blackjack · No accounts
             </div>
             <h1
               id="home-hero-title"
@@ -180,9 +181,9 @@ export default function Home21z() {
                 marginBottom: 36,
               }}
             >
-              A quiet table for serious play. Before play, the house anchors a seed-session
-              commitment to Zcash. Each hand is derived from that seed, your client seed,
-              and a unique nonce. No username or email required.
+              Play Zcash blackjack with rules you can read and hands you can check.
+              Before real play, the house commits a seed session to Zcash.
+              After seed reveal, reproduce your hand from its recorded inputs.
             </p>
             <div className="flex flex-wrap gap-3.5">
               <Link href="/blackjack" className="z21-btn z21-btn-primary">
@@ -272,6 +273,8 @@ export default function Home21z() {
           <VerifiedHandsFeed limit={5} compact />
         </section>
 
+        <PlayerGuideLinks brandId="21z" />
+
         {/* Footer */}
         <footer
           style={{
@@ -287,7 +290,7 @@ export default function Home21z() {
           <div className="font-mono" style={{ fontSize: 11, color: 'var(--text-muted)' }}>
             21z.cash · play 18+ · gambling can be addictive
           </div>
-          <nav aria-label="Footer" style={{ display: 'flex', gap: 24 }}>
+          <nav aria-label="Footer" style={{ display: 'flex', flexWrap: 'wrap', gap: 24 }}>
             {[
               { label: 'Provably Fair', href: '/provably-fair' },
               { label: 'Reserves', href: '/reserves' },

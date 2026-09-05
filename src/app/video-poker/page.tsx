@@ -1,3 +1,4 @@
+import PlayerGuideLinks from '@/components/seo/PlayerGuideLinks'
 import VideoPokerGame from '@/components/game/VideoPokerGame'
 import { BreadcrumbJsonLd } from '@/components/seo/JsonLd'
 import { getBrandUrlForPath } from '@/lib/brand/config'
@@ -26,6 +27,12 @@ export default async function VideoPokerPage() {
             How to Play Video Poker at {brand.config.name}
           </h2>
 
+          {brand.id !== 'veilstone' && (
+            <p className="mb-8 text-lg leading-relaxed text-[var(--text-secondary)]">
+              {brand.id === '21z' ? 'Choose Jacks or Better or Deuces Wild, inspect the active paytable, and keep the game ID to verify your deal and draw after seed reveal.' : 'Explore Zcash video poker one decision at a time: choose a variant, check the active paytable, and decide which cards to hold. Our payout guide explains the stake and return with ZEC examples.'}
+            </p>
+          )}
+
           <div className="grid md:grid-cols-2 gap-8 mb-12">
             <div className="bg-midnight-black/40 rounded-xl p-6 border border-masque-gold/20">
               <h3 className="text-xl font-display font-semibold text-masque-gold mb-3">
@@ -34,7 +41,7 @@ export default async function VideoPokerPage() {
               <ul className="space-y-2 text-venetian-gold/70 text-sm">
                 <li>Minimum winning hand: pair of Jacks, Queens, Kings, or Aces</li>
                 <li>Full House pays 9x, Flush pays 6x (9/6 schedule)</li>
-                <li>Royal Flush at max bet (5 coins) pays 4,000x</li>
+                <li>{brand.id === 'veilstone' ? 'Royal Flush at max bet (5 coins) pays 4,000x' : 'Royal Flush at 5 coins pays 4,000 base-bet units (800x the total stake)'}</li>
                 <li>House edge: approximately 0.46% with optimal strategy</li>
                 <li>Standard 52-card deck, no wild cards</li>
               </ul>
@@ -48,7 +55,7 @@ export default async function VideoPokerPage() {
                 <li>All four 2s (Deuces) are wild and substitute for any card</li>
                 <li>Minimum winning hand: Three of a Kind</li>
                 <li>Four Deuces pays 200x per coin</li>
-                <li>Natural Royal Flush at max bet pays 4,000x</li>
+                <li>{brand.id === 'veilstone' ? 'Natural Royal Flush at max bet pays 4,000x' : 'Natural Royal Flush at 5 coins pays 4,000 base-bet units'}</li>
                 <li>House edge: approximately 0.76% with optimal strategy</li>
               </ul>
             </div>
@@ -76,8 +83,9 @@ export default async function VideoPokerPage() {
               <div>
                 <h4 className="text-bone-white font-semibold mb-1">3. Verify</h4>
                 <p>
-                  Every deal uses a blockchain-committed seed. After the hand, verify
-                  the shuffle was fair using our{' '}
+                  {brand.id === 'veilstone'
+                    ? 'Every deal uses a blockchain-committed seed. After the hand, verify the shuffle was fair using our'
+                    : 'Real-play seed sessions are committed to Zcash before betting. Rotate the seed session to reveal its server seed, then check the deal and draw using our'}{' '}
                   <a href="/verify" className="text-masque-gold hover:underline">
                     verification tool
                   </a>.
@@ -113,6 +121,7 @@ export default async function VideoPokerPage() {
           </div>
         </div>
       </section>
+      <PlayerGuideLinks brandId={brand.id} />
     </>
   )
 }

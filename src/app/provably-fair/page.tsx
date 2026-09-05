@@ -1,3 +1,4 @@
+import PlayerGuideLinks from '@/components/seo/PlayerGuideLinks'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { BrandWordmark } from '@/components/brand/BrandWordmark'
@@ -98,7 +99,9 @@ export default async function ProvablyFairPage() {
             <Step
               number={2}
               title="You Add Randomness"
-              description="A client seed is generated in your browser. You can customize it at any time. Combined with a nonce (game counter), your input ensures no one &mdash; including us &mdash; can predict the deck order."
+              description={brand.id === 'veilstone'
+                ? 'A client seed is generated in your browser. You can customize it at any time. Combined with a nonce (game counter), your input ensures no one — including us — can predict the deck order.'
+                : 'A client seed is generated in your browser. In session mode, customize it before the first hand. After play begins, rotate the seed session to choose another client seed. The server seed, client seed, and hand nonce determine the shuffle.'}
             />
 
             <Step
@@ -257,6 +260,7 @@ export default async function ProvablyFairPage() {
           <p>{brand.config.name} &mdash; {brand.config.tagline}</p>
         </div>
       </footer>
+      <PlayerGuideLinks brandId={brand.id} />
     </main>
     </>
   )
