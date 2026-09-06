@@ -12,6 +12,15 @@ describe('buildContentSecurityPolicy', () => {
     expect(policy).toContain("frame-ancestors 'none'")
   })
 
+  it('allows the local solver only on poker pages without allowing JavaScript eval or Cloudflare', () => {
+    const poker = buildContentSecurityPolicy('nonce', false, true)
+    expect(poker).toContain("worker-src 'self' blob:")
+    expect(poker).toContain("'wasm-unsafe-eval'")
+    expect(poker).not.toContain("'unsafe-eval'")
+    expect(poker).not.toContain('cloudflare.com')
+    expect(buildContentSecurityPolicy('nonce', false)).not.toContain("'wasm-unsafe-eval'")
+  })
+
   it('allows the React development debugger without weakening production', () => {
     expect(buildContentSecurityPolicy('dev-nonce', true)).toContain("'unsafe-eval'")
   })

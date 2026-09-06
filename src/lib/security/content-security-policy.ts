@@ -1,14 +1,14 @@
-export function buildContentSecurityPolicy(nonce: string, isDevelopment: boolean): string {
+export function buildContentSecurityPolicy(nonce: string, isDevelopment: boolean, pokerPage = false): string {
   const scriptSources = [
     "'self'",
     `'nonce-${nonce}'`,
     "'strict-dynamic'",
+    ...(pokerPage ? ["'wasm-unsafe-eval'"] : []),
     ...(isDevelopment ? ["'unsafe-eval'"] : []),
   ].join(' ')
   const connectSources = [
     "'self'",
     'https://*.sentry.io',
-    'https://challenges.cloudflare.com',
     ...(isDevelopment
       ? ['http://localhost:*', 'http://127.0.0.1:*', 'ws://localhost:*', 'ws://127.0.0.1:*']
       : []),
@@ -24,7 +24,8 @@ export function buildContentSecurityPolicy(nonce: string, isDevelopment: boolean
     "font-src 'self' https://fonts.gstatic.com",
     "img-src 'self' blob: data:",
     `connect-src ${connectSources}`,
-    "frame-src 'self' https://changenow.io https://challenges.cloudflare.com",
+    "frame-src 'self' https://changenow.io",
+    ...(pokerPage ? ["worker-src 'self' blob:"] : []),
     "frame-ancestors 'none'",
     "object-src 'none'",
     "base-uri 'self'",

@@ -3,7 +3,7 @@ import { buildContentSecurityPolicy } from '@/lib/security/content-security-poli
 
 export function proxy(request: NextRequest) {
   const nonce = Buffer.from(crypto.randomUUID()).toString('base64')
-  const policy = buildContentSecurityPolicy(nonce, process.env.NODE_ENV === 'development')
+  const policy = buildContentSecurityPolicy(nonce, process.env.NODE_ENV === 'development', request.nextUrl.pathname === '/poker' || request.nextUrl.pathname.startsWith('/poker/'))
   const requestHeaders = new Headers(request.headers)
 
   // Next.js reads this request header and attaches the nonce to framework and

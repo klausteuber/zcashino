@@ -10,7 +10,8 @@ import { PrismaClient } from '@prisma/client'
 import { PrismaLibSql } from '@prisma/adapter-libsql'
 import { PokerService } from './service'
 import { accessStatus, ensureIdentity, setupIdentity } from './access'
-import { browserMarker, POKER_BROWSER_COOKIE, verifyHuman } from './human-check'
+import { browserMarker, POKER_BROWSER_COOKIE, verifyHuman, issueSecurityChallenge } from './human-check'
+import { solveSecurityChallenge } from '@/test/poker-security-proof'
 import { unseal } from './integrity-crypto'
 import { analyzeHand, expireIntegrityData } from './integrity-monitor'
 const folder = mkdtempSync(join(tmpdir(), 'poker-integrity-')), databaseUrl = `file:${join(folder, 'poker.db')}`
@@ -53,13 +54,13 @@ beforeEach(async () => {
 })
 afterAll(async () => { await db.$disconnect(); rmSync(folder, { recursive: true, force: true }) })
 describe('Poker access, private histories and integrity persistence', () => {
-  it('requires a saved recovery credential and human verification before reserving real funds', async () => {
+  it('requires a saved recovery credential and security verification before reserving real funds', async () => {
     const p = await player(false)
     await expect(service.create(p.id, input, randomUUID())).rejects.toThrow('identity')
     await expect(db.$transaction(tx => setupIdentity(tx, p.id, 'Alice', true))).rejects.toThrow('recovery key')
     await db.sessionRecoveryCredential.create({ data: { sessionId: p.id, keyHash: randomUUID() } })
     await db.$transaction(tx => setupIdentity(tx, p.id, 'Alice', true))
-    await expect(service.create(p.id, input, randomUUID())).rejects.toThrow('human check')
+    await expect(service.create(p.id, input, randomUUID())).rejects.toThrow('security check')
     expect(await db.pokerTable.count()).toBe(0)
     expect((await db.session.findUniqueOrThrow({ where: { id: p.id } })).balance).toBe(1)
   })
@@ -81,7 +82,7 @@ describe('Poker access, private histories and integrity persistence', () => {
     const id = await service.create(p.id, input, receipt)
     expect(await service.create(p.id, input, receipt)).toBe(id)
     await send(id, p.id, { kind: 'leave' })
-    await expect(service.create(p.id, input, randomUUID())).rejects.toThrow('fresh human check')
+    await expect(service.create(p.id, input, randomUUID())).rejects.toThrow('fresh security check')
     expect((await db.session.findUniqueOrThrow({ where: { id: p.id } })).balance).toBe(1)
   })
   it('rejects replayed/cross-identity checks and accepts only one concurrent redemption', async () => {
@@ -91,6 +92,23 @@ describe('Poker access, private histories and integrity persistence', () => {
     expect(results.filter(r => r.status === 'fulfilled')).toHaveLength(1)
     await expect(verifyHuman(db, a.id, `local-test:${status.nonce}`, status.nonce, request(marker))).rejects.toThrow('already used')
   })
+  it('redeems a real self-hosted challenge once across concurrent requests and rejects cross-identity reuse', async () => {
+    const a = await player(), b = await player(), status = await accessStatus(db, a.id), marker = browserMarker(request())
+    process.env.POKER_HUMAN_CHECK_MODE = 'self-hosted'
+    const challenge = await issueSecurityChallenge(db, a.id, status.nonce, request(marker))
+    if (!('challenge' in challenge)) throw new Error('Expected format 1')
+    const proof = solveSecurityChallenge(challenge)
+    const other = await accessStatus(db, b.id)
+    await expect(verifyHuman(db, b.id, proof, other.nonce, request(marker))).rejects.toThrow('expired or invalid')
+    const results = await Promise.allSettled([1, 2].map(() => verifyHuman(db, a.id, proof, status.nonce, request(marker))))
+    expect(results.filter(r => r.status === 'fulfilled')).toHaveLength(1)
+    await expect(verifyHuman(db, a.id, proof, status.nonce, request(marker))).rejects.toThrow('already used')
+    expect((await accessStatus(db, a.id)).entryVerified).toBe(true)
+    const tableId = await service.create(a.id, input, randomUUID())
+    expect((await accessStatus(db, a.id)).entryVerified).toBe(false)
+    await send(tableId, a.id, { kind: 'leave' })
+    expect((await db.session.findUniqueOrThrow({ where: { id: a.id } })).balance).toBe(1)
+  }, 30_000)
   it('honors expiry/rechecks only between hands and still permits actions and cash-out', async () => {
     const { a, b, id } = await table()
     await db.pokerIdentity.update({ where: { sessionId: a.id }, data: { recheckRequired: true, humanVerifiedUntil: new Date(0) } })
@@ -106,7 +124,7 @@ describe('Poker access, private histories and integrity persistence', () => {
   it('requires a fresh check at 100 dealt hands and carries restrictions through restore', async () => {
     const p = await player()
     await db.session.update({ where: { id: p.id }, data: { pokerHandsDealt: 100, playerAuthVersion: { increment: 1 } } })
-    await expect(service.create(p.id, input, randomUUID())).rejects.toThrow('human check')
+    await expect(service.create(p.id, input, randomUUID())).rejects.toThrow('security check')
     await verify(p.id)
     await db.pokerIdentity.update({ where: { sessionId: p.id }, data: { restrictedUntil: new Date(Date.now() + 60000) } })
     await expect(service.create(p.id, input, randomUUID())).rejects.toThrow('restricted')

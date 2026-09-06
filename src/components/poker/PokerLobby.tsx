@@ -48,7 +48,7 @@ export default function PokerLobby({ nonce }: { nonce?: string }) {
   async function create(event: React.FormEvent) {
     event.preventDefault()
     if (busy) return
-    if (!access?.setupComplete || !access.entryVerified || !access.playVerified) { setError('Complete your poker identity and human check first.'); return }
+    if (!access?.setupComplete || !access.entryVerified || !access.playVerified) { setError('Complete your poker identity and security check first.'); return }
     setBusy(true); setError('')
     try {
       const amount = parseZec(buyIn)

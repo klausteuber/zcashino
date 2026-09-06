@@ -31,3 +31,6 @@ scripts/*
 
 !scripts/bootstrap-admin.ts
 !scripts/prepare-standalone-release.mjs
+
+!scripts/prepare-poker-check.mjs
+backups/

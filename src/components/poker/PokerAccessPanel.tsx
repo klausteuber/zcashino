@@ -70,13 +70,13 @@ export default function PokerAccessPanel({ game, entry = true, inHand = false, n
     finally { setBusy(false) }
   }
   const verified = access?.setupComplete && access.playVerified && (!entry || access.entryVerified) && !access.restricted
-  return <section className={styles.accessPanel} aria-label="Poker identity and human check">
-    <div className={styles.accessHeading}><strong>{access?.nickname ? `Playing as ${access.nickname}` : 'Your poker identity'}</strong><span>{inHand ? 'Hand in progress' : verified ? 'Ready for poker' : 'Setup & human check'}</span></div>
+  return <section className={styles.accessPanel} aria-label="Poker identity and security check">
+    <div className={styles.accessHeading}><strong>{access?.nickname ? `Playing as ${access.nickname}` : 'Your poker identity'}</strong><span>{inHand ? 'Hand in progress' : verified ? 'Ready for poker' : 'Setup & security check'}</span></div>
     <details className={styles.accessDetails} open={!verified && !inHand} key={`${verified}-${inHand}`}><summary>{verified || inHand ? 'Identity & privacy' : 'Complete poker setup'}</summary>
     {access?.nickname && <p className={styles.fine}>Poker ID: {access.identityId}. {game.session?.isDemo ? 'This practice identity stays in this browser. Real ZEC identities can be restored with a wallet recovery key.' : 'Restore your wallet recovery key on either brand to keep this identity.'}</p>}
     {error && <p role="alert" className={styles.error}>{error}</p>}
     {!access && <p className={styles.fine}>Loading poker access…</p>}
-    {inHand ? <p className={styles.fine}>Any new human check will wait until this hand finishes. Your action timer and cash-out remain available.</p> : <>
+    {inHand ? <p className={styles.fine}>Any new security check will wait until this hand finishes. Your action timer and cash-out remain available.</p> : <>
       {access && !access.setupComplete && <div className={styles.accessControls}>
         <p className={styles.fine}>Use one poker identity across 21Z.cash and CypherJester. Your nickname stays the same between tables. Creating another wallet does not make a second poker identity permissible.</p>
         {!access.nickname && <label>Poker nickname<input aria-label="Poker nickname" minLength={2} maxLength={24} value={nickname} onChange={e => setNickname(e.target.value)} autoComplete="nickname" /></label>}
@@ -90,13 +90,13 @@ export default function PokerAccessPanel({ game, entry = true, inHand = false, n
       </div>}
       {access?.restricted && <p className={styles.notice}>New poker hands are restricted for this identity. You can still leave and return your stack.</p>}
       {access?.setupComplete && !verified && !access.restricted && <div className={styles.accessControls}>
-        <p className={styles.fine}>{entry ? 'Complete a fresh human check before taking a seat.' : 'Complete a human check, then select Ready to play.'} A routine check lasts up to two hours or 100 dealt hands. Additional checks may be requested between hands.</p>
-        {access.provider === 'unavailable' ? <p className={styles.notice}>Human verification is awaiting configuration. New seats are temporarily unavailable.</p> : access.provider === 'local-test' ? <><p className={styles.notice}>Local testing only: this check does not verify a human.</p><button type="button" className={styles.secondary} disabled={busy} onClick={() => void verify(`local-test:${access.nonce}`)}>Complete local test check</button></> : <HumanCheck key={`${access.nonce}:${attempt}`} siteKey={access.siteKey!} challengeNonce={access.nonce} scriptNonce={nonce} onToken={token => void verify(token)} />}
+        <p className={styles.fine}>{entry ? 'Complete a fresh security check before taking a seat.' : 'Complete a security check, then select Ready to play.'} A routine check lasts up to two hours or 100 dealt hands. Additional checks may be requested between hands.</p>
+        {access.provider === 'unavailable' ? <p className={styles.notice}>Security verification is awaiting configuration. New seats are temporarily unavailable.</p> : access.provider === 'local-test' ? <><p className={styles.notice}>Local testing only: this check does not verify a human.</p><button type="button" className={styles.secondary} disabled={busy} onClick={() => void verify(`local-test:${access.nonce}`)}>Complete local test check</button></> : <HumanCheck key={`${access.nonce}:${attempt}`} challengeNonce={access.nonce} scriptNonce={nonce} onVerified={() => { void refresh().catch(() => setError('Check completed. Refresh the page to reload your entry status.')) }} />}
         {busy && <p role="status">Verifying…</p>}
       </div>}
       <details className={styles.accessRestore}><summary>Restore an existing poker identity</summary><p className={styles.fine}>Use the same wallet recovery key on either brand. Restoring signs out older browser sessions. Leave your current table before switching identities.</p><label>Wallet recovery key<input aria-label="Wallet recovery key" type="password" autoComplete="off" value={restore} onChange={e => setRestore(e.target.value)} /></label><button type="button" className={styles.secondary} disabled={busy || !restore.trim()} onClick={() => void restoreIdentity()}>Restore identity</button></details>
     </>}
-    <p className={styles.fine}>Private poker histories and limited browser/network signals are retained for integrity checks for 30 days. Cloudflare performs human checks when enabled. <Link href="/privacy#poker-integrity">Poker privacy details</Link>.</p>
+    <p className={styles.fine}>Private poker histories and limited browser/network signals are retained for integrity checks for 30 days. Security checks run on our own servers and do not certify that subsequent decisions are human. <Link href="/privacy#poker-integrity">Poker privacy details</Link>.</p>
     </details>
   </section>
 }

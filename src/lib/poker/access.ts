@@ -10,13 +10,11 @@ export const HUMAN_CHECK_HANDS = 100
 export function localHumanTestEnabled() {
   return process.env.POKER_HUMAN_CHECK_MODE === 'local-test' && process.env.NODE_ENV !== 'production' && process.env.ZCASH_NETWORK === 'testnet'
 }
-export function humanProvider(): Pick<PokerAccess, 'provider' | 'siteKey'> {
-  if (localHumanTestEnabled()) return { provider: 'local-test', siteKey: null }
-  const siteKey = process.env.TURNSTILE_SITE_KEY, secret = process.env.TURNSTILE_SECRET_KEY
-  // Cloudflare's published dummy credentials cannot protect real users.
-  const dummy = (s: string) => /^[123]x0{10,}/.test(s)
-  return siteKey && secret && !dummy(siteKey) && !dummy(secret) && process.env.TURNSTILE_HOSTNAMES
-    ? { provider: 'turnstile', siteKey } : { provider: 'unavailable', siteKey: null }
+export function humanProvider(): Pick<PokerAccess, 'provider'> {
+  if (localHumanTestEnabled()) return { provider: 'local-test' }
+  const mode = process.env.POKER_HUMAN_CHECK_MODE || 'self-hosted'
+  const secret = process.env.POKER_INTEGRITY_SECRET || process.env.PLAYER_SESSION_SECRET
+  return { provider: mode === 'self-hosted' && secret && secret.length >= 32 ? 'self-hosted' : 'unavailable' }
 }
 export async function ensureIdentity(db: Db, sessionId: string) {
   const existing = await db.pokerIdentity.findUnique({ where: { sessionId } })
@@ -56,10 +54,10 @@ export async function requirePokerAccess(db: Db, sessionId: string, entry: boole
   if (!session || !identity?.nickname) throw new PokerError('Set up your poker identity before taking a seat.', 403)
   if (!session.walletAddress.startsWith('demo_') && (!session.recoveryCredential || !identity.recoverySavedAt)) throw new PokerError('Save your wallet recovery key before playing poker.', 403)
   if (identity.restrictedUntil && identity.restrictedUntil.getTime() > now) throw new PokerError('New poker hands are restricted for this identity. You can still leave and return your stack.', 403)
-  if (!playVerified(identity, session.pokerHandsDealt, now)) throw new PokerError('Complete the human check before the next hand.', 403)
+  if (!playVerified(identity, session.pokerHandsDealt, now)) throw new PokerError('Complete the security check before the next hand.', 403)
   if (entry) {
     const used = await db.pokerIdentity.updateMany({ where: { id: identity.id, entryVerifiedUntil: { gt: new Date(now) } }, data: { entryVerifiedUntil: null } })
-    if (used.count !== 1) throw new PokerError('Complete a fresh human check before taking a seat.', 403)
+    if (used.count !== 1) throw new PokerError('Complete a fresh security check before taking a seat.', 403)
   }
   return identity
 }

@@ -6,7 +6,6 @@ export interface PokerAccess {
   entryVerified: boolean
   playVerified: boolean
   restricted: boolean
-  provider: 'turnstile' | 'local-test' | 'unavailable'
-  siteKey: string | null
+  provider: 'self-hosted' | 'local-test' | 'unavailable'
   nonce: string
 }

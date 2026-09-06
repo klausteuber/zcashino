@@ -15,7 +15,7 @@ const nextConfig: NextConfig = {
   // geoip-lite loads its database (.dat files) relative to its own module dir.
   // Keep it OUT of the webpack bundle so __dirname resolves to node_modules at
   // build- and run-time (otherwise the build fails collecting /api/session).
-  serverExternalPackages: ['geoip-lite'],
+  serverExternalPackages: ['geoip-lite', 'capjs-core'],
 
   // Belt-and-suspenders: ensure the .dat database ships in the standalone output
   // for the route that performs geo lookups.

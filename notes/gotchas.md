@@ -1258,3 +1258,9 @@ post-restart catch-up window as startup, not degradation.
 - Brand host smoke tests must use an HTTP client that actually transmits the requested `Host` header. In this local Node fetch runtime, the custom Host check did not exercise the alternate host; raw `node:http` and curl verified the boundary correctly.
 
 - Release browser checks also assert public copy: update the existing reserves heading assertion when the privacy change renames it to “Reserve Report.” A missing heading in the smoke suite was a stale expectation, not a server failure. Key files: `tests/e2e/smoke.spec.ts`, `src/app/reserves/page.tsx`.
+
+### Self-hosted entry checks (2026-09-06)
+
+- **Symptom:** Cap tried a CDN despite React configuring a local WASM URL. **Cause:** The pinned widget preloads its solver at script execution, before the loaded effect. **Fix:** Rewrite its exact pinned CDN asset defaults at build time, fail on unexpected upstream changes, and verify browser resource URLs. **Files:** `scripts/prepare-poker-check.mjs`, `HumanCheck.tsx`.
+- **Symptom:** The security checkbox was visible but pointer events missed it. **Cause:** A 100%-width inner widget inside an unconstrained inline-block host shrank its interactive area. **Fix:** Give the host block display and full width too; check the narrow sidebar/mobile layout.
+- Cap instrumentation uses dynamic JS evaluation even when automated-browser blocking is off. Do not weaken the site's production CSP just to enable it. This release uses proof of work and preserves the existing evidence-monitoring layer.
