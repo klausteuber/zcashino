@@ -7,6 +7,7 @@ import { formatZec, parseZec, stakesLabel, studAnte, studBringIn, POKER_VARIANTS
 import PokerAccessPanel from './PokerAccessPanel'
 import type { PokerAccess } from '@/lib/poker/access-types'
 import PokerWallet from './PokerWallet'
+import { UsdEstimate, PriceReference } from '@/components/prices/PlayerPrice'
 import styles from './poker.module.css'
 
 export default function PokerLobby({ nonce }: { nonce?: string }) {
@@ -87,7 +88,7 @@ export default function PokerLobby({ nonce }: { nonce?: string }) {
         <label className={styles.gameFilter}>Game<select value={filter} onChange={e => setFilter(e.target.value as typeof filter)}><option value="all">All games</option>{POKER_VARIANTS.map(v => <option key={v} value={v}>{VARIANT_NAMES[v]}</option>)}</select></label>
         <div className={styles.tableList}>
           {!loaded ? <p className={styles.empty}>Connecting to the poker room…</p> : visible.length === 0 ? <div className={styles.empty}><span className={styles.emptySuit}>♠</span><h3>The first seat is yours.</h3><p>Create a table and share its link with your friends.</p></div> : visible.map(table => <Link key={table.id} href={`/poker/table/${table.id}`} className={styles.lobbyRow}>
-            <div><strong>{table.name}</strong><small className={styles.variantLabel}>{VARIANT_NAMES[table.variant]}</small><small>{stakesLabel(table.variant, table.bigBlind)} · {table.mode === 'real' ? 'ZEC' : 'play ZEC'}</small></div>
+            <div><strong>{table.name}</strong><small className={styles.variantLabel}>{VARIANT_NAMES[table.variant]}</small><small>{stakesLabel(table.variant, table.bigBlind)} · {table.mode === 'real' ? 'ZEC' : 'play ZEC'}</small>{table.mode === 'real' && <UsdEstimate zats={table.variant === 'stud' ? table.bigBlind : table.bigBlind / 2} endZats={table.variant === 'stud' ? table.bigBlind * 2 : table.bigBlind} className={styles.usdEstimate} />}</div>
             <div className={styles.seatDots} aria-label={`${table.players} of 6 seats occupied`}>{Array.from({ length: 6 }, (_, i) => <i key={i} data-filled={i < table.players} />)}</div>
             <span>{table.players}/6</span><span className={styles.rowCta}>{table.myTable ? 'Return' : table.players === 6 ? 'Watch' : 'Open'} →</span>
           </Link>)}
@@ -102,8 +103,9 @@ export default function PokerLobby({ nonce }: { nonce?: string }) {
           <label>Room name<input required minLength={2} maxLength={24} value={tableName} onChange={e => setTableName(e.target.value)} /></label>
           <label>{variant === 'stud' ? 'Betting limits' : 'Blinds'}<select value={blind} onChange={e => { const value = Number(e.target.value); setBlind(value); setBuyIn(formatZec(value * 100)) }}>
             {[10_000, 100_000, 1_000_000].map(value => <option key={value} value={value}>{stakesLabel(variant, value)} · {mode === 'real' ? 'ZEC' : 'play ZEC'}</option>)}
-          </select></label>
-          <label>Buy-in ({mode === 'real' ? 'ZEC' : 'play ZEC'})<input required inputMode="decimal" value={buyIn} onChange={e => setBuyIn(e.target.value)} /><small>{formatZec(blind * 20)}–{formatZec(blind * 100)} · 20–100 {variant === 'stud' ? 'small bets' : 'big blinds'}</small></label>
+          </select>{mode === 'real' && <UsdEstimate zats={variant === 'stud' ? blind : blind / 2} endZats={variant === 'stud' ? blind * 2 : blind} className={styles.usdEstimate} />}</label>
+          <label>Buy-in ({mode === 'real' ? 'ZEC' : 'play ZEC'})<input required inputMode="decimal" value={buyIn} onChange={e => setBuyIn(e.target.value)} />{mode === 'real' && <UsdEstimate zats={parseZec(buyIn)} className={styles.usdEstimate} />}<small>{formatZec(blind * 20)}–{formatZec(blind * 100)} · 20–100 {variant === 'stud' ? 'small bets' : 'big blinds'}</small></label>
+          {mode === 'real' && <PriceReference className={styles.fine} />}
           <p className={styles.fine}>{variant === 'omaha' ? 'Four hole cards. Use exactly two with three board cards. Raises are capped by the pot.' : variant === 'stud' ? `Fixed limit, high hand wins. Ante ${formatZec(studAnte(blind))}, bring-in ${formatZec(studBringIn(blind))}. Four bets per street, including heads-up. An open pair on fourth street allows the bigger bet.` : 'Two hole cards. No-limit betting. New and returning players post a big blind after the opening hand.'}</p>
           {mode === 'real' && !enabled && loaded && <p className={styles.notice}>Real ZEC tables are awaiting activation.</p>}
           {wrongWallet && <p className={styles.notice}>{mode === 'real' ? 'Use “Fund with ZEC” above to set up and fund your real balance.' : 'Your current wallet is a real ZEC session. Practice tables require a separate demo session.'}</p>}

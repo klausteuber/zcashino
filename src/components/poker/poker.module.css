@@ -38,3 +38,6 @@
 .recoverySecret{display:grid;gap:12px;padding:14px;border:1px solid var(--accent-primary);font-size:12px}.recoverySecret code{overflow-wrap:anywhere;user-select:all}.accessRestore{margin-top:12px;font-size:12px}.accessRestore summary{cursor:pointer;color:var(--accent-primary)}.accessRestore button{margin-top:10px}.rail>.accessPanel{margin:12px;grid-column:1/-1}.joinDialog{max-height:90vh;overflow:auto}
 
 .accessDetails>summary{font-size:11px;color:var(--accent-primary);cursor:pointer;margin-top:10px}.rail .accessPanel{align-self:start}
+
+.usdEstimate{display:block;font-size:12px;font-weight:400;line-height:1.5;color:var(--text-secondary)}
+.priceReference{max-width:440px;font-size:11px;line-height:1.6;color:var(--text-secondary);margin:0}

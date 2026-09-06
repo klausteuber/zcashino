@@ -5,6 +5,7 @@ import { useDepositPolling } from '@/hooks/useDepositPolling'
 import { OnboardingModal } from '@/components/onboarding/OnboardingModal'
 import { WithdrawalModal } from '@/components/wallet/WithdrawalModal'
 import { formatZec } from '@/lib/poker/types'
+import { UsdEstimate, PriceReference } from '@/components/prices/PlayerPrice'
 import styles from './poker.module.css'
 
 export default function PokerWallet({ game }: { game: UseGameSessionReturn }) {
@@ -18,10 +19,11 @@ export default function PokerWallet({ game }: { game: UseGameSessionReturn }) {
   return <>
     <div className="flex min-w-0 flex-col gap-2">
     <div className={styles.wallet}>
-      <div><span className={styles.eyebrow}>{session?.isDemo ? 'Practice balance' : 'Available balance'}</span><strong>{formatZec(Math.round((session?.balance ?? 0) * 100_000_000))} <small>{session?.isDemo ? 'play ZEC' : 'ZEC'}</small></strong></div>
+      <div><span className={styles.eyebrow}>{session?.isDemo ? 'Practice balance' : 'Available balance'}</span><strong>{formatZec(Math.round((session?.balance ?? 0) * 100_000_000))} <small>{session?.isDemo ? 'play ZEC' : 'ZEC'}</small></strong>{session && !session.isDemo && <UsdEstimate zats={Math.round(session.balance * 100_000_000)} className={styles.usdEstimate} />}</div>
       <button className={styles.primary} onClick={game.handleSwitchToReal}>{session?.isDemo ? 'Fund with ZEC' : 'Deposit'}</button>
       {!session?.isDemo && <button className={styles.secondary} onClick={() => setWithdraw(true)}>Withdraw</button>}
     </div>
+    {!session?.isDemo && <PriceReference className={styles.priceReference} />}
     {!game.showOnboarding && deposit.isPolling && <>
       {(deposit.status === 'detected' || deposit.status === 'confirming') && <p role="status" className={styles.fine}>
         Deposit pending: {deposit.amount} ZEC · {deposit.confirmations}/{deposit.requiredConfirmations} confirmations

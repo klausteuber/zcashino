@@ -7,6 +7,7 @@ import type { TableCommand } from '@/lib/poker/service'
 import PokerAccessPanel from './PokerAccessPanel'
 import type { PokerAccess } from '@/lib/poker/access-types'
 import PokerWallet from './PokerWallet'
+import { UsdEstimate, PriceReference } from '@/components/prices/PlayerPrice'
 import styles from './poker.module.css'
 
 function Card({ card, small = false, exposed = false }: { card: number | null; small?: boolean; exposed?: boolean }) {
@@ -177,8 +178,9 @@ export default function PokerTable({ tableId, nonce }: { tableId: string; nonce?
       <form className={styles.form} onSubmit={e => { e.preventDefault(); const amount = parseZec(buyIn); if (amount === null) { setError('Enter a valid buy-in.'); return } void send({ kind: 'join', seat, buyIn: amount, name }) }}>
         {error && <p role="alert" className={styles.error}>{error}</p>}
         <label>Your nickname<input autoFocus required minLength={2} maxLength={24} value={name} readOnly placeholder="Set up your poker identity first" autoComplete="nickname" /></label>
-        <label>Buy-in ({units})<input required inputMode="decimal" value={buyIn} onChange={e => setBuyIn(e.target.value)} /><small>{formatZec(table.buyInMin)}–{formatZec(table.buyInMax)} {units}</small></label>
+        <label>Buy-in ({units})<input required inputMode="decimal" value={buyIn} onChange={e => setBuyIn(e.target.value)} />{table.mode === 'real' && <UsdEstimate zats={parseZec(buyIn)} className={styles.usdEstimate} />}<small>{formatZec(table.buyInMin)}–{formatZec(table.buyInMax)} {units}</small></label>
         {(!access?.setupComplete || !access?.entryVerified) && <p className={styles.notice}>Close this dialog and complete your poker identity and security check in the table sidebar first.</p>}
+        {table.mode === 'real' && <PriceReference className={styles.fine} />}
         <p className={styles.fine}>Available: {formatZec(table.balanceZats)} {game.session?.isDemo ? 'play ZEC' : 'ZEC'}. Your buy-in stays at this table until you leave. {isStud ? 'Each hand posts an ante. The lowest exposed card posts the bring-in or completes the bet.' : 'Joining after the first hand posts one big blind.'}</p>
         {!canJoin && <p className={styles.notice}>Use the matching wallet balance before joining. Real tables require a funded real ZEC session.</p>}
         <button className={styles.primary} disabled={busy || !canJoin || !access?.entryVerified || !access?.playVerified || !access?.setupComplete || access?.restricted}>{busy ? 'Reserving seat…' : 'Buy in & take seat'}</button>
