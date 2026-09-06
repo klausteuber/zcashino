@@ -75,7 +75,7 @@ describe('Zallet RPC compatibility', () => {
     expect(calls[1]).toMatchObject({ method: 'z_getaccount', params: ['account-uuid'] })
     expect(calls[2]).toMatchObject({
       method: 'z_getaddressforaccount',
-      params: ['account-uuid', ['p2pkh', 'sapling']],
+      params: ['account-uuid', ['p2pkh', 'sapling'], 0],
     })
   })
 
@@ -139,6 +139,39 @@ describe('Zallet RPC compatibility', () => {
     const { generateDepositAddressSet } = await loadZalletRpc()
     await expect(generateDepositAddressSet()).rejects.toThrow('wallet locked')
     expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('derives a fresh-account address beyond the automatic transparent gap limit', async () => {
+    const fetchMock = global.fetch as ReturnType<typeof vi.fn>
+    fetchMock.mockReset()
+    fetchMock.mockResolvedValueOnce(mockRpcResponse({ account: 88, account_uuid: 'new-88' }))
+    for (let index = 0; index < 11; index++) {
+      fetchMock.mockResolvedValueOnce(mockRpcResponse(null, {
+        code: -4,
+        message: index === 5
+          ? `Error: address at diversifier index ${index} was already generated with different receiver types.`
+          : `Error: diversifier index ${index} cannot generate an address with the requested receivers.`,
+      }))
+    }
+    fetchMock.mockResolvedValueOnce(mockRpcResponse({ address: 'u1sapling' }))
+      .mockResolvedValueOnce(mockRpcResponse({ p2pkh: 't1companion', sapling: 'zsreceiver' }))
+    const { generateDepositAddressSet } = await loadZalletRpc()
+    await expect(generateDepositAddressSet()).resolves.toMatchObject({
+      unifiedAddr: 'u1sapling', transparentAddr: 't1companion', accountIndex: 88, accountUuid: 'new-88',
+    })
+    const calls = fetchMock.mock.calls.map(call => JSON.parse(call[1].body))
+    expect(calls.filter(call => call.method === 'z_getnewaccount')).toHaveLength(1)
+    expect(calls[12]).toMatchObject({ method: 'z_getaddressforaccount', params: ['new-88', ['p2pkh', 'sapling'], 11] })
+  })
+
+  it('does not retry address derivation after an unrelated wallet error', async () => {
+    const fetchMock = global.fetch as ReturnType<typeof vi.fn>
+    fetchMock.mockReset()
+    fetchMock.mockResolvedValueOnce(mockRpcResponse({ account: 88, account_uuid: 'new-88' }))
+      .mockResolvedValueOnce(mockRpcResponse(null, { code: -4, message: 'wallet unavailable' }))
+    const { generateDepositAddressSet } = await loadZalletRpc()
+    await expect(generateDepositAddressSet()).rejects.toThrow('wallet unavailable')
+    expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
   it('looks up an account balance without ever falling back to the whole wallet', async () => {

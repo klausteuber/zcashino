@@ -1276,3 +1276,5 @@ post-restart catch-up window as startup, not degradation.
 - RPC reference: https://zcash.github.io/zallet/rpc/index.html#z_recoveraccounts ; installed production `help "z_recoveraccounts"` confirms the same contract.
 
 - Live canary caught a response-contract mismatch before displaying any address: `z_recoveraccounts` returns `{ accounts: [{ account_uuid, seedfp, zip32_account_index }] }`, not a bare UUID array. Verified using installed empty-list RPC and upstream `recover_accounts.rs`; corrected parser and checked the unique requested account name too. Keep real RPC response shapes in test fixtures.
+
+- A second live canary exposed Zallet automatic address generation hitting the transparent gap limit immediately after account recovery. Explicit Sapling+p2pkh derivation on the empty canary account succeeded at index 11, after invalid indices and its precreated default UA. For fresh isolated Zallet accounts, scan a bounded 0–127 index range, skip only exact invalid-diversifier/receiver-mismatch rejections, and fail on other errors. Preserve the existing receiver types. Added the observed index-11 regression and unrelated-error test.

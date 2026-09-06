@@ -259,6 +259,30 @@ async function createDepositAccount(accountName: string, network: ZcashNetwork):
   }
 }
 
+async function generateFreshAccountAddress(accountRef: string | number, network: ZcashNetwork) {
+  if (!IS_ZALLET) {
+    return rpcCall<RpcUnifiedAddressResult>('z_getaddressforaccount', [accountRef, ['p2pkh', 'sapling']], network)
+  }
+
+  // Zallet pre-generates transparent receivers when importing an HD account.
+  // Its automatic "next" address can immediately exceed the gap limit. For
+  // this newly allocated, isolated account, explicitly find a valid Sapling
+  // diversifier instead. Skip default UAs with a different receiver set.
+  for (let index = 0; index < 128; index++) {
+    try {
+      return await rpcCall<RpcUnifiedAddressResult>(
+        'z_getaddressforaccount', [accountRef, ['p2pkh', 'sapling'], index], network
+      )
+    } catch (error) {
+      if (!(error instanceof RpcRejectedError) || error.code !== -4 || !(
+        error.message.includes(`diversifier index ${index} cannot generate an address with the requested receivers`) ||
+        error.message.includes(`address at diversifier index ${index} was already generated with different receiver types`)
+      )) throw error
+    }
+  }
+  throw new Error('Could not derive a deposit address within the bounded index range')
+}
+
 /**
  * Generate a new deposit address set (unified + transparent companion receiver).
  */
@@ -290,11 +314,7 @@ export async function generateDepositAddressSet(
     accountIndex = account.zip32_account_index ?? -1
   }
 
-  const ua = await rpcCall<RpcUnifiedAddressResult>(
-    'z_getaddressforaccount',
-    [accountRef, ['p2pkh', 'sapling']],
-    network
-  )
+  const ua = await generateFreshAccountAddress(accountRef, network)
 
   const receivers = await rpcCall<{ p2pkh?: string; sapling?: string; orchard?: string }>(
     'z_listunifiedreceivers',
