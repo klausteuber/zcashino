@@ -13,6 +13,7 @@ export default function PokerAccessPanel({ game, entry = true, inHand = false, n
   const [key, setKey] = useState(''), [saved, setSaved] = useState(false), [restore, setRestore] = useState('')
   const [attempt, setAttempt] = useState(0)
   const [busy, setBusy] = useState(false), [error, setError] = useState('')
+  const [loadError, setLoadError] = useState('')
   const verifying = useRef(false)
   const statusAbort = useRef<AbortController | null>(null)
   const sessionId = game.session?.id
@@ -20,7 +21,7 @@ export default function PokerAccessPanel({ game, entry = true, inHand = false, n
     const abort = statusAbort.current
     const res = await fetch('/api/poker/access', { cache: 'no-store', signal: abort?.signal }), body = await res.json()
     if (!res.ok) throw new Error(body.error || 'Unable to load poker access.')
-    if (!abort?.signal.aborted) setAccess(body)
+    if (!abort?.signal.aborted) { setAccess(body); setLoadError('') }
   }, [])
   useEffect(() => {
     setAccess(null); setKey(''); setSaved(false); setError(''); setNickname('')
@@ -29,7 +30,7 @@ export default function PokerAccessPanel({ game, entry = true, inHand = false, n
     if (!sessionId) return
     let cancelled = false, timer: ReturnType<typeof setTimeout>
     const poll = async () => {
-      try { await refresh() } catch (e) { if (!cancelled) setError(e instanceof Error ? e.message : 'Connection lost.') }
+      try { await refresh() } catch (e) { if (!cancelled) setLoadError(e instanceof Error ? e.message : 'Connection lost.') }
       if (!cancelled) timer = setTimeout(poll, 5000)
     }
     void poll()
@@ -75,6 +76,7 @@ export default function PokerAccessPanel({ game, entry = true, inHand = false, n
     <details className={styles.accessDetails} open={!verified && !inHand} key={`${verified}-${inHand}`}><summary>{verified || inHand ? 'Identity & privacy' : 'Complete poker setup'}</summary>
     {access?.nickname && <p className={styles.fine}>Poker ID: {access.identityId}. {game.session?.isDemo ? 'This practice identity stays in this browser. Real ZEC identities can be restored with a wallet recovery key.' : 'Restore your wallet recovery key on either brand to keep this identity.'}</p>}
     {error && <p role="alert" className={styles.error}>{error}</p>}
+    {loadError && <p role="alert" className={styles.error}>{loadError}</p>}
     {!access && <p className={styles.fine}>Loading poker access…</p>}
     {inHand ? <p className={styles.fine}>Any new security check will wait until this hand finishes. Your action timer and cash-out remain available.</p> : <>
       {access && !access.setupComplete && <div className={styles.accessControls}>

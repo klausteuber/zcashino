@@ -520,7 +520,8 @@ async function handleCheckDeposits(session: {
       await creditFunds(dbTx, session.id, existing.amount, 'totalDeposited')
       creditedThisTx = true
 
-      const shouldAuthenticate = !isAuthenticatedNow && !!session.withdrawalAddress
+      // Match deposits first seen after confirmation: withdrawal setup is separate.
+      const shouldAuthenticate = !isAuthenticatedNow
       if (shouldAuthenticate) {
         await dbTx.session.update({
           where: { id: session.id },
@@ -581,6 +582,25 @@ async function handleCheckDeposits(session: {
   const updatedSession = await prisma.session.findUnique({
     where: { id: session.id },
   })
+
+  // Repair accounts credited by the old pending-deposit path, which required a
+  // withdrawal address to authenticate. Use the credited ledger total, never
+  // just a confirmed chain transaction (which may have been held by limits).
+  const confirmedReceive = Array.from(receiveMap.entries()).find(([, tx]) =>
+    tx.confirmations >= CONFIRMATIONS_REQUIRED && tx.amount >= MIN_DEPOSIT)
+  // Address-change re-verification must remain pending when an address is set.
+  if (updatedSession && !updatedSession.isAuthenticated && updatedSession.withdrawalAddress === null &&
+      updatedSession.totalDeposited >= MIN_DEPOSIT && confirmedReceive) {
+    const repaired = await prisma.session.updateMany({
+      where: { id: session.id, isAuthenticated: false, withdrawalAddress: null, totalDeposited: { gte: MIN_DEPOSIT } },
+      data: { isAuthenticated: true, authTxHash: confirmedReceive[0], authConfirmedAt: new Date() },
+    })
+    if (repaired.count > 0) {
+      updatedSession.isAuthenticated = true
+      updatedSession.authTxHash = confirmedReceive[0]
+      justAuthenticated = true
+    }
+  }
 
   const pendingDeposits = Array.from(receiveMap.entries())
     .filter(([, tx]) => tx.confirmations < CONFIRMATIONS_REQUIRED)

@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
     session: {
       findUnique: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
     },
     transaction: {
       findFirst: vi.fn(),
@@ -600,7 +601,7 @@ describe('/api/wallet POST withdrawal-status transitions', () => {
     })
   })
 
-  it('sends a Telegram alert for a newly confirmed deposit', async () => {
+  it.each(['new', 'pending'])('credits and authenticates a %s deposit without a withdrawal address', async (previousStatus) => {
     prismaMock.session.findUnique
       .mockResolvedValueOnce({
         id: 'session-1',
@@ -636,7 +637,9 @@ describe('/api/wallet POST withdrawal-status transitions', () => {
         time: 1,
       },
     ])
-    prismaMock.transaction.findMany.mockResolvedValueOnce([])
+    prismaMock.transaction.findMany.mockResolvedValueOnce(previousStatus === 'new' ? [] : [
+      { id: 'pending-deposit', txHash: 'tx-confirmed', status: 'pending', amount: 0.25, confirmations: 2 },
+    ])
     prismaMock.transaction.count.mockResolvedValueOnce(0)
 
     const response = await POST(makeRequest({
@@ -650,7 +653,11 @@ describe('/api/wallet POST withdrawal-status transitions', () => {
     expect(payload.newDeposit).toBe(true)
     expect(payload.depositAmount).toBe(0.25)
     expect(payload.authenticated).toBe(true)
-    expect(prismaMock.transaction.create).toHaveBeenCalledWith({
+    expect(prismaMock.session.update).toHaveBeenCalledWith({
+      where: { id: 'session-1' },
+      data: expect.objectContaining({ isAuthenticated: true, authTxHash: 'tx-confirmed' }),
+    })
+    if (previousStatus === 'new') expect(prismaMock.transaction.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         sessionId: 'session-1',
         type: 'deposit',
@@ -674,5 +681,23 @@ describe('/api/wallet POST withdrawal-status transitions', () => {
       isAuthDeposit: true,
       credited: true,
     })
+  })
+
+  it.each([
+    { totalDeposited: 0, withdrawalAddress: null, shouldRepair: false },
+    { totalDeposited: 1, withdrawalAddress: null, shouldRepair: true },
+    { totalDeposited: 1, withdrawalAddress: 't1ChangedAddress', shouldRepair: false },
+  ])('repairs only previously credited sessions without a withdrawal address ($shouldRepair)', async ({ totalDeposited, withdrawalAddress, shouldRepair }) => {
+    prismaMock.session.findUnique.mockResolvedValue({ id: 'session-1', balance: totalDeposited,
+      totalDeposited, isAuthenticated: false, withdrawalAddress,
+      wallet: { unifiedAddr: 'utestDeposit', transparentAddr: 'tmDeposit', network: 'testnet' } })
+    prismaMock.session.updateMany.mockResolvedValue({ count: 1 })
+    listAddressTransactionsMock.mockResolvedValue([{ txid: 'already-confirmed', category: 'receive', amount: 1, confirmations: 13 }])
+    prismaMock.transaction.findMany.mockResolvedValue([{ id: 'deposit-1', txHash: 'already-confirmed', amount: 1, status: 'confirmed', confirmations: 13 }])
+    const response = await POST(makeRequest({ action: 'check-deposits', sessionId: 'session-1' }))
+    expect(response.status).toBe(200)
+    expect((await response.json()).authenticated).toBe(shouldRepair)
+    expect(prismaMock.session.updateMany).toHaveBeenCalledTimes(shouldRepair ? 1 : 0)
+    expect(creditFundsMock).not.toHaveBeenCalled()
   })
 })

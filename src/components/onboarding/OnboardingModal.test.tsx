@@ -1,14 +1,18 @@
 import { StrictMode, useState } from 'react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { OnboardingModal } from './OnboardingModal'
 import { BrandProvider } from '@/components/brand/BrandProvider'
 import { getBrandConfig } from '@/lib/brand/config'
 
+const depositPolling = vi.hoisted(() => ({ onDeposit: undefined as undefined | ((amount: number, txHash: string) => void) }))
+
 // Mock the useDepositPolling hook
 vi.mock('@/hooks/useDepositPolling', () => ({
-  useDepositPolling: () => ({
+  useDepositPolling: (_sessionId: string | null, _enabled: boolean, options: { onDeposit: (amount: number, txHash: string) => void }) => {
+    depositPolling.onDeposit = options.onDeposit
+    return ({
     status: 'idle',
     confirmations: 0,
     requiredConfirmations: 3,
@@ -18,7 +22,8 @@ vi.mock('@/hooks/useDepositPolling', () => ({
     refresh: vi.fn(),
     reset: vi.fn(),
     isPolling: false,
-  }),
+    })
+  },
 }))
 
 // Mock QRCode component
@@ -333,6 +338,23 @@ describe('OnboardingModal', () => {
   })
 
   describe('Modal Behavior', () => {
+    it('lets a player leave a pending deposit without claiming it is confirmed or changing wallets', async () => {
+      const user = userEvent.setup()
+      render(<OnboardingModal {...defaultProps} sessionId="session-123" depositAddress="tmDeposit123" />)
+
+      act(() => depositPolling.onDeposit?.(1, 'pending-transaction'))
+
+      expect(screen.getByText('Deposit Detected!')).toBeInTheDocument()
+      expect(screen.getByRole('link', { name: /open poker lobby/i })).toHaveAttribute('href', '/poker')
+      expect(screen.getByRole('link', { name: /back to casino/i })).toHaveAttribute('href', '/')
+      expect(screen.getByText(/deposit becomes available after 3 confirmations/i)).toBeInTheDocument()
+      await user.click(screen.getByRole('button', { name: 'Close deposit dialog' }))
+      expect(defaultProps.onClose).toHaveBeenCalledTimes(1)
+      expect(defaultProps.onDepositComplete).not.toHaveBeenCalled()
+      expect(defaultProps.onDemoSelect).not.toHaveBeenCalled()
+      expect(defaultProps.onCreateRealSession).not.toHaveBeenCalled()
+    })
+
     it('should have correct modal styling', () => {
       const { container } = render(<OnboardingModal {...defaultProps} />)
 

@@ -25,6 +25,7 @@ export default function PokerLobby({ nonce }: { nonce?: string }) {
   const [blind, setBlind] = useState(10_000)
   const [buyIn, setBuyIn] = useState('0.01')
   const [error, setError] = useState('')
+  const [loadError, setLoadError] = useState('')
   const [busy, setBusy] = useState(false)
   const sessionId = game.session?.id
   const load = useCallback(async () => {
@@ -32,6 +33,7 @@ export default function PokerLobby({ nonce }: { nonce?: string }) {
     const body = await res.json()
     if (!res.ok) throw new Error(body.error || 'Unable to load tables.')
     setTables(body.tables); setEnabled(body.realMoneyEnabled); setLoaded(true)
+    setLoadError('')
   }, [])
   useEffect(() => { setName(localStorage.getItem('poker_display_name') || '') }, [])
   useEffect(() => {
@@ -39,7 +41,7 @@ export default function PokerLobby({ nonce }: { nonce?: string }) {
     let cancelled = false
     let timer: ReturnType<typeof setTimeout>
     const poll = async () => {
-      try { await load() } catch (e) { if (!cancelled) setError(e instanceof Error ? e.message : 'Connection lost.') }
+      try { await load() } catch (e) { if (!cancelled) setLoadError(e instanceof Error ? e.message : 'Connection lost.') }
       if (!cancelled) timer = setTimeout(poll, 5_000)
     }
     void poll()
@@ -74,7 +76,7 @@ export default function PokerLobby({ nonce }: { nonce?: string }) {
       </div>
       <div className={styles.heroArt} aria-hidden="true"><div className={styles.artRing}><span>6</span><small>MAX</small></div><div className={styles.artCard}>A<span>♠</span></div><div className={styles.artCardSecond}>K<span>♦</span></div><div className={styles.artCaption}>A SEAT AT THE TABLE</div></div>
     </section>
-    {(error || game.error) && <div role="alert" className={styles.error}>{error || game.error}</div>}
+    {(error || loadError || game.error) && <div role="alert" className={styles.error}>{error || loadError || game.error}</div>}
     {mine && <Link href={`/poker/table/${mine.id}`} className={styles.returnBanner}>Your stack is at {mine.name}. Return to your table →</Link>}
     <PokerAccessPanel game={game} entry={!mine} nonce={nonce} onAccess={updateAccess} />
     <div className={styles.lobbyGrid}>

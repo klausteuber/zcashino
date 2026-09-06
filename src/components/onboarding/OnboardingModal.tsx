@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback, useEffect, useRef } from 'react'
+import Link from 'next/link'
 import { QRCode, CopyButton } from '@/components/ui/QRCode'
 import { useDepositPolling, DepositStatus } from '@/hooks/useDepositPolling'
 import { useBrand } from '@/hooks/useBrand'
@@ -73,6 +74,11 @@ export function OnboardingModal({
 
   const opened = useRef(false)
   const creatingSession = useRef(false)
+  const completionTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => () => {
+    if (completionTimer.current) clearTimeout(completionTimer.current)
+  }, [isOpen])
 
   // Deposit polling
   const depositStatus = useDepositPolling(
@@ -83,11 +89,12 @@ export function OnboardingModal({
         console.log('Deposit detected:', amount, txHash)
         setStep('confirming')
       },
-      onConfirmed: (amount) => {
+      onConfirmed: (amount, sessionBalance) => {
         console.log('Deposit confirmed:', amount)
         setStep('ready')
-        setTimeout(() => {
-          onDepositComplete(amount)
+        if (completionTimer.current) clearTimeout(completionTimer.current)
+        completionTimer.current = setTimeout(() => {
+          onDepositComplete(sessionBalance ?? amount)
         }, 2000)
       }
     }
@@ -344,7 +351,11 @@ export function OnboardingModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
-      <div className="bg-midnight-black border border-masque-gold/30 rounded-2xl cyber-panel shadow-2xl max-w-md w-full mx-4 overflow-hidden animate-modal-enter">
+      <div className="bg-midnight-black border border-masque-gold/30 rounded-2xl cyber-panel shadow-2xl max-w-md w-full mx-4 max-h-[calc(100dvh-2rem)] overflow-y-auto animate-modal-enter">
+        <nav aria-label="Deposit navigation" className="sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-masque-gold/20 bg-midnight-black px-6 py-3">
+          <Link href="/" onClick={onClose} className="text-sm text-masque-gold hover:text-bone-white underline">← Back to casino</Link>
+          <button type="button" onClick={onClose} className="min-h-11 px-3 text-sm text-bone-white hover:text-masque-gold" aria-label="Close deposit dialog">Close ✕</button>
+        </nav>
         {/* Welcome Step */}
         {step === 'welcome' && (
           <WelcomeScreen
@@ -404,7 +415,7 @@ export function OnboardingModal({
 
         {/* Confirming Step - Show progress */}
         {step === 'confirming' && (
-          <ConfirmingScreen depositStatus={depositStatus} />
+          <ConfirmingScreen depositStatus={depositStatus} onClose={onClose} />
         )}
 
         {/* Ready Step - Success! */}
@@ -913,7 +924,7 @@ function getAddressNetworkLabel(address: string): 'mainnet' | 'testnet' | 'unkno
 }
 
 // Confirming Screen Component
-function ConfirmingScreen({ depositStatus }: { depositStatus: DepositStatus }) {
+function ConfirmingScreen({ depositStatus, onClose }: { depositStatus: DepositStatus; onClose: () => void }) {
   const { confirmations, requiredConfirmations, amount, txHash } = depositStatus
 
   return (
@@ -953,14 +964,16 @@ function ConfirmingScreen({ depositStatus }: { depositStatus: DepositStatus }) {
         </p>
       </div>
 
-      {/* While you wait */}
+      {/* Keep the next step available while the deposit confirms. */}
       <div className="text-left p-4 bg-jester-purple-dark/20 rounded-lg cyber-panel border border-masque-gold/20 mb-4">
-        <p className="text-sm font-medium text-venetian-gold mb-2">While you wait...</p>
-        <ul className="text-sm text-venetian-gold/50 space-y-1">
-          <li>• Our games are provably fair</li>
-          <li>• View proof of reserves at /reserves</li>
-          <li>• Blackjack edge: around 0.5% with basic strategy</li>
-        </ul>
+        <p className="text-sm font-medium text-venetian-gold mb-2">Browse tables while you wait</p>
+        <p className="text-sm text-bone-white/80">
+          You can leave this screen while your deposit confirms. This deposit becomes available after {requiredConfirmations} confirmations.
+        </p>
+        <Link href="/poker" onClick={onClose} className="mt-4 block w-full rounded-lg btn-gold-shimmer px-4 py-3 text-center font-semibold text-midnight-black">
+          Open poker lobby →
+        </Link>
+        <p className="mt-3 text-xs text-venetian-gold/70">Stay on this site in the same browser to keep your wallet. Open Deposit again to check its progress.</p>
       </div>
 
       {/* Block explorer link */}

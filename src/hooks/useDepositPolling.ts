@@ -15,8 +15,9 @@ interface UseDepositPollingOptions {
   interval?: number
   pauseWhenHidden?: boolean
   onDeposit?: (amount: number, txHash: string) => void
-  onConfirmed?: (amount: number) => void
+  onConfirmed?: (amount: number, sessionBalance?: number) => void
   onError?: (error: string) => void
+  onSessionUpdate?: (sessionId: string, session: { balance: number; isAuthenticated: boolean }) => void
 }
 
 const REQUIRED_CONFIRMATIONS = 3
@@ -31,7 +32,8 @@ export function useDepositPolling(
     pauseWhenHidden = true,
     onDeposit,
     onConfirmed,
-    onError
+    onError,
+    onSessionUpdate,
   } = options
 
   const [status, setStatus] = useState<DepositStatus>({
@@ -48,15 +50,15 @@ export function useDepositPolling(
   const lastCheckRef = useRef<number>(0)
   const backoffRef = useRef<number>(0)
   const statusRef = useRef(status)
-  const callbacksRef = useRef({ onDeposit, onConfirmed, onError })
+  const callbacksRef = useRef({ onDeposit, onConfirmed, onError, onSessionUpdate })
 
   useEffect(() => {
     statusRef.current = status
   }, [status])
 
   useEffect(() => {
-    callbacksRef.current = { onDeposit, onConfirmed, onError }
-  }, [onDeposit, onConfirmed, onError])
+    callbacksRef.current = { onDeposit, onConfirmed, onError, onSessionUpdate }
+  }, [onDeposit, onConfirmed, onError, onSessionUpdate])
 
   const updateStatus = useCallback((updater: (prev: DepositStatus) => DepositStatus) => {
     setStatus((prev) => {
@@ -96,13 +98,23 @@ export function useDepositPolling(
       }
 
       if (!res.ok) {
-        throw new Error('Failed to check deposits')
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error || 'Failed to check deposits')
       }
 
       // Successful request — reset backoff
       backoffRef.current = 0
 
       const data = await res.json()
+      if (data.error || data.success === false) throw new Error(data.error || 'Failed to check deposits')
+      if (typeof data.session?.balance === 'number' && Number.isFinite(data.session.balance) &&
+          typeof data.session.isAuthenticated === 'boolean') {
+        callbacksRef.current.onSessionUpdate?.(sessionId, {
+          balance: data.session.balance,
+          isAuthenticated: data.session.isAuthenticated,
+        })
+      }
+      updateStatus(prev => prev.error ? { ...prev, status: 'waiting', error: null } : prev)
       const currentStatus = statusRef.current
 
       // Check if we have any pending deposits
@@ -169,7 +181,9 @@ export function useDepositPolling(
             amount: confirmedAmount,
           }
         })
-        callbacksRef.current.onConfirmed?.(confirmedAmount)
+        const sessionBalance = data.session?.balance ?? data.sessionBalance
+        callbacksRef.current.onConfirmed?.(confirmedAmount,
+          typeof sessionBalance === 'number' && Number.isFinite(sessionBalance) ? sessionBalance : undefined)
       }
 
     } catch (err) {
