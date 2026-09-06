@@ -84,7 +84,7 @@ test.describe('Core casino routes', () => {
     await page.goto('/reserves')
     await expect(page.getByRole('heading', {
       level: 1,
-      name: 'Proof of Reserves',
+      name: 'Reserve Report',
     })).toBeVisible()
   })
 

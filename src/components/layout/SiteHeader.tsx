@@ -8,6 +8,7 @@ import { useBrandContext } from '@/components/brand/BrandProvider'
 const casinoNavLinks = [
   { href: '/blackjack', label: 'Blackjack' },
   { href: '/video-poker', label: 'Video Poker' },
+  { href: '/poker', label: 'Poker' },
   { href: '/feed', label: 'Verified Hands' },
   { href: '/provably-fair', label: 'Provably Fair' },
 ]

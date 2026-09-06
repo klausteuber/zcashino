@@ -431,11 +431,11 @@ export async function checkLowHouseBalance(): Promise<number> {
   }
 
   const liabilities = await prisma.session.aggregate({
-    _sum: { balance: true },
-    where: { balance: { gt: 0 }, ...REAL_SESSIONS_WHERE },
+    _sum: { balance: true, pokerLockedZats: true },
+    where: REAL_SESSIONS_WHERE,
   })
 
-  const totalLiabilities = liabilities._sum.balance ?? 0
+  const totalLiabilities = (liabilities._sum.balance ?? 0) + Number(liabilities._sum.pokerLockedZats ?? 0n) / 100_000_000
   if (totalLiabilities === 0) {
     await dismissResolvedAlerts('low_house_balance', 'no player liabilities')
     return 0

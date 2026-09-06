@@ -3,6 +3,7 @@ import { roundZec } from '@/lib/wallet'
 export type WagerLimitCode = 'LOSS_LIMIT_REACHED' | 'SESSION_LIMIT_REACHED'
 
 interface SessionWagerContext {
+  pokerLockedZats?: bigint
   totalWagered: number
   totalWon: number
   lossLimit: number | null
@@ -43,7 +44,7 @@ export function checkWagerAllowed(
 
   if (session.lossLimit !== null && session.lossLimit !== undefined) {
     const netLoss = Math.max(0, roundZec(session.totalWagered - session.totalWon))
-    if (roundZec(netLoss + normalizedExposure) > session.lossLimit) {
+    if (roundZec(netLoss + normalizedExposure + Number(session.pokerLockedZats ?? 0n) / 100_000_000) > session.lossLimit) {
       return {
         allowed: false,
         code: 'LOSS_LIMIT_REACHED',

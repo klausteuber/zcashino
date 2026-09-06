@@ -22,6 +22,9 @@ model Session {
   authConfirmedAt   DateTime? // When authentication was confirmed
 
   // Balance tracking
+  pokerLockedZats BigInt @default(0) // Poker exposure reserved outside the spendable balance
+  pokerTimeBankMs Int @default(30000)
+  pokerHandsDealt Int @default(0)
   balance        Float @default(0)
   totalDeposited Float @default(0)
   totalWithdrawn Float @default(0)
@@ -48,6 +51,7 @@ model Session {
   wallet             DepositWallet?
   fairnessState      SessionFairnessState?
   recoveryCredential SessionRecoveryCredential?
+  pokerIdentity      PokerIdentity?
 
   @@index([walletAddress])
   @@index([withdrawalAddress])
@@ -697,4 +701,143 @@ model VeilstonePlaytestFeedback {
   @@unique([matchId, sessionId])
   @@index([matchId])
   @@index([sessionId])
+}
+
+// Six-max Hold'em. State contains private cards and must never be returned directly.
+model PokerTable {
+  id          String   @id @default(cuid())
+  name        String
+  mode        String
+  version     Int      @default(0)
+  state       String
+  escrowZats  BigInt   @default(0)
+  nextTickAt  DateTime?
+  closed      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  seats       PokerSeat[]
+  events      PokerEvent[]
+  @@index([closed, mode, updatedAt])
+  @@index([nextTickAt])
+}
+
+model PokerSeat {
+  id        String @id @default(cuid())
+  tableId   String
+  sessionId String @unique // One table per player; prevents simultaneous exposure.
+  seatIndex Int
+  table     PokerTable @relation(fields: [tableId], references: [id])
+  @@unique([tableId, seatIndex])
+}
+
+// Atomic transfer/action receipts. No cards or wallet addresses in the public log.
+model PokerEvent {
+  id          String   @id @default(cuid())
+  tableId     String
+  sessionId   String?
+  requestId   String   @unique
+  kind        String
+  amountZats  BigInt   @default(0)
+  version     Int
+  details     String
+  createdAt   DateTime @default(now())
+  table       PokerTable @relation(fields: [tableId], references: [id])
+  @@index([tableId, createdAt])
+  @@index([sessionId, createdAt])
+}
+
+// Pseudonymous poker identity. Recovery of the Session restores this identity on either brand.
+model PokerIdentity {
+  id                    String @id @default(cuid())
+  sessionId             String @unique
+  session               Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  nickname              String?
+  recoverySavedAt       DateTime?
+  nonce                 String @default(uuid())
+  humanVerifiedAt       DateTime?
+  humanVerifiedUntil    DateTime?
+  entryVerifiedUntil    DateTime?
+  verifiedHands         Int @default(0)
+  recheckRequired       Boolean @default(false)
+  lastRecheckAt         DateTime?
+  restrictedUntil       DateTime?
+  createdAt             DateTime @default(now())
+}
+
+// Short-lived replay protection; raw provider tokens are never retained.
+model PokerHumanToken {
+  digest    String @id
+  expiresAt DateTime
+  @@index([expiresAt])
+}
+
+// Random browser marker and daily keyed network digest; no raw IP or fingerprint.
+model PokerObservation {
+  id         String @id
+  identityId String
+  browserKey String
+  networkKey String?
+  createdAt  DateTime @default(now())
+  expiresAt  DateTime
+  @@index([identityId, createdAt])
+  @@index([browserKey, createdAt])
+  @@index([networkKey, createdAt])
+  @@index([expiresAt])
+}
+
+// Private integrity records are separate from financial receipts and expire after 30 days.
+model PokerHand {
+  id          String @id
+  tableId     String
+  handNumber  Int
+  variant     String
+  mode        String
+  bigBlind    Int
+  payload     String // AES-256-GCM; dealt cards only, never the undealt deck
+  startedAt   DateTime
+  completedAt DateTime?
+  analyzedAt  DateTime?
+  expiresAt   DateTime
+  decisions   PokerDecision[]
+  players     PokerHandPlayer[]
+  @@unique([tableId, handNumber])
+  @@index([completedAt, analyzedAt])
+  @@index([expiresAt])
+}
+model PokerHandPlayer {
+  id           String @id @default(cuid())
+  handId       String
+  hand         PokerHand @relation(fields: [handId], references: [id], onDelete: Cascade)
+  identityId   String
+  seat         Int
+  startStack   Float
+  wagered      Float @default(0)
+  returned     Float @default(0)
+  @@unique([handId, identityId])
+  @@index([identityId, handId])
+}
+model PokerDecision {
+  id         String @id
+  handId     String
+  hand       PokerHand @relation(fields: [handId], references: [id], onDelete: Cascade)
+  identityId String
+  phase      String
+  action     String
+  source     String // player, timeout, or leave; automatic actions excluded from bot analysis
+  elapsedMs  Float?
+  payload    String // encrypted decision context and time-bank usage
+  createdAt  DateTime
+  @@index([identityId, createdAt])
+  @@index([handId, createdAt])
+}
+model PokerIntegritySignal {
+  id         String @id
+  kind       String
+  identityId String
+  otherId    String?
+  payload    String // encrypted evidence; never part of a player snapshot
+  createdAt  DateTime
+  expiresAt  DateTime
+  @@index([identityId, createdAt])
+  @@index([expiresAt])
 }

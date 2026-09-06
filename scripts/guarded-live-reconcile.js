@@ -44,6 +44,7 @@ async function main() {
     prisma.session.aggregate({
       _sum: {
         balance: true,
+        pokerLockedZats: true,
       },
       _count: {
         id: true,
@@ -75,7 +76,7 @@ async function main() {
     }),
   ])
 
-  const liabilities = Number(sessionTotals._sum.balance || 0)
+  const liabilities = Number(sessionTotals._sum.balance || 0) + Number(sessionTotals._sum.pokerLockedZats ?? 0n) / 100_000_000
   const houseConfirmed = Number(health?.houseBalance?.confirmed || 0)
   const housePending = Number(health?.houseBalance?.pending || 0)
   const houseTotal = houseConfirmed + housePending

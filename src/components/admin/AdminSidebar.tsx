@@ -21,6 +21,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Overview', href: '/admin', icon: '~' },
   { label: 'Analytics', href: '/admin/analytics', icon: '#' },
   { label: 'Players', href: '/admin/players', icon: '@' },
+  { label: 'Poker integrity', href: '/admin/poker', icon: '♠' },
   { label: 'Games', href: '/admin/games', icon: '*' },
   { label: 'Withdrawals', href: '/admin/withdrawals', icon: '$' },
   { label: 'Alerts', href: '/admin/alerts', icon: '!' },

@@ -673,3 +673,7 @@ In-memory limits and remote font fetches are acceptable in dev, but must be call
 ### Casino SEO release and browser imports (2026-09-05)
 
 **Symptom:** The alternate production builder failed on `node:crypto` in the browser bundle. **Root cause:** BlackjackGame imported betting limits from the server game engine, and PaytableDisplay imported tables from the poker engine; both engines import the server shuffle implementation. **Fix:** Extract browser-safe limits and paytables, share them with the engines, and preserve existing server exports. **Key files:** `src/lib/game/blackjack-limits.ts`, `src/lib/game/video-poker-paytables.ts`, `src/components/game/BlackjackGame.tsx`, `src/components/game/PaytableDisplay.tsx`.
+
+### Shared poker accounting, privacy and integrity (2026-09-06)
+
+**Symptom:** Adding multiplayer introduces reserved balances, concealed cards, and repeatable entry checks that ordinary casino accounting and public reserve detail did not cover. **Root cause:** Seated chips are outside spendable balances; client identities and retryable requests cannot be trusted to enforce entry or privacy. **Fix:** Reserve ZEC atomically with durable receipts, count table locks in liabilities, expose aggregate reserves, authenticate and consume human checks with buy-ins, encrypt private histories, and require a positively mapped Cypher host for evidence review. **Key files:** `src/lib/poker/service.ts`, `src/lib/poker/access.ts`, `src/lib/poker/history.ts`, `src/lib/poker/integrity-admin-host.ts`, `src/app/api/reserves/route.ts`.

@@ -10,6 +10,10 @@ export async function register() {
     const { enforceStartupValidation } = await import('./lib/startup-validator')
     enforceStartupValidation()
 
+    // Start table deadlines independently of other services' initial RPC work.
+    const { startPokerWorker } = await import('./lib/poker/worker')
+    startPokerWorker()
+
     const { getProvablyFairMode } = await import('./lib/provably-fair/mode')
     const fairnessMode = getProvablyFairMode()
 

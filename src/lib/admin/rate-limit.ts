@@ -4,6 +4,9 @@ import { getClientIpAddress } from '@/lib/admin/request'
 
 export type AdminRateLimitBucket = 'auth-login' | 'admin-read' | 'admin-action' | 'admin-write'
 export type PublicRateLimitBucket =
+  | 'poker-human'
+  | 'poker-read'
+  | 'poker-action'
   | 'game-action'
   | 'session-create'
   | 'wallet-action'
@@ -45,6 +48,9 @@ const DEFAULT_BUCKET_CONFIG: Record<AdminRateLimitBucket | PublicRateLimitBucket
     maxRequests: 30,
     windowMs: 60 * 1000,
   },
+  'poker-human': { maxRequests: 15, windowMs: 60_000 },
+  'poker-read': { maxRequests: 900, windowMs: 60_000 },
+  'poker-action': { maxRequests: 180, windowMs: 60_000 },
   'game-action': {
     maxRequests: 60,
     windowMs: 60 * 1000,

@@ -8,6 +8,7 @@ export function buildContentSecurityPolicy(nonce: string, isDevelopment: boolean
   const connectSources = [
     "'self'",
     'https://*.sentry.io',
+    'https://challenges.cloudflare.com',
     ...(isDevelopment
       ? ['http://localhost:*', 'http://127.0.0.1:*', 'ws://localhost:*', 'ws://127.0.0.1:*']
       : []),
@@ -23,7 +24,7 @@ export function buildContentSecurityPolicy(nonce: string, isDevelopment: boolean
     "font-src 'self' https://fonts.gstatic.com",
     "img-src 'self' blob: data:",
     `connect-src ${connectSources}`,
-    "frame-src 'self' https://changenow.io",
+    "frame-src 'self' https://changenow.io https://challenges.cloudflare.com",
     "frame-ancestors 'none'",
     "object-src 'none'",
     "base-uri 'self'",

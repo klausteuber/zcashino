@@ -10,8 +10,7 @@ import { REAL_SESSIONS_WHERE } from '@/lib/admin/query-filters'
 
 /**
  * GET /api/reserves
- * Public endpoint for proof of reserves
- * Returns all deposit addresses and their balances for transparency
+ * Public aggregate reserve report. Individual player deposit addresses remain private.
  */
 export async function GET(request: NextRequest) {
   const rateLimit = checkPublicRateLimit(request, 'reserves-read')
@@ -30,15 +29,7 @@ export async function GET(request: NextRequest) {
         network,
         session: REAL_SESSIONS_WHERE,
       },
-      include: {
-        session: {
-          select: {
-            balance: true,
-            isAuthenticated: true,
-            createdAt: true,
-          },
-        },
-      },
+      select: { cachedBalance: true },
       orderBy: {
         createdAt: 'desc',
       },
@@ -57,38 +48,14 @@ export async function GET(request: NextRequest) {
     // Calculate totals
     let totalTransparentBalance = 0
 
-    // Build address list with balances
-    const addresses: Array<{
-      address: string
-      cachedBalance: number
-      userBalance: number
-      isAuthenticated: boolean
-      createdAt: Date
-      balanceUpdatedAt: Date | null
-    }> = []
-
-    for (const wallet of wallets) {
-      // Public reads must not trigger per-wallet RPC scans or mutate cached balances.
-      // Balance snapshots are refreshed by wallet/deposit operational flows.
-      const onChainBalance = wallet.cachedBalance
-
-      totalTransparentBalance += onChainBalance
-
-      addresses.push({
-        address: wallet.transparentAddr,
-        cachedBalance: onChainBalance,
-        userBalance: wallet.session.balance,
-        isAuthenticated: wallet.session.isAuthenticated,
-        createdAt: wallet.createdAt,
-        balanceUpdatedAt: wallet.balanceUpdatedAt,
-      })
-    }
+    for (const wallet of wallets) totalTransparentBalance += wallet.cachedBalance
 
     // Get aggregate stats for real-money sessions only.
     const stats = await prisma.session.aggregate({
       where: REAL_SESSIONS_WHERE,
       _sum: {
         balance: true,
+        pokerLockedZats: true,
         totalDeposited: true,
         totalWithdrawn: true,
         totalWagered: true,
@@ -97,7 +64,7 @@ export async function GET(request: NextRequest) {
       _count: true,
     })
 
-    const totalUserLiabilities = stats._sum.balance || 0
+    const totalUserLiabilities = (stats._sum.balance || 0) + Number(stats._sum.pokerLockedZats ?? 0n) / 100_000_000
     const totalWalletBalance = walletBalance.confirmed + walletBalance.pending
     const totalOnChainBalance = totalWalletBalance > 0
       ? totalWalletBalance
@@ -144,9 +111,10 @@ export async function GET(request: NextRequest) {
         totalWon: stats._sum.totalWon || 0,
       },
 
-      // Individual addresses for verification
-      addresses,
-      addressCount: addresses.length,
+      // Compatibility fields contain no per-player information.
+      addresses: [],
+      addressCount: wallets.length,
+      reportingMode: 'aggregate',
 
       // Network info
       network,

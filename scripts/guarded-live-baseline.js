@@ -41,6 +41,7 @@ async function captureBaseline() {
     prisma.session.aggregate({
       _sum: {
         balance: true,
+        pokerLockedZats: true,
         totalDeposited: true,
         totalWithdrawn: true,
       },
@@ -94,7 +95,7 @@ async function captureBaseline() {
       availableCommitments: poolAvailable,
     },
     totals: {
-      liabilities: sessionTotals._sum.balance || 0,
+      liabilities: (sessionTotals._sum.balance || 0) + Number(sessionTotals._sum.pokerLockedZats ?? 0n) / 100_000_000,
       totalDeposited: sessionTotals._sum.totalDeposited || 0,
       totalWithdrawn: sessionTotals._sum.totalWithdrawn || 0,
     },

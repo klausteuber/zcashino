@@ -101,6 +101,7 @@ export async function GET(request: NextRequest) {
         where: REAL_SESSIONS_WHERE,
         _sum: {
           balance: true,
+          pokerLockedZats: true,
           totalDeposited: true,
           totalWithdrawn: true,
           totalWagered: true,
@@ -311,7 +312,7 @@ export async function GET(request: NextRequest) {
       getVeilstoneOperationalSummary(),
     ])
 
-    const liabilities = sessionTotals._sum.balance || 0
+    const liabilities = (sessionTotals._sum.balance || 0) + Number(sessionTotals._sum.pokerLockedZats ?? 0n) / 100_000_000
     const totalDeposited = sessionTotals._sum.totalDeposited || 0
     const totalWithdrawn = sessionTotals._sum.totalWithdrawn || 0
     const totalWagered = sessionTotals._sum.totalWagered || 0

@@ -77,6 +77,7 @@ describe('/api/reserves', () => {
     prismaMock.session.aggregate.mockResolvedValue({
       _sum: {
         balance: 0.5,
+        pokerLockedZats: 25_000_000n,
         totalDeposited: 1,
         totalWithdrawn: 0.25,
         totalWagered: 2,
@@ -98,7 +99,10 @@ describe('/api/reserves', () => {
     expect(payload.reserves.totalOnChainBalance).toBe(2.25)
     expect(payload.reserves.transparentAddressBalance).toBe(1.25)
     expect(payload.reserves.walletBalance).toEqual({ confirmed: 2, pending: 0.25, total: 2.25 })
-    expect(payload.addresses[0].cachedBalance).toBe(1.25)
+    expect(payload.reserves.totalUserLiabilities).toBe(0.75)
+    expect(payload.addresses).toEqual([])
+    expect(JSON.stringify(payload)).not.toContain('t1reserve')
+    expect(JSON.stringify(payload)).not.toContain('userBalance')
     expect(prismaMock.depositWallet.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({

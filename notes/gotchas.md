@@ -1223,3 +1223,38 @@ post-restart catch-up window as startup, not degradation.
 ### Casino SEO release and browser imports (2026-09-05)
 
 **Symptom:** The alternate production builder failed on `node:crypto` in the browser bundle. **Root cause:** BlackjackGame imported betting limits from the server game engine, and PaytableDisplay imported tables from the poker engine; both engines import the server shuffle implementation. **Fix:** Extract browser-safe limits and paytables, share them with the engines, and preserve existing server exports. **Key files:** `src/lib/game/blackjack-limits.ts`, `src/lib/game/video-poker-paytables.ts`, `src/components/game/BlackjackGame.tsx`, `src/components/game/PaytableDisplay.tsx`.
+
+### Six-max poker and release checks (2026-09-06)
+
+- A browser that polls a table can hide a broken background worker because the read route also processes overdue actions. Verify timers by stopping table requests and reading the database directly. Initialize the worker before unrelated RPC startup work and idempotently on authenticated poker requests.
+- Keep buy-in/cash-out transfers separate from wager and payout statistics. Use integer table escrow, update session locks in the same transaction, and include locked funds in every reserve/liability calculation. Removing positive-balance filters matters when a player has their entire balance seated.
+- API raise limits must support stacks larger than the starting buy-in after wins. Bound them by safe integers and the engine's legal stack, not the maximum initial buy-in.
+- Returning sit-outs/new arrivals need an explicit blind rule to prevent free-hand cycling. Keep that rule visible beside buy-in controls.
+- Do not import browser display constants or paytables from server dealing modules: their transitive `node:crypto` import breaks the production client bundle. Share browser-safe data modules and re-export where needed for compatibility.
+- Prisma's local SQLite `db push` integration fixture needed an existing empty file. Create it first; the safe migration bootstrap remains the application migration path. Limit Vitest to two workers on this machine to avoid timing failures from starting dozens of workers at once.
+
+### Poker variants and time bank (2026-09-06)
+
+- A pot-limit maximum includes the call before calculating the pot raise. Omaha evaluation must enumerate exactly two hole cards and three board cards; evaluating any five of the combined nine admits illegal winners.
+- Stud antes belong to total contribution, not street bets. Keep bring-in/completion separate from normal calls, and never let an automatic fold bypass a forced bring-in. Expose only card positions 2–5; seventh street remains down.
+- Persist the time bank and dealt-hand count on the session as well as the seated state, so leaving/rejoining cannot grant a fresh reserve. Charge only elapsed time after the original decision deadline, and make activation a versioned, idempotent action.
+- Legacy table JSON needs defaults for variant/timer fields before the engine sees it. Do not reset the hand or rewrite applied migrations to achieve this.
+- Restart the local preview after changing game engine or worker code: a hot-reload-protected interval can retain its old service instance even when request handlers update. Check card suits on phones; the original decorative card-under-seat overlap obscured stud's exposed suits.
+
+### Poker integrity controls (2026-09-06)
+
+- One unique poker seat per `Session` does not establish one human. Bind stable nicknames and restrictions to the recoverable session, and treat shared browser/network observations as review signals with legitimate household/device explanations.
+- Grant consumption belongs inside the buy-in transaction, after duplicate-receipt detection. Otherwise failed buys or retries can waste checks or allow a second seat entry.
+- Enforce human-check expiry only at entry/Ready/new deal. Never gate active decisions, bank use, leaving or cash-out with it.
+- Distinguish automatic timeout/departure actions from player choices before analyzing response times. Exclude actual reserve-spending decisions, but don't let a zero-cost bank activation erase normal decision timing; bank activation is never itself suspicious.
+- Store private history separately from financial receipts and encrypt it with authenticated record context. Never expose active down cards through an admin evidence API. Retention cleanup must preserve funds, financial receipts, identity and time-bank state.
+- Run statistical reads outside the gameplay transaction. Large monitoring scans must not hold a SQLite write transaction across the analysis.
+- A Turnstile flexible widget has a minimum width larger than the poker sidebar; use the compact widget there. Recreate the widget after failed verification and preserve the CSP nonce for its script.
+- React callback refs must be updated in an effect, not during render. Abort old access-status requests when restoring another session so stale identity responses cannot replace the current setup UI.
+- The legacy migration chain fails in a naive Prisma shadow replay. Generate additive diffs from the previous/current schema without rewriting applied migrations, and use the existing safe migrator for rehearsals.
+
+- The inherited brand admin guard permits `single-brand`/`forced` resolution. The new private poker evidence endpoint additionally requires a positive Cypher hostname mapping independent of UI branding mode; spoofed untrusted forwarded hosts do not count. The standalone host-boundary test exposed this edge case.
+
+- Brand host smoke tests must use an HTTP client that actually transmits the requested `Host` header. In this local Node fetch runtime, the custom Host check did not exercise the alternate host; raw `node:http` and curl verified the boundary correctly.
+
+- Release browser checks also assert public copy: update the existing reserves heading assertion when the privacy change renames it to “Reserve Report.” A missing heading in the smoke suite was a stale expectation, not a server failure. Key files: `tests/e2e/smoke.spec.ts`, `src/app/reserves/page.tsx`.
