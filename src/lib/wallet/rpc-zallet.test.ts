@@ -93,8 +93,8 @@ describe('Zallet RPC compatibility', () => {
       .mockResolvedValueOnce(mockRpcResponse(null, allocationError))
       .mockResolvedValueOnce(mockRpcResponse(migratedAccounts))
       .mockResolvedValueOnce(mockRpcResponse(syncedStatus))
-      .mockResolvedValueOnce(mockRpcResponse(['new']))
-      .mockResolvedValueOnce(mockRpcResponse({ account_uuid: 'new', zip32_account_index: 87, seedfp: 'seed' }))
+      .mockResolvedValueOnce(mockRpcResponse({ accounts: [{ account_uuid: 'new', zip32_account_index: 87, seedfp: 'seed' }] }))
+      .mockImplementationOnce(() => Promise.resolve(mockRpcResponse({ account_uuid: 'new', zip32_account_index: 87, seedfp: 'seed', name: JSON.parse(fetchMock.mock.calls[0][1].body).params[0] })))
       .mockResolvedValueOnce(mockRpcResponse({ address: 'u1new' }))
       .mockResolvedValueOnce(mockRpcResponse({ p2pkh: 't1new' }))
     const { generateDepositAddressSet } = await loadZalletRpc()
@@ -108,14 +108,14 @@ describe('Zallet RPC compatibility', () => {
     expect(calls[5].params[0]).toBe('new')
   })
 
-  it.each([[], ['old']])('never reuses an account after an allocation race (%j)', async created => {
+  it.each([{ created: [] }, { created: ['old'] }])('never reuses an account after an allocation race ($created)', async ({ created }) => {
     const fetchMock = global.fetch as ReturnType<typeof vi.fn>
     fetchMock.mockReset()
     fetchMock
       .mockResolvedValueOnce(mockRpcResponse(null, allocationError))
       .mockResolvedValueOnce(mockRpcResponse(migratedAccounts))
       .mockResolvedValueOnce(mockRpcResponse(syncedStatus))
-      .mockResolvedValueOnce(mockRpcResponse(created))
+      .mockResolvedValueOnce(mockRpcResponse({ accounts: created.map(account_uuid => ({ account_uuid })) }))
     const { generateDepositAddressSet } = await loadZalletRpc()
     await expect(generateDepositAddressSet()).rejects.toThrow('allocation conflicted')
     expect(fetchMock).toHaveBeenCalledTimes(4)

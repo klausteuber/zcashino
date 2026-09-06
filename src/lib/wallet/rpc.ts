@@ -239,21 +239,23 @@ async function createDepositAccount(accountName: string, network: ZcashNetwork):
     // This index is above every ordinary account already tracked by the wallet.
     // Only accept a newly returned UUID; [] means a concurrent caller claimed it.
     // Never look up and reuse that caller's account for this player's deposits.
-    const created = await rpcCall<string[]>('z_recoveraccounts', [[{
+    const recovered = await rpcCall<{ accounts: RpcAccountResult[] }>('z_recoveraccounts', [[{
       name: accountName,
       seedfp: legacy.seedfp,
       zip32_account_index: nextIndex,
       birthday_height: status.blockHeight,
     }]], network)
-    if (!Array.isArray(created) || created.length !== 1 || typeof created[0] !== 'string' || !created[0] ||
-        accounts.some(account => account.account_uuid === created[0])) {
+    const created = recovered?.accounts
+    const accountUuid = created?.[0]?.account_uuid
+    if (!Array.isArray(created) || created.length !== 1 || typeof accountUuid !== 'string' || !accountUuid ||
+        accounts.some(account => account.account_uuid === accountUuid)) {
       throw new Error('Deposit account allocation conflicted; please retry')
     }
-    const account = await rpcCall<RpcAccountResult & { seedfp?: string }>('z_getaccount', [created[0]], network)
-    if (account.account_uuid !== created[0] || account.zip32_account_index !== nextIndex || account.seedfp !== legacy.seedfp) {
+    const account = await rpcCall<RpcAccountResult & { seedfp?: string; name?: string }>('z_getaccount', [accountUuid], network)
+    if (account.account_uuid !== accountUuid || account.zip32_account_index !== nextIndex || account.seedfp !== legacy.seedfp || account.name !== accountName) {
       throw new Error('Deposit account allocation could not be verified')
     }
-    return { account: nextIndex, account_uuid: created[0] }
+    return { account: nextIndex, account_uuid: accountUuid }
   }
 }
 

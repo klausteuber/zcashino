@@ -1274,3 +1274,5 @@ post-restart catch-up window as startup, not degradation.
 - Key files: `src/lib/wallet/rpc.ts`, `src/app/api/session/route.ts`, `src/components/onboarding/OnboardingModal.tsx`, and adjacent regression tests.
 - Verification: regression coverage includes the production allocator error, account collision, multiple seeds, unrelated errors, cookie persistence, and a StrictMode parent/session-update reproduction. 704 tests, lint, and TypeScript passed before rollout.
 - RPC reference: https://zcash.github.io/zallet/rpc/index.html#z_recoveraccounts ; installed production `help "z_recoveraccounts"` confirms the same contract.
+
+- Live canary caught a response-contract mismatch before displaying any address: `z_recoveraccounts` returns `{ accounts: [{ account_uuid, seedfp, zip32_account_index }] }`, not a bare UUID array. Verified using installed empty-list RPC and upstream `recover_accounts.rs`; corrected parser and checked the unique requested account name too. Keep real RPC response shapes in test fixtures.
