@@ -301,6 +301,22 @@ describe('/api/session address selection', () => {
     })
   })
 
+  it('GET keeps the signed session cookie after deposit wallet creation fails', async () => {
+    parsePlayerSessionFromRequestMock.mockReturnValue(null)
+    prismaMock.session.findUnique.mockResolvedValue(null)
+    prismaMock.session.create.mockResolvedValue({
+      id: 'incomplete-real', walletAddress: 'real_new', playerAuthVersion: 4,
+      balance: 0, wallet: null,
+    })
+    createDepositWalletForSessionMock.mockRejectedValueOnce(new Error('wallet unavailable'))
+    const response = await GET({
+      nextUrl: { searchParams: new URLSearchParams('wallet=real_new') },
+      headers: { get: vi.fn().mockReturnValue(null) },
+    } as unknown as NextRequest)
+    expect((await response.json()).walletError).toBe('wallet_creation_failed')
+    expect(setPlayerSessionCookieMock).toHaveBeenCalledWith(response, 'incomplete-real', 'real_new', 4)
+  })
+
   it('GET repairs a real session missing its deposit wallet', async () => {
     parsePlayerSessionFromRequestMock.mockReturnValue({
       sessionId: 'real-session',

@@ -201,6 +201,62 @@ function extractAccountIndex(result: number | RpcAccountResult): number {
   return -1
 }
 
+// Migrated zcashd wallets contain a reserved Legacy account at this index.
+// Some Zallet versions count it when selecting max(index) + 1, exhausting
+// automatic allocation even though ordinary account indices remain available.
+const LEGACY_ACCOUNT_INDEX = 0x7fffffff
+
+async function createDepositAccount(accountName: string, network: ZcashNetwork): Promise<number | RpcAccountResult> {
+  try {
+    return await rpcCall<number | RpcAccountResult>(
+      'z_getnewaccount', IS_ZALLET ? [accountName] : [], network
+    )
+  } catch (error) {
+    if (!IS_ZALLET || !(error instanceof RpcRejectedError) || error.code !== -20 ||
+        !error.message.includes('ZIP 32 account identifiers must be less than 0x7FFFFFFF')) {
+      throw error
+    }
+
+    const accounts = await rpcCall<Array<RpcAccountResult & { seedfp?: string }>>(
+      'z_listaccounts', [false], network
+    )
+    const seeds = new Set(accounts.map(account => account.seedfp).filter(Boolean))
+    const legacy = accounts.find(account => account.zip32_account_index === LEGACY_ACCOUNT_INDEX)
+    if (!legacy?.seedfp || seeds.size !== 1) throw error
+
+    const indices = accounts.map(account => account.zip32_account_index)
+    if (indices.some(index => !Number.isInteger(index) || index! < 0 || index! > LEGACY_ACCOUNT_INDEX)) {
+      throw new Error('Cannot safely determine the next deposit account index')
+    }
+    const nextIndex = Math.max(-1, ...indices.filter(index => index !== LEGACY_ACCOUNT_INDEX) as number[]) + 1
+    if (nextIndex >= LEGACY_ACCOUNT_INDEX) throw error
+
+    const status = await checkNodeStatus(network)
+    if (!status.connected || !status.synced || status.blockHeight <= 0) {
+      throw new Error('Cannot generate deposit address: Zcash node not connected or wallet not fully synced')
+    }
+
+    // This index is above every ordinary account already tracked by the wallet.
+    // Only accept a newly returned UUID; [] means a concurrent caller claimed it.
+    // Never look up and reuse that caller's account for this player's deposits.
+    const created = await rpcCall<string[]>('z_recoveraccounts', [[{
+      name: accountName,
+      seedfp: legacy.seedfp,
+      zip32_account_index: nextIndex,
+      birthday_height: status.blockHeight,
+    }]], network)
+    if (!Array.isArray(created) || created.length !== 1 || typeof created[0] !== 'string' || !created[0] ||
+        accounts.some(account => account.account_uuid === created[0])) {
+      throw new Error('Deposit account allocation conflicted; please retry')
+    }
+    const account = await rpcCall<RpcAccountResult & { seedfp?: string }>('z_getaccount', [created[0]], network)
+    if (account.account_uuid !== created[0] || account.zip32_account_index !== nextIndex || account.seedfp !== legacy.seedfp) {
+      throw new Error('Deposit account allocation could not be verified')
+    }
+    return { account: nextIndex, account_uuid: created[0] }
+  }
+}
+
 /**
  * Generate a new deposit address set (unified + transparent companion receiver).
  */
@@ -213,11 +269,7 @@ export async function generateDepositAddressSet(
   accountUuid: string | null
 }> {
   const accountName = `cypherjester-deposit-${Date.now()}-${randomUUID().slice(0, 8)}`
-  const accountResult = await rpcCall<number | RpcAccountResult>(
-    'z_getnewaccount',
-    IS_ZALLET ? [accountName] : [],
-    network
-  )
+  const accountResult = await createDepositAccount(accountName, network)
   let accountIndex = extractAccountIndex(accountResult)
   const accountUuid = typeof accountResult === 'object' && accountResult !== null
     ? accountResult.account_uuid ?? null

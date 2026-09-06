@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { QRCode, CopyButton } from '@/components/ui/QRCode'
 import { useDepositPolling, DepositStatus } from '@/hooks/useDepositPolling'
 import { useBrand } from '@/hooks/useBrand'
@@ -71,10 +71,13 @@ export function OnboardingModal({
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [recoverySaved, setRecoverySaved] = useState(false)
 
+  const opened = useRef(false)
+  const creatingSession = useRef(false)
+
   // Deposit polling
   const depositStatus = useDepositPolling(
     localSessionId,
-    step === 'deposit' || step === 'confirming',
+    isOpen && !!localDepositAddress && (step === 'deposit' || step === 'confirming'),
     {
       onDeposit: (amount, txHash) => {
         console.log('Deposit detected:', amount, txHash)
@@ -109,7 +112,8 @@ export function OnboardingModal({
 
   // Handle modal open/close and initialStep
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !opened.current) {
+      opened.current = true
       if (initialStep === 'restore') {
         setStep('restore')
       } else if (depositAddress && sessionId) {
@@ -125,6 +129,7 @@ export function OnboardingModal({
       // else: show welcome screen (default)
     }
     if (!isOpen) {
+      opened.current = false
       // Reset to welcome when modal closes so next open starts fresh
       setStep('welcome')
       setErrorMessage(null)
@@ -147,6 +152,8 @@ export function OnboardingModal({
 
   // Handle real ZEC selection — skip setup, go straight to deposit
   const handleRealSelect = useCallback(async () => {
+    if (creatingSession.current) return
+    creatingSession.current = true
     setIsLoading(true)
     setErrorMessage(null)
     try {
@@ -187,6 +194,7 @@ export function OnboardingModal({
       setErrorMessage('Failed to create session. Please try again.')
       setStep('error')
     } finally {
+      creatingSession.current = false
       setIsLoading(false)
     }
   }, [onCreateRealSession])

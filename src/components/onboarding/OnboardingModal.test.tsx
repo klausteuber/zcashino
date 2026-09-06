@@ -1,3 +1,4 @@
+import { StrictMode, useState } from 'react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -308,6 +309,27 @@ describe('OnboardingModal', () => {
         expect(screen.getByText(/save this key now/i)).toBeInTheDocument()
       })
     })
+  })
+
+  it('does not automatically retry when a failed wallet request changes the parent session', async () => {
+    const user = userEvent.setup()
+    const create = vi.fn()
+    function FundingFlow() {
+      const [id, setId] = useState('demo')
+      return <OnboardingModal {...defaultProps} initialStep="deposit" sessionId={id}
+        onCreateRealSession={async () => {
+          create()
+          setId(`real-${create.mock.calls.length}`)
+          return { sessionId: 'real-1', depositAddress: null, walletErrorMessage: 'Wallet unavailable' }
+        }} />
+    }
+    render(<StrictMode><FundingFlow /></StrictMode>)
+    await screen.findByText('Wallet unavailable')
+    expect(create).toHaveBeenCalledTimes(1)
+    await user.click(screen.getByText('Try Again'))
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(2))
+    await screen.findByText('Wallet unavailable')
+    expect(create).toHaveBeenCalledTimes(2)
   })
 
   describe('Modal Behavior', () => {

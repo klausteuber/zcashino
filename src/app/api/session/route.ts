@@ -53,12 +53,13 @@ function createWalletCreationErrorResponse(
     id: string
     walletAddress: string
     balance: number
+    playerAuthVersion?: number
   },
   err: unknown
 ) {
   const errMsg = err instanceof Error ? err.message : String(err)
 
-  return NextResponse.json({
+  const response = NextResponse.json({
     id: session.id,
     walletAddress: session.walletAddress,
     balance: roundZec(session.balance),
@@ -73,6 +74,10 @@ function createWalletCreationErrorResponse(
       ? 'The Zcash node is temporarily unavailable. Please try again in a moment.'
       : 'Failed to generate deposit address. Please try again.',
   })
+  // Keep ownership of the newly created session even when wallet setup fails.
+  // A retry must repair this session rather than create an orphan on every attempt.
+  setPlayerSessionCookie(response, session.id, session.walletAddress, session.playerAuthVersion ?? 1)
+  return response
 }
 
 async function createSessionResponse(session: {

@@ -79,6 +79,68 @@ describe('Zallet RPC compatibility', () => {
     })
   })
 
+  const allocationError = { code: -20, message: 'ZIP 32 account identifiers must be less than 0x7FFFFFFF.' }
+  const migratedAccounts = [
+    { account_uuid: 'old', seedfp: 'seed', zip32_account_index: 86 },
+    { account_uuid: 'legacy', seedfp: 'seed', zip32_account_index: 2147483647 },
+  ]
+  const syncedStatus = { node_tip: { height: 3500000 }, wallet_tip: { height: 3500000 }, fully_synced_height: 3500000 }
+
+  it('allocates a fresh ordinary account when the migrated Legacy index blocks automatic allocation', async () => {
+    const fetchMock = global.fetch as ReturnType<typeof vi.fn>
+    fetchMock.mockReset()
+    fetchMock
+      .mockResolvedValueOnce(mockRpcResponse(null, allocationError))
+      .mockResolvedValueOnce(mockRpcResponse(migratedAccounts))
+      .mockResolvedValueOnce(mockRpcResponse(syncedStatus))
+      .mockResolvedValueOnce(mockRpcResponse(['new']))
+      .mockResolvedValueOnce(mockRpcResponse({ account_uuid: 'new', zip32_account_index: 87, seedfp: 'seed' }))
+      .mockResolvedValueOnce(mockRpcResponse({ address: 'u1new' }))
+      .mockResolvedValueOnce(mockRpcResponse({ p2pkh: 't1new' }))
+    const { generateDepositAddressSet } = await loadZalletRpc()
+    await expect(generateDepositAddressSet()).resolves.toEqual({
+      unifiedAddr: 'u1new', transparentAddr: 't1new', accountIndex: 87, accountUuid: 'new',
+    })
+    const calls = fetchMock.mock.calls.map(call => JSON.parse(call[1].body))
+    expect(calls[3]).toMatchObject({ method: 'z_recoveraccounts', params: [[{
+      seedfp: 'seed', zip32_account_index: 87, birthday_height: 3500000,
+    }]] })
+    expect(calls[5].params[0]).toBe('new')
+  })
+
+  it.each([[], ['old']])('never reuses an account after an allocation race (%j)', async created => {
+    const fetchMock = global.fetch as ReturnType<typeof vi.fn>
+    fetchMock.mockReset()
+    fetchMock
+      .mockResolvedValueOnce(mockRpcResponse(null, allocationError))
+      .mockResolvedValueOnce(mockRpcResponse(migratedAccounts))
+      .mockResolvedValueOnce(mockRpcResponse(syncedStatus))
+      .mockResolvedValueOnce(mockRpcResponse(created))
+    const { generateDepositAddressSet } = await loadZalletRpc()
+    await expect(generateDepositAddressSet()).rejects.toThrow('allocation conflicted')
+    expect(fetchMock).toHaveBeenCalledTimes(4)
+  })
+
+  it('fails closed when the wallet contains multiple seeds', async () => {
+    const fetchMock = global.fetch as ReturnType<typeof vi.fn>
+    fetchMock.mockReset()
+    fetchMock
+      .mockResolvedValueOnce(mockRpcResponse(null, allocationError))
+      .mockResolvedValueOnce(mockRpcResponse([...migratedAccounts, { seedfp: 'other', zip32_account_index: 0 }]))
+    const { generateDepositAddressSet } = await loadZalletRpc()
+    await expect(generateDepositAddressSet()).rejects.toThrow('ZIP 32')
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not try another allocation after a network or unrelated RPC failure', async () => {
+    const fetchMock = global.fetch as ReturnType<typeof vi.fn>
+    fetchMock.mockReset()
+    fetchMock.mockResolvedValueOnce(mockRpcResponse(null, { code: -20, message: 'wallet locked' }))
+    const { generateDepositAddressSet } = await loadZalletRpc()
+    await expect(generateDepositAddressSet()).rejects.toThrow('wallet locked')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
   it('looks up an account balance without ever falling back to the whole wallet', async () => {
     const fetchMock = global.fetch as ReturnType<typeof vi.fn>
     fetchMock
