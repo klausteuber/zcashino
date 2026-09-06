@@ -20,6 +20,7 @@ const nextConfig: NextConfig = {
   // Belt-and-suspenders: ensure the .dat database ships in the standalone output
   // for the route that performs geo lookups.
   outputFileTracingIncludes: {
+    '/*': ['./node_modules/capjs-core/src/*.js'],
     '/api/session': ['./node_modules/geoip-lite/data/**/*'],
   },
 

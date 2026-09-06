@@ -43,13 +43,17 @@ test.describe('Core casino routes', () => {
     const played = await page.evaluate(async () => {
       const sessionResponse = await fetch('/api/session')
       const session = await sessionResponse.json()
+      const accessResponse = await fetch('/api/poker/access')
+      const access = await accessResponse.json()
       const response = await fetch('/api/game', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'start', sessionId: session.id, bet: 0.01 }),
       })
-      return { sessionId: session.id, status: response.status, body: await response.json() }
+      return { sessionId: session.id, status: response.status, body: await response.json(), pokerStatus: accessResponse.status, pokerProvider: access.provider }
     })
     expect(played.status).toBe(200)
+    expect(played.pokerStatus).toBe(200)
+    expect(played.pokerProvider).toBe('self-hosted')
     expect(played.body.gameState).not.toHaveProperty('deck')
     expect(played.body.gameState).not.toHaveProperty('serverSeed')
     for (const card of played.body.gameState.dealerHand.cards) {

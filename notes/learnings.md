@@ -681,3 +681,5 @@ In-memory limits and remote font fetches are acceptable in dev, but must be call
 ### Self-hosted poker verification (2026-09-06)
 
 **Symptom:** Poker could not open without external Turnstile credentials, contrary to the user's self-hosting preference. **Root cause:** Entry validation and the widget were provider-specific. **Fix:** Embed pinned Cap proof-of-work generation/validation, bind it to the existing identity/browser/nonce/host, and reuse atomic grant/replay accounting. Serve all assets locally, including early solver preloads, and preserve production script restrictions by excluding optional dynamic-code probes. **Key files:** `src/lib/poker/security-check.ts`, `src/lib/poker/human-check.ts`, `src/components/poker/HumanCheck.tsx`, `scripts/prepare-poker-check.mjs`.
+
+**Packaging follow-up:** An external ESM package's manifest can be present in a standalone image while its exported entry is missing. The release artifact validator must test runtime importability, not just secret/source exclusion. Explicit Cap file tracing and a standalone import/generation check now gate the build.

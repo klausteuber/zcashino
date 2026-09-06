@@ -2,6 +2,7 @@
 
 import { lstat, readdir, realpath } from 'node:fs/promises'
 import { relative, resolve, sep } from 'node:path'
+import { pathToFileURL } from 'node:url'
 
 const DEFAULT_ARTIFACT_ROOT = '.next/standalone'
 
@@ -151,6 +152,11 @@ async function main() {
     return
   }
 
+  // Turbopack can trace an external package's manifest without its src entry.
+  // Import from the artifact itself so that omission blocks a production build.
+  const cap = await import(pathToFileURL(resolve(artifactRoot, 'node_modules/capjs-core/src/index.js')).href)
+  const challenge = await cap.generateChallenge('artifact-check-only-secret-32-characters', { challengeCount: 1, challengeDifficulty: 1 })
+  if (!challenge.token || typeof cap.validateChallenge !== 'function') throw new Error('Standalone Cap runtime is incomplete')
   console.log(`Standalone artifact passed validation: ${resolve(artifactRoot)}`)
 }
 
