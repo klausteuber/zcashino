@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { Prisma } from '@prisma/client'
 import prisma from '@/lib/db'
 import { checkPublicRateLimit, createRateLimitResponse } from '@/lib/admin/rate-limit'
 import { isKillSwitchActive } from '@/lib/kill-switch'
@@ -141,16 +142,19 @@ export async function POST(request: NextRequest) {
 
     switch (parsed.data.action) {
       case 'create':
-        return handleCreateRecoveryKey(request)
+        return await handleCreateRecoveryKey(request)
       case 'regenerate':
-        return handleRegenerateRecoveryKey(request)
+        return await handleRegenerateRecoveryKey(request)
       case 'restore':
-        return handleRestoreRecoveryKey(parsed.data.recoveryKey)
+        return await handleRestoreRecoveryKey(parsed.data.recoveryKey)
       default:
         return NextResponse.json({ error: 'Unsupported recovery action.' }, { status: 400 })
     }
   } catch (error) {
     console.error('[SessionRecoveryAPI] Request failed:', error)
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2028') {
+      return NextResponse.json({ error: 'The wallet is busy processing another request. Please try restoring again in a few seconds.' }, { status: 503 })
+    }
     return NextResponse.json(
       { error: 'Failed to process session recovery request.' },
       { status: 500 }

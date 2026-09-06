@@ -165,6 +165,7 @@ describe('/api/wallet POST withdrawal-status transitions', () => {
     validateAddressViaRPCMock.mockResolvedValue({ isvalid: true })
     getDepositInfoMock.mockReturnValue({})
     creditFundsMock.mockResolvedValue(undefined)
+    prismaMock.transaction.create.mockResolvedValue({ id: 'transaction-1' })
     prismaMock.transaction.updateMany.mockResolvedValue({ count: 1 })
     sendPlayerDepositAlertMock.mockResolvedValue(undefined)
     createDepositWalletForSessionMock.mockResolvedValue({

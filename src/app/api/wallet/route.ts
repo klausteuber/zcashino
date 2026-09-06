@@ -1,6 +1,7 @@
 import { RpcRejectedError } from '@/lib/wallet/rpc-errors'
 import { holdUnknownWithdrawal, UNKNOWN_SUBMISSION_PREFIX } from '@/lib/services/withdrawal-submission'
 import { NextRequest, NextResponse } from 'next/server'
+import type { Prisma } from '@prisma/client'
 import prisma from '@/lib/db'
 import {
   DEFAULT_NETWORK,
@@ -172,7 +173,7 @@ export async function POST(request: NextRequest) {
         return handleCreateWallet(session)
 
       case 'check-deposits':
-        return handleCheckDeposits({
+        return await handleCheckDeposits({
           id: session.id,
           balance: session.balance,
           isAuthenticated: session.isAuthenticated,
@@ -247,8 +248,10 @@ async function handleCreateWallet(session: { id: string; wallet: unknown }) {
  * Check if accepting a deposit would exceed the session's deposit limit.
  * Returns true if the deposit is allowed.
  */
-async function isDepositWithinLimit(sessionId: string, depositAmount: number): Promise<boolean> {
-  const session = await prisma.session.findUnique({
+async function isDepositWithinLimit(dbTx: Prisma.TransactionClient, sessionId: string, depositAmount: number, depositId: string): Promise<boolean> {
+  // This runs inside the credit transaction. A query on the outer Prisma client
+  // waits for that same SQLite transaction to finish and causes a deadlock.
+  const session = await dbTx.session.findUnique({
     where: { id: sessionId },
     select: { depositLimit: true },
   })
@@ -257,10 +260,12 @@ async function isDepositWithinLimit(sessionId: string, depositAmount: number): P
 
   // Sum deposits confirmed in the last 24 hours
   const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000)
-  const recent = await prisma.transaction.aggregate({
+  const recent = await dbTx.transaction.aggregate({
     _sum: { amount: true },
     where: {
       sessionId,
+      // The current deposit has just been inserted/promoted in this transaction.
+      id: { not: depositId },
       type: 'deposit',
       status: 'confirmed',
       confirmedAt: { gte: since24h },
@@ -397,7 +402,7 @@ async function handleCheckDeposits(session: {
       let createdTx = false
       try {
         await prisma.$transaction(async (dbTx) => {
-          await dbTx.transaction.create({
+          const recorded = await dbTx.transaction.create({
             data: {
               sessionId: session.id,
               type: 'deposit',
@@ -413,7 +418,7 @@ async function handleCheckDeposits(session: {
           if (!isConfirmedOnChain || !eligibleAmount) return
 
           // Enforce deposit limit (24h rolling)
-          const withinLimit = await isDepositWithinLimit(session.id, tx.amount)
+          const withinLimit = await isDepositWithinLimit(dbTx, session.id, tx.amount, recorded.id)
           if (!withinLimit) {
             console.warn(
               `[Deposit] Deposit limit exceeded for session ${session.id.slice(0, 8)}...: ` +
@@ -508,7 +513,7 @@ async function handleCheckDeposits(session: {
       promotedThisTx = true
 
       // Enforce deposit limit (24h rolling)
-      const withinLimit = await isDepositWithinLimit(session.id, existing.amount)
+      const withinLimit = await isDepositWithinLimit(dbTx, session.id, existing.amount, existing.id)
       if (!withinLimit) {
         console.warn(
           `[Deposit] Deposit limit exceeded for session ${session.id.slice(0, 8)}...: ` +

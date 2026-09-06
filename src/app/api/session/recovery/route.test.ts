@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NextRequest } from 'next/server'
+import { Prisma } from '@prisma/client'
 
 const mocks = vi.hoisted(() => ({
   prismaMock: {
@@ -220,5 +221,15 @@ describe('/api/session/recovery', () => {
     await expect(response.json()).resolves.toEqual({
       error: 'Recovery key invalid or expired.',
     })
+  })
+
+  it('returns a retryable JSON response when a recovery transaction times out', async () => {
+    mocks.prismaMock.$transaction.mockRejectedValueOnce(new Prisma.PrismaClientKnownRequestError('Transaction expired', {
+      code: 'P2028', clientVersion: '7.10.0',
+    }))
+    const response = await POST(makeRequest({ action: 'restore', recoveryKey: `zrec_${'ab'.repeat(32)}` }))
+    expect(response.status).toBe(503)
+    expect((await response.json()).error).toContain('try restoring again')
+    expect(mocks.setPlayerSessionCookieMock).not.toHaveBeenCalled()
   })
 })
