@@ -81,14 +81,14 @@ export default function PokerAccessPanel({ game, entry = true, inHand = false, n
     {error && <p role="alert" className={styles.error}>{error}</p>}
     {loadError && <p role="alert" className={styles.error}>{loadError}</p>}
     {!access && <p className={styles.fine}>Loading poker access…</p>}
-    {access && <fieldset className={styles.avatarPicker} disabled={busy}>
+    {access && <details className={styles.accessRestore}><summary>Change avatar</summary><p className={styles.fine}>Your starter avatar is assigned automatically. You can change it anytime.</p><fieldset className={styles.avatarPicker} disabled={busy}>
       <legend>Choose your avatar</legend>
       <div className={styles.avatarChoices}>{AVATAR_IDS.map(id => <button key={id} type="button" aria-label={`Use ${POKER_AVATARS[id].label} avatar`} aria-pressed={access.avatar === id} onClick={async () => {
         setAvatarNotice('')
         if (await post({ kind: 'avatar', avatar: id }, true)) setAvatarNotice('Avatar saved. It follows your poker identity across tables.')
       }}><PlayerAvatar avatar={id} name={POKER_AVATARS[id].label} /><span>{POKER_AVATARS[id].label}</span></button>)}</div>
       {avatarNotice && <p role="status" className={styles.fine}>{avatarNotice}</p>}
-    </fieldset>}
+    </fieldset></details>}
     {inHand ? <p className={styles.fine}>Any new security check will wait until this hand finishes. Your action timer and cash-out remain available.</p> : <>
       {access && !access.setupComplete && <div className={styles.accessControls}>
         <p className={styles.fine}>Use one poker identity across 21Z.cash and CypherJester. Your nickname stays the same between tables. Creating another wallet does not make a second poker identity permissible.</p>

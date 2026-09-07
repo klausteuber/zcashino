@@ -64,6 +64,18 @@ describe('Poker access, private histories and integrity persistence', () => {
     expect(await db.pokerTable.count()).toBe(0)
     expect((await db.session.findUniqueOrThrow({ where: { id: p.id } })).balance).toBe(1)
   })
+  it('automatically saves a starter for new and legacy identities, retaining later choices', async () => {
+    const p = await player(false)
+    const first = await ensureIdentity(db, p.id)
+    expect(first.avatar).toMatch(/^(fox|wolf|owl|panda|tiger|lion|frog|octopus)$/)
+    expect((await ensureIdentity(db, p.id)).avatar).toBe(first.avatar)
+    await db.pokerIdentity.update({ where: { id: first.id }, data: { avatar: null } })
+    const legacy = await ensureIdentity(db, p.id)
+    expect(legacy.avatar).toBeTruthy()
+    expect((await ensureIdentity(db, p.id)).avatar).toBe(legacy.avatar)
+    await db.$transaction(tx => updateAvatar(tx, p.id, 'octopus'))
+    expect((await ensureIdentity(db, p.id)).avatar).toBe('octopus')
+  })
   it('persists avatars across auth restoration and updates occupied seats without changing funds or grants', async () => {
     const a = await player(), b = await player()
     const originalIdentity = await db.pokerIdentity.findUniqueOrThrow({ where: { sessionId: a.id } })

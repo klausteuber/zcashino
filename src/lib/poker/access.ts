@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto'
+import { randomInt, randomUUID } from 'node:crypto'
 import type { Prisma, PrismaClient, PokerIdentity } from '@prisma/client'
 import { PokerError } from './engine'
 import { AVATAR_IDS, resolveAvatar, type PokerAvatarId } from './avatars'
@@ -19,8 +19,13 @@ export function humanProvider(): Pick<PokerAccess, 'provider'> {
 }
 export async function ensureIdentity(db: Db, sessionId: string) {
   const existing = await db.pokerIdentity.findUnique({ where: { sessionId } })
-  if (existing) return existing
-  return db.pokerIdentity.upsert({ where: { sessionId }, create: { sessionId, nonce: randomUUID() }, update: {} })
+  const identity = existing ?? await db.pokerIdentity.upsert({ where: { sessionId },
+    create: { sessionId, nonce: randomUUID(), avatar: AVATAR_IDS[randomInt(AVATAR_IDS.length)] }, update: {} })
+  if (identity.avatar !== null) return identity
+  // Give legacy identities a starter once. A concurrent manual choice always wins.
+  await db.pokerIdentity.updateMany({ where: { id: identity.id, avatar: null },
+    data: { avatar: AVATAR_IDS[randomInt(AVATAR_IDS.length)] } })
+  return db.pokerIdentity.findUniqueOrThrow({ where: { id: identity.id } })
 }
 export function playVerified(identity: PokerIdentity, hands: number, now = Date.now()) {
   return !!identity.humanVerifiedUntil && identity.humanVerifiedUntil.getTime() > now && !identity.recheckRequired && hands - identity.verifiedHands < HUMAN_CHECK_HANDS
