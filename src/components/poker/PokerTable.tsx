@@ -6,6 +6,7 @@ import { formatZec, parseZec, stakesLabel, studAnte, studBringIn, VARIANT_NAMES,
 import type { TableCommand } from '@/lib/poker/service'
 import PokerAccessPanel from './PokerAccessPanel'
 import type { PokerAccess } from '@/lib/poker/access-types'
+import PlayerAvatar from './PlayerAvatar'
 import PokerWallet from './PokerWallet'
 import { UsdEstimate, PriceReference } from '@/components/prices/PlayerPrice'
 import styles from './poker.module.css'
@@ -136,7 +137,7 @@ export default function PokerTable({ tableId, nonce }: { tableId: string; nonce?
               <div className={`${styles.holeCards} ${isStud ? styles.studCards : ''}`}>
                 {isStud ? <><div>{player.cards.map((card, j) => !player.exposed[j] && <Card key={j} card={card} small />)}</div><div>{player.cards.map((card, j) => player.exposed[j] && <Card key={j} card={card} small exposed />)}</div></> : player.cards.map((card, j) => <Card key={j} card={card} small />)}
               </div>
-              <div className={styles.seatBody}><div className={styles.seatName}><span className={styles.avatar}>{player.name.slice(0, 1).toUpperCase()}</span><strong>{player.name}{isMe ? ' (you)' : ''}</strong>{!isStud && state?.dealer === i && <span className={styles.dealer} title="Dealer button">D</span>}</div>
+              <div className={styles.seatBody}><div className={styles.seatName}><PlayerAvatar avatar={player.avatar} name={player.name} /><strong>{player.name}{isMe ? ' (you)' : ''}</strong>{!isStud && state?.dealer === i && <span className={styles.dealer} title="Dealer button">D</span>}</div>
                 <div className={styles.stack}>{formatZec(player.stack)} <small>{units}</small></div>
                 <small className={styles.seatAction}>{player.leaving ? 'Leaving after hand' : winner ? 'Winner' : player.lastAction || (player.ready ? 'Ready' : 'Sitting out')}</small>
                 {state?.actor === i && <div className={styles.timerTrack}><div style={{ width: `${Math.min(100, seconds / 30 * 100)}%` }} /></div>}

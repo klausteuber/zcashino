@@ -1,9 +1,9 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { NextRequest } from 'next/server'
-const mocks = vi.hoisted(() => ({ auth: vi.fn(), status: vi.fn(), setup: vi.fn(), verify: vi.fn(), marker: vi.fn(), setCookie: vi.fn() }))
+const mocks = vi.hoisted(() => ({ auth: vi.fn(), status: vi.fn(), setup: vi.fn(), avatar: vi.fn(), verify: vi.fn(), marker: vi.fn(), setCookie: vi.fn() }))
 vi.mock('@/lib/db', () => ({ default: { $transaction: async (fn: (tx: unknown) => unknown) => fn({}) } }))
-vi.mock('@/lib/poker/access', () => ({ accessStatus: mocks.status, setupIdentity: mocks.setup }))
+vi.mock('@/lib/poker/access', () => ({ accessStatus: mocks.status, setupIdentity: mocks.setup, updateAvatar: mocks.avatar }))
 vi.mock('@/lib/poker/human-check', () => ({ verifyHuman: mocks.verify, browserMarker: mocks.marker, setBrowserMarker: mocks.setCookie }))
 // Use the actual HTTP schema and origin checks with only authentication/worker dependencies mocked.
 vi.mock('@/lib/auth/player-session', () => ({ requirePlayerSession: mocks.auth }))
@@ -15,6 +15,17 @@ function request(body: unknown, origin = 'https://21z.cash') {
 }
 beforeEach(() => { vi.clearAllMocks(); mocks.auth.mockResolvedValue({ ok: true, session: { sessionId: 'owner' } }); mocks.status.mockResolvedValue({ identityId: 'poker-id' }); mocks.verify.mockResolvedValue({ entryVerified: true }) })
 describe('Poker entry HTTP boundaries', () => {
+  it('saves only a catalog avatar on the authenticated identity', async () => {
+    const result = await POST(request({ kind: 'avatar', avatar: 'owl' }))
+    expect(result.status).toBe(200)
+    expect(mocks.avatar).toHaveBeenCalledWith(expect.anything(), 'owner', 'owl')
+    expect((await POST(request({ kind: 'avatar', avatar: 'https://example.com/tracker.svg' }))).status).toBe(400)
+    expect((await POST(request({ kind: 'avatar', avatar: 'owl', sessionId: 'victim' }))).status).toBe(400)
+    expect((await POST(request({ kind: 'avatar', avatar: 'owl' }, 'https://evil.example'))).status).toBe(403)
+    mocks.auth.mockResolvedValue({ ok: false, response: Response.json({}, { status: 401 }) })
+    expect((await POST(request({ kind: 'avatar', avatar: 'owl' }))).status).toBe(401)
+    expect(mocks.avatar).toHaveBeenCalledTimes(1)
+  })
   it('requires authentication before reading or mutating identity', async () => {
     mocks.auth.mockResolvedValue({ ok: false, response: Response.json({}, { status: 401 }) })
     expect((await GET(new NextRequest('https://21z.cash/api/poker/access'))).status).toBe(401)

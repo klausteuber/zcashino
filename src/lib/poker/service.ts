@@ -7,6 +7,7 @@ import { isKillSwitchActive } from '@/lib/kill-switch'
 import { act, activeHand, automaticAction, createTableState, legalActions, PokerError, publicState, seatPlayer, startHand, tableChips, useTimeBank } from './engine'
 import { type PokerMode, type PokerVariant, type PokerState, type PublicTable, type LobbyTable, type PokerAction, ZATS_PER_ZEC, TIME_BANK_MAX_MS } from './types'
 
+import { resolveAvatar } from './avatars'
 import { accessStatus, requirePokerAccess } from './access'
 import { beginHistory, decisionHistory, finishHistory } from './history'
 
@@ -227,9 +228,18 @@ export class PokerService {
       const session = await tx.session.findUnique({ where: { id: sessionId }, select: { balance: true } })
       if (!session) throw new PokerError('Session expired.', 401)
       const s = parse(row)
+      const identities = await tx.pokerIdentity.findMany({
+        where: { sessionId: { in: s.seats.flatMap(p => p ? [p.playerId] : []) } },
+        select: { sessionId: true, id: true, avatar: true },
+      })
+      const avatars = new Map(identities.map(identity => [identity.sessionId, resolveAvatar(identity.avatar, identity.id)]))
+      const visible = publicState(s, sessionId)
+      const state = { ...visible, seats: visible.seats.map((seat, index) => seat ? {
+        ...seat, avatar: avatars.get(s.seats[index]!.playerId) ?? resolveAvatar(null, seat.name),
+      } : null) }
       const viewer = s.seats.findIndex(p => p?.playerId === sessionId)
       return { id: row.id, name: row.name, mode: row.mode as PokerMode, version: row.version,
-        buyInMin: s.bigBlind * 20, buyInMax: s.bigBlind * 100, state: publicState(s, sessionId), viewerSeat: viewer < 0 ? null : viewer,
+        buyInMin: s.bigBlind * 20, buyInMax: s.bigBlind * 100, state, viewerSeat: viewer < 0 ? null : viewer,
         legal: legalActions(s, viewer), balanceZats: Math.round(session.balance * ZATS_PER_ZEC), serverTime: Date.now(), realMoneyEnabled: realMoneyEnabled(), access: await accessStatus(tx, sessionId) }
     })
   }

@@ -9,6 +9,9 @@ it('applies the additive poker migration to an existing session table without ch
     await db.executeMultiple(readFileSync('prisma/migrations/20260906010000_add_six_max_poker/migration.sql', 'utf8'))
     await db.executeMultiple(readFileSync('prisma/migrations/20260906020000_poker_time_bank/migration.sql', 'utf8'))
     await db.executeMultiple(readFileSync('prisma/migrations/20260906030000_poker_integrity/migration.sql', 'utf8'))
+    await db.executeMultiple(`INSERT INTO "PokerIdentity" ("id", "sessionId", "nickname", "nonce") VALUES ('identity', 'existing', 'Alice', 'nonce');`)
+    await db.executeMultiple(readFileSync('prisma/migrations/20260906040000_poker_avatar/migration.sql', 'utf8'))
+    expect((await db.execute('SELECT nickname,avatar FROM "PokerIdentity"')).rows[0]).toMatchObject({ nickname: 'Alice', avatar: null })
     const row = (await db.execute('SELECT balance,pokerLockedZats,pokerTimeBankMs,pokerHandsDealt FROM "Session"')).rows[0]
     expect(row.pokerTimeBankMs).toBe(30000); expect(row.pokerHandsDealt).toBe(0)
     expect(row.balance).toBe(1.23456789); expect(Number(row.pokerLockedZats)).toBe(0)

@@ -752,6 +752,7 @@ model PokerIdentity {
   sessionId             String @unique
   session               Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   nickname              String?
+  avatar                String?
   recoverySavedAt       DateTime?
   nonce                 String @default(uuid())
   humanVerifiedAt       DateTime?

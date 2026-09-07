@@ -2,12 +2,14 @@ import { NextRequest } from 'next/server'
 import { z } from 'zod'
 import prisma from '@/lib/db'
 import { pokerAuth, pokerFailure, pokerName, pokerResponse } from '@/lib/poker/http'
-import { accessStatus, setupIdentity } from '@/lib/poker/access'
+import { accessStatus, setupIdentity, updateAvatar } from '@/lib/poker/access'
 import { browserMarker, setBrowserMarker, verifyHuman } from '@/lib/poker/human-check'
 import { checkPublicRateLimit, createRateLimitResponse } from '@/lib/admin/rate-limit'
+import { AVATAR_IDS } from '@/lib/poker/avatars'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 const schema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('avatar'), avatar: z.enum(AVATAR_IDS) }).strict(),
   z.object({ kind: z.literal('setup'), nickname: pokerName, recoverySaved: z.boolean() }).strict(),
   z.object({ kind: z.literal('verify'), token: z.string().min(1).max(2048), nonce: z.string().uuid() }).strict(),
 ])
@@ -31,6 +33,10 @@ export async function POST(request: NextRequest) {
     let value: unknown
     try { value = JSON.parse(text) } catch { return pokerResponse({ error: 'Invalid JSON.' }, 400) }
     const body = schema.parse(value)
+    if (body.kind === 'avatar') {
+      await prisma.$transaction(tx => updateAvatar(tx, auth.session.sessionId, body.avatar))
+      return pokerResponse(await accessStatus(prisma, auth.session.sessionId))
+    }
     if (body.kind === 'setup') {
       await prisma.$transaction(tx => setupIdentity(tx, auth.session.sessionId, body.nickname, body.recoverySaved))
       return pokerResponse(await accessStatus(prisma, auth.session.sessionId))

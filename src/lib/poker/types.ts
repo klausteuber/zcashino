@@ -65,6 +65,7 @@ export interface LegalActions {
   raiseOptions: number[] | null
 }
 export interface PublicSeat extends Omit<PokerSeat, 'playerId' | 'cards' | 'actedAtBet'> {
+  avatar?: import('./avatars').PokerAvatarId
   cards: (number | null)[]
   exposed: boolean[]
 }

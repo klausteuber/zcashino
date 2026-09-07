@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type { Prisma, PrismaClient, PokerIdentity } from '@prisma/client'
 import { PokerError } from './engine'
+import { AVATAR_IDS, resolveAvatar, type PokerAvatarId } from './avatars'
 import type { PokerAccess } from './access-types'
 
 type Db = Prisma.TransactionClient | PrismaClient
@@ -30,7 +31,7 @@ export async function accessStatus(db: Db, sessionId: string, now = Date.now()):
   const identity = await ensureIdentity(db, sessionId)
   const real = !session.walletAddress.startsWith('demo_')
   const recoveryRequired = real && (!session.recoveryCredential || !identity.recoverySavedAt)
-  return { identityId: identity.id, nickname: identity.nickname, recoveryRequired,
+  return { identityId: identity.id, nickname: identity.nickname, avatar: resolveAvatar(identity.avatar, identity.id), recoveryRequired,
     setupComplete: !!identity.nickname && !recoveryRequired,
     entryVerified: !!identity.entryVerifiedUntil && identity.entryVerifiedUntil.getTime() > now,
     playVerified: playVerified(identity, session.pokerHandsDealt, now),
@@ -60,4 +61,11 @@ export async function requirePokerAccess(db: Db, sessionId: string, entry: boole
     if (used.count !== 1) throw new PokerError('Complete a fresh security check before taking a seat.', 403)
   }
   return identity
+}
+
+/** Cosmetic changes never grant entry or modify the nickname, wallet or table state. */
+export async function updateAvatar(db: Db, sessionId: string, avatar: PokerAvatarId) {
+  if (!AVATAR_IDS.includes(avatar)) throw new PokerError('Choose an available avatar.', 400)
+  const identity = await ensureIdentity(db, sessionId)
+  await db.pokerIdentity.update({ where: { id: identity.id }, data: { avatar } })
 }

@@ -1,6 +1,7 @@
 export interface PokerAccess {
   identityId: string
   nickname: string | null
+  avatar?: import('./avatars').PokerAvatarId
   recoveryRequired: boolean
   setupComplete: boolean
   entryVerified: boolean

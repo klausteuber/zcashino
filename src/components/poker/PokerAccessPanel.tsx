@@ -3,6 +3,8 @@ import Link from 'next/link'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { UseGameSessionReturn } from '@/hooks/useGameSession'
 import type { PokerAccess } from '@/lib/poker/access-types'
+import PlayerAvatar from './PlayerAvatar'
+import { AVATAR_IDS, POKER_AVATARS } from '@/lib/poker/avatars'
 import HumanCheck from './HumanCheck'
 import styles from './poker.module.css'
 
@@ -11,6 +13,7 @@ export default function PokerAccessPanel({ game, entry = true, inHand = false, n
 }) {
   const [access, setAccess] = useState<PokerAccess | null>(null), [nickname, setNickname] = useState('')
   const [key, setKey] = useState(''), [saved, setSaved] = useState(false), [restore, setRestore] = useState('')
+  const [avatarNotice, setAvatarNotice] = useState('')
   const [attempt, setAttempt] = useState(0)
   const [busy, setBusy] = useState(false), [error, setError] = useState('')
   const [loadError, setLoadError] = useState('')
@@ -24,7 +27,7 @@ export default function PokerAccessPanel({ game, entry = true, inHand = false, n
     if (!abort?.signal.aborted) { setAccess(body); setLoadError('') }
   }, [])
   useEffect(() => {
-    setAccess(null); setKey(''); setSaved(false); setError(''); setNickname('')
+    setAccess(null); setAvatarNotice(''); setKey(''); setSaved(false); setError(''); setNickname('')
     statusAbort.current?.abort()
     statusAbort.current = new AbortController()
     if (!sessionId) return
@@ -37,12 +40,12 @@ export default function PokerAccessPanel({ game, entry = true, inHand = false, n
     return () => { cancelled = true; statusAbort.current?.abort(); clearTimeout(timer) }
   }, [refresh, sessionId])
   useEffect(() => { onAccess?.(access) }, [access, onAccess])
-  async function post(body: unknown) {
+  async function post(body: unknown, preserveRecoveryKey = false) {
     setBusy(true); setError('')
     try {
       const res = await fetch('/api/poker/access', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }), data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Could not complete poker setup.')
-      setAccess(data); setKey(''); return true
+      setAccess(data); if (!preserveRecoveryKey) setKey(''); return true
     } catch (e) { setError(e instanceof Error ? e.message : 'Unable to complete the check.'); await refresh().catch(() => {}); return false }
     finally { setBusy(false) }
   }
@@ -72,12 +75,20 @@ export default function PokerAccessPanel({ game, entry = true, inHand = false, n
   }
   const verified = access?.setupComplete && access.playVerified && (!entry || access.entryVerified) && !access.restricted
   return <section className={styles.accessPanel} aria-label="Poker identity and security check">
-    <div className={styles.accessHeading}><strong>{access?.nickname ? `Playing as ${access.nickname}` : 'Your poker identity'}</strong><span>{inHand ? 'Hand in progress' : verified ? 'Ready for poker' : 'Setup & security check'}</span></div>
+    <div className={styles.accessHeading}><strong className={styles.identityName}>{access && <PlayerAvatar avatar={access.avatar} name={access.nickname || 'Player'} />}{access?.nickname ? `Playing as ${access.nickname}` : 'Your poker identity'}</strong><span>{inHand ? 'Hand in progress' : verified ? 'Ready for poker' : 'Setup & security check'}</span></div>
     <details className={styles.accessDetails} open={!verified && !inHand} key={`${verified}-${inHand}`}><summary>{verified || inHand ? 'Identity & privacy' : 'Complete poker setup'}</summary>
     {access?.nickname && <p className={styles.fine}>Poker ID: {access.identityId}. {game.session?.isDemo ? 'This practice identity stays in this browser. Real ZEC identities can be restored with a wallet recovery key.' : 'Restore your wallet recovery key on either brand to keep this identity.'}</p>}
     {error && <p role="alert" className={styles.error}>{error}</p>}
     {loadError && <p role="alert" className={styles.error}>{loadError}</p>}
     {!access && <p className={styles.fine}>Loading poker access…</p>}
+    {access && <fieldset className={styles.avatarPicker} disabled={busy}>
+      <legend>Choose your avatar</legend>
+      <div className={styles.avatarChoices}>{AVATAR_IDS.map(id => <button key={id} type="button" aria-label={`Use ${POKER_AVATARS[id].label} avatar`} aria-pressed={access.avatar === id} onClick={async () => {
+        setAvatarNotice('')
+        if (await post({ kind: 'avatar', avatar: id }, true)) setAvatarNotice('Avatar saved. It follows your poker identity across tables.')
+      }}><PlayerAvatar avatar={id} name={POKER_AVATARS[id].label} /><span>{POKER_AVATARS[id].label}</span></button>)}</div>
+      {avatarNotice && <p role="status" className={styles.fine}>{avatarNotice}</p>}
+    </fieldset>}
     {inHand ? <p className={styles.fine}>Any new security check will wait until this hand finishes. Your action timer and cash-out remain available.</p> : <>
       {access && !access.setupComplete && <div className={styles.accessControls}>
         <p className={styles.fine}>Use one poker identity across 21Z.cash and CypherJester. Your nickname stays the same between tables. Creating another wallet does not make a second poker identity permissible.</p>

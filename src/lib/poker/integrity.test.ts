@@ -9,7 +9,7 @@ import { NextRequest } from 'next/server'
 import { PrismaClient } from '@prisma/client'
 import { PrismaLibSql } from '@prisma/adapter-libsql'
 import { PokerService } from './service'
-import { accessStatus, ensureIdentity, setupIdentity } from './access'
+import { accessStatus, ensureIdentity, setupIdentity, updateAvatar } from './access'
 import { browserMarker, POKER_BROWSER_COOKIE, verifyHuman, issueSecurityChallenge } from './human-check'
 import { solveSecurityChallenge } from '@/test/poker-security-proof'
 import { unseal } from './integrity-crypto'
@@ -63,6 +63,28 @@ describe('Poker access, private histories and integrity persistence', () => {
     await expect(service.create(p.id, input, randomUUID())).rejects.toThrow('security check')
     expect(await db.pokerTable.count()).toBe(0)
     expect((await db.session.findUniqueOrThrow({ where: { id: p.id } })).balance).toBe(1)
+  })
+  it('persists avatars across auth restoration and updates occupied seats without changing funds or grants', async () => {
+    const a = await player(), b = await player()
+    const originalIdentity = await db.pokerIdentity.findUniqueOrThrow({ where: { sessionId: a.id } })
+    const initial = await accessStatus(db, a.id)
+    expect(initial.avatar).toBeTruthy()
+    expect((await accessStatus(db, a.id)).avatar).toBe(initial.avatar)
+    const id = await service.create(a.id, input, randomUUID())
+    const before = await service.snapshot(id, b.id)
+    const wallet = await db.session.findUniqueOrThrow({ where: { id: a.id } })
+    const identity = await db.pokerIdentity.findUniqueOrThrow({ where: { sessionId: a.id } })
+    await db.$transaction(tx => updateAvatar(tx, a.id, 'owl'))
+    expect(await db.pokerIdentity.findUniqueOrThrow({ where: { sessionId: a.id } })).toEqual({ ...identity, avatar: 'owl' })
+    expect(await db.session.findUniqueOrThrow({ where: { id: a.id } })).toEqual(wallet)
+    await db.session.update({ where: { id: a.id }, data: { playerAuthVersion: { increment: 1 } } })
+    expect(await accessStatus(db, a.id)).toMatchObject({ identityId: originalIdentity.id, avatar: 'owl' })
+    const view = await new PokerService(db).snapshot(id, b.id)
+    expect(view.state.seats[0]).toMatchObject({ avatar: 'owl', stack: before.state.seats[0]!.stack })
+    expect(view.state.seats[0]).not.toHaveProperty('playerId')
+    expect(view.state.seats[0]).not.toHaveProperty('sessionId')
+    expect(view.version).toBe(before.version)
+    expect((await accessStatus(db, b.id)).avatar).toBe(before.access.avatar)
   })
   it('keeps one stable pseudonym across restored authentication, brands and table choices', async () => {
     const p = await player(), identity = await ensureIdentity(db, p.id)
