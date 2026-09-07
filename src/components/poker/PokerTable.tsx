@@ -9,13 +9,14 @@ import type { PokerAccess } from '@/lib/poker/access-types'
 import PlayerAvatar from './PlayerAvatar'
 import PokerWallet from './PokerWallet'
 import { UsdEstimate, PriceReference } from '@/components/prices/PlayerPrice'
+import { betPresets } from '@/lib/poker/presentation'
 import styles from './poker.module.css'
 
 function Card({ card, small = false, exposed = false }: { card: number | null; small?: boolean; exposed?: boolean }) {
   const rank = card === null ? '' : ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'][Math.floor(card / 4)]
   const suit = card === null ? '' : ['♣', '♦', '♥', '♠'][card % 4]
-  return <div className={`${styles.card} ${small ? styles.smallCard : ''} ${card === null ? styles.cardBack : ''}`} data-red={suit === '♦' || suit === '♥'} data-exposed={exposed} aria-label={card === null ? 'Hidden card' : `${rank}${suit}${exposed ? ' · face up' : ''}`} title={exposed ? 'Visible to everyone' : undefined}>
-    {card !== null && <><strong>{rank}</strong><span>{suit}</span></>}
+  return <div className={`${styles.card} ${small ? styles.smallCard : ''} ${card === null ? styles.cardBack : ''}`} data-suit={card === null ? undefined : card % 4} data-red={suit === '♦' || suit === '♥'} data-exposed={exposed} aria-label={card === null ? 'Hidden card' : `${rank}${suit}${exposed ? ' · face up' : ''}`} title={exposed ? 'Visible to everyone' : undefined}>
+    {card !== null && <><strong>{rank}</strong><span>{suit}</span><i aria-hidden="true">{rank}{suit}</i></>}
   </div>
 }
 export default function PokerTable({ tableId, nonce }: { tableId: string; nonce?: string }) {
@@ -33,6 +34,7 @@ export default function PokerTable({ tableId, nonce }: { tableId: string; nonce?
   const updateAccess = useCallback((value: PokerAccess | null) => { setAccess(value); setName(value?.nickname ?? '') }, [])
   const [buyIn, setBuyIn] = useState('')
   const [raise, setRaise] = useState('')
+  const [fourColor, setFourColor] = useState(false)
   const [copied, setCopied] = useState(false)
   const dialogRef = useRef<HTMLElement>(null)
   const returnFocus = useRef<HTMLElement | null>(null)
@@ -111,20 +113,22 @@ export default function PokerTable({ tableId, nonce }: { tableId: string; nonce?
   const bankActive = !!table?.legal && state?.timeBankStartsAt !== null
   const bankRemaining = Math.max(0, (me?.timeBankMs ?? 0) - (bankActive ? Math.max(0, clock + clockOffset - (state?.timeBankStartsAt ?? 0)) : 0))
   const betLabel = state?.currentBet === 0 ? 'Bet' : isStud && state?.phase === 'third' && state.currentBet < state.bigBlind ? 'Complete' : 'Raise'
+  const raiseAmount = parseZec(raise)
+  const presets = table?.legal && me ? betPresets(table.legal, me.streetBet, pot, variant) : []
   const actionDisabled = busy || !connected || !table?.legal || seconds === 0
-  return <div className={`${styles.page} ${styles.tablePage}`} data-variant={variant}>
+  return <div className={`${styles.page} ${styles.tablePage}`} data-variant={variant} data-four-color={fourColor}>
     <div className={styles.topline}><Link href="/poker" className={styles.back}>← Poker lobby</Link><PokerWallet game={game} /></div>
     <div className={styles.tableHeading}><div><p className={styles.eyebrow}>SIX-MAX · {VARIANT_NAMES[variant]}</p><h1>{table?.name ?? 'Opening table…'}</h1><p>{state ? `${stakesLabel(variant, state.bigBlind)} · ${units} · No rake · Hand #${state.handNumber}` : 'Connecting to the room'}</p></div>
-      <div className={styles.tableTools}><span className={styles.connection} data-connected={connected}>{connected ? 'Connected' : 'Reconnecting…'}</span><button className={styles.secondary} onClick={copyLink}>{copied ? 'Link copied' : 'Invite friends ↗'}</button></div>
+      <div className={styles.tableTools}><button className={styles.textButton} aria-pressed={fourColor} onClick={() => setFourColor(!fourColor)}>4-color deck {fourColor ? 'on' : 'off'}</button><span className={styles.connection} data-connected={connected}>{connected ? 'Connected' : 'Reconnecting…'}</span><button className={styles.secondary} onClick={copyLink}>{copied ? 'Link copied' : 'Invite friends ↗'}</button></div>
     </div>
     {(error || game.error) && <div role="alert" className={styles.error}>{error || game.error}<button onClick={() => { setError(''); game.setError(null) }} aria-label="Dismiss error">×</button></div>}
     {!connected && table && <p role="status" className={styles.notice}>Connection interrupted. Your saved stack is safe. Controls resume when the table reconnects; the turn timer continues.</p>}
     <div className={styles.gameLayout}>
       <section className={styles.playArea} aria-label="Six-player poker table">
         <div className={styles.felt}>
-          <div className={styles.tableBrand}>SIX MAX <span>♠</span></div>
+          <div className={styles.tableBrand}>PRIVATE TABLE <span>♠</span></div><div className={styles.streetBadge}>{table?.mode === 'practice' ? 'PRACTICE · ' : ''}{state?.phase === 'waiting' ? 'TAKE YOUR SEAT' : state?.phase === 'complete' ? 'SHOWDOWN' : state?.phase.toUpperCase()}</div>
           {isStud ? <div className={styles.studStreet}><strong>{state?.phase === 'waiting' ? 'SEVEN-CARD STUD' : state?.phase === 'complete' ? 'SHOWDOWN' : `${state?.phase.toUpperCase()} STREET`}</strong><span>Fixed limit · High hand wins</span></div> : <div className={styles.board} aria-label="Community cards">{Array.from({ length: 5 }, (_, i) => state?.board[i] !== undefined ? <Card key={i} card={state.board[i]} /> : <div key={i} className={styles.cardSlot} />)}</div>}
-          <div className={styles.pot}>{state?.phase === 'complete' ? 'HAND COMPLETE' : 'TOTAL POT'}<strong>{formatZec(pot)} <small>{units}</small></strong></div>
+          <div className={styles.pot}><span className={styles.potChips} aria-hidden="true"><i /><i /><i /></span>{state?.phase === 'complete' ? 'HAND COMPLETE' : 'TOTAL POT'}<strong>{formatZec(pot)} <small>{units}</small></strong></div>
           <div className={styles.tableStatus} role="status">{state?.phase === 'waiting' ? state.nextHandAt ? `Dealing in ${nextSeconds}s` : 'Waiting for two ready players' : state?.phase === 'complete' ? `Next hand in ${nextSeconds}s` : state?.actor !== null && state?.actor !== undefined ? `${state.seats[state.actor]?.name} to act · ${seconds}s` : ''}</div>
         </div>
         {Array.from({ length: 6 }, (_, i) => {
@@ -132,14 +136,14 @@ export default function PokerTable({ tableId, nonce }: { tableId: string; nonce?
           const position = (i - (table?.viewerSeat ?? 0) + 6) % 6
           const isMe = table?.viewerSeat === i
           const winner = state?.phase === 'complete' && state.awards.some(a => a.seat === i && !a.refund)
-          return <div key={i} className={`${styles.seat} ${styles[`seat${position}`]}`} data-testid={`seat-${i}`} data-acting={state?.actor === i} data-folded={player?.folded} data-winner={winner}>
+          return <div key={i} className={`${styles.seat} ${styles[`seat${position}`]}`} data-testid={`seat-${i}`} data-me={isMe} data-urgent={state?.actor === i && seconds <= 10} data-acting={state?.actor === i} data-folded={player?.folded} data-winner={winner}>
             {player ? <>
               <div className={`${styles.holeCards} ${isStud ? styles.studCards : ''}`}>
                 {isStud ? <><div>{player.cards.map((card, j) => !player.exposed[j] && <Card key={j} card={card} small />)}</div><div>{player.cards.map((card, j) => player.exposed[j] && <Card key={j} card={card} small exposed />)}</div></> : player.cards.map((card, j) => <Card key={j} card={card} small />)}
               </div>
               <div className={styles.seatBody}><div className={styles.seatName}><PlayerAvatar avatar={player.avatar} name={player.name} /><strong>{player.name}{isMe ? ' (you)' : ''}</strong>{!isStud && state?.dealer === i && <span className={styles.dealer} title="Dealer button">D</span>}</div>
                 <div className={styles.stack}>{formatZec(player.stack)} <small>{units}</small></div>
-                <small className={styles.seatAction}>{player.leaving ? 'Leaving after hand' : winner ? 'Winner' : player.lastAction || (player.ready ? 'Ready' : 'Sitting out')}</small>
+                <small className={styles.seatAction}>{player.leaving ? 'Leaving after hand' : winner ? 'Winner' : state?.actor === i ? `Thinking · ${seconds}s` : player.lastAction || (player.ready ? 'Ready' : 'Sitting out')}</small>
                 {state?.actor === i && <div className={styles.timerTrack}><div style={{ width: `${Math.min(100, seconds / 30 * 100)}%` }} /></div>}
               </div>
               {player.streetBet > 0 && <div className={styles.betChip}>◉ {formatZec(player.streetBet)}</div>}
@@ -148,22 +152,24 @@ export default function PokerTable({ tableId, nonce }: { tableId: string; nonce?
         })}
       </section>
     {state?.phase === 'complete' && state.awards.some(a => !a.refund) && <div className={styles.result} role="status">{state.awards.filter(a => !a.refund).map((award, i) => <span key={i}><strong>{state.seats[award.seat]?.name ?? `Seat ${award.seat + 1}`}</strong> wins {formatZec(award.amount)} {units} · {award.label}</span>)}</div>}
-    {me && <section className={styles.actionBar} aria-label="Poker actions">
+    {me && <section className={styles.actionBar} data-your-turn={!!table?.legal} aria-label="Poker actions">
       {me.cards.length > 0 && <div className={styles.yourCards}><span className={styles.eyebrow}>YOUR CARDS</span><div>{me.cards.map((card, i) => <Card key={i} card={card} exposed={me.exposed[i]} />)}</div>{isStud && <small>Outlined cards are face up for everyone.</small>}{variant === 'omaha' && <small>Use exactly two of these cards and three from the board.</small>}</div>}
-      <div className={styles.turnLabel}><span className={styles.eyebrow}>{bankActive ? 'TIME BANK ACTIVATED' : table?.legal ? 'YOUR MOVE' : 'AT THE TABLE'}</span><strong>{table?.legal ? `${seconds} seconds` : me.leaving ? 'Leaving after hand' : state?.phase === 'waiting' ? 'Ready when you are' : 'Waiting for your turn'}</strong></div>
+      <div className={styles.turnLabel} data-urgent={!!table?.legal && seconds <= 10}><span className={styles.eyebrow}>{bankActive ? 'TIME BANK ACTIVATED' : table?.legal ? 'YOUR MOVE' : 'AT THE TABLE'}</span><strong>{table?.legal ? `${seconds} seconds` : me.leaving ? 'Leaving after hand' : state?.phase === 'waiting' ? 'Ready when you are' : 'Waiting for your turn'}</strong></div>
       <div className={styles.actionButtons}><button className={styles.foldButton} disabled={actionDisabled || bringInDue} onClick={() => void send({ kind: 'act', action: { type: 'fold' } })}>Fold</button>
         <button className={styles.callButton} disabled={actionDisabled} onClick={() => void send({ kind: 'act', action: { type: bringInDue ? 'bring-in' : table?.legal?.canCheck ? 'check' : 'call' } })}>{bringInDue ? `Bring in ${formatZec(table?.legal?.bringIn ?? 0)}` : table?.legal?.canCheck ? 'Check' : `Call ${formatZec(table?.legal?.call ?? 0)}`}</button>
       </div>
-      {isStud ? <div className={styles.limitControls}>{(table?.legal?.raiseOptions?.length ? table.legal.raiseOptions : [state?.limitUnit ?? 0]).map(amount => <button key={amount} className={styles.primary} disabled={actionDisabled || !table?.legal?.canRaise} onClick={() => void send({ kind: 'act', action: { type: 'raise', to: amount } })}>{betLabel} to {formatZec(amount)}</button>)}</div> : <div className={styles.raiseControls}><div className={styles.raiseRow}><label className={styles.raiseInput}>Raise to<input aria-label={`Raise total in ${units}`} inputMode="decimal" value={raise} disabled={actionDisabled || !table?.legal?.canRaise} onChange={e => setRaise(e.target.value)} /></label>
+      {isStud ? <div className={styles.limitControls}>{(table?.legal?.raiseOptions?.length ? table.legal.raiseOptions : [state?.limitUnit ?? 0]).map(amount => <button key={amount} className={styles.primary} disabled={actionDisabled || !table?.legal?.canRaise} onClick={() => void send({ kind: 'act', action: { type: 'raise', to: amount } })}>{betLabel} to {formatZec(amount)}</button>)}</div> : <div className={styles.raiseControls}><div className={styles.raiseRow}><label className={styles.raiseInput}>{betLabel} to<input aria-label={`Raise total in ${units}`} inputMode="decimal" value={raise} disabled={actionDisabled || !table?.legal?.canRaise} onChange={e => setRaise(e.target.value)} /></label>
         <button className={styles.primary} disabled={actionDisabled || !table?.legal?.canRaise || parseZec(raise) === null || parseZec(raise)! < (table?.legal?.minRaiseTo ?? 0) || parseZec(raise)! > (table?.legal?.maxRaiseTo ?? 0)} onClick={() => void send({ kind: 'act', action: { type: 'raise', to: parseZec(raise)! } })}>{betLabel}</button></div>
-        <div className={styles.quickBets}>{[['Min', table?.legal?.minRaiseTo], ['½ pot', Math.max(table?.legal?.minRaiseTo ?? 0, (me.streetBet + (table?.legal?.call ?? 0)) + Math.floor((pot + (table?.legal?.call ?? 0)) / 2))], ['Pot', Math.max(table?.legal?.minRaiseTo ?? 0, me.streetBet + (table?.legal?.call ?? 0) + pot + (table?.legal?.call ?? 0))], [variant === 'omaha' ? 'Max' : 'All-in', table?.legal?.maxRaiseTo]].map(([label, amount]) => <button key={label} disabled={actionDisabled || !table?.legal?.canRaise} onClick={() => setRaise(formatZec(Math.min(Number(amount), table!.legal!.maxRaiseTo)))}>{label}</button>)}</div>
+        <input className={styles.betSlider} type="range" aria-label={`Bet total in ${units}`} min={table?.legal?.minRaiseTo ?? 0} max={table?.legal?.maxRaiseTo ?? 0} step={1} value={Math.max(table?.legal?.minRaiseTo ?? 0, Math.min(raiseAmount ?? 0, table?.legal?.maxRaiseTo ?? 0))} disabled={actionDisabled || !table?.legal?.canRaise} onChange={e => setRaise(formatZec(Number(e.target.value)))} />
+        <div className={styles.quickBets}>{presets.map(({ label, amount }) => <button key={label} aria-pressed={raiseAmount === amount} disabled={actionDisabled || !table?.legal?.canRaise} onClick={() => setRaise(formatZec(amount))}>{label}</button>)}</div>
+        <small className={styles.betHint}>Total this street · {units}{table?.mode === 'real' && <UsdEstimate zats={raiseAmount} className={styles.usdEstimate} />}</small>
       </div>}
       <div className={styles.timeBank}><div><strong>Time bank · {Math.ceil(bankRemaining / 1000)}s</strong><small>+5s in {TIME_BANK_REFILL_HANDS - me.handsDealt % TIME_BANK_REFILL_HANDS} hands dealt to you · 30s maximum</small></div><button className={styles.secondary} disabled={actionDisabled || bankActive || bankRemaining <= 0 || me.leaving} onClick={() => void send({ kind: 'time-bank' })}>{bankActive ? 'Activated for this turn' : 'Use time bank'}</button><p>Only time beyond your normal 30 seconds uses the bank. Leaving or reconnecting keeps your remaining time.</p></div>
     </section>}
       <aside className={styles.rail}>
         <div className={styles.panelHeading}><h2>At the table</h2><span className={styles.badge}>{state?.seats.filter(Boolean).length ?? 0}/6</span></div>
         {me ? <div className={styles.playerTools}>
-          <span className={styles.eyebrow}>YOUR TABLE STACK</span><strong>{formatZec(me.stack)} <small>{units}</small></strong>
+          <span className={styles.eyebrow}>YOUR TABLE STACK</span><strong>{formatZec(me.stack)} <small>{units}</small></strong>{table?.mode === 'real' && <UsdEstimate zats={me.stack} className={styles.usdEstimate} />}
           <button className={me.ready ? styles.secondary : styles.primary} disabled={busy || !connected || me.leaving} onClick={() => void send({ kind: 'ready', ready: !me.ready })}>{me.ready ? 'Sit out next hand' : 'Ready to play'}</button>
           <button className={styles.textButton} disabled={busy || !connected || me.leaving} onClick={() => void send({ kind: 'leave' })}>{me.leaving ? 'Cash-out queued' : me.inHand && state?.phase !== 'complete' && state?.phase !== 'waiting' ? 'Leave after this hand' : 'Leave & return stack'}</button>
           <p className={styles.fine}>{me.leaving ? 'Required bring-ins are posted; other turns check or fold automatically. Your remaining stack returns after this hand.' : 'Sitting out keeps your seat. Leaving returns your remaining stack to your available balance.'}</p>

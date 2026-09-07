@@ -52,3 +52,96 @@
 .avatarChoices button:focus-visible{outline:2px solid var(--accent-primary);outline-offset:3px}
 .avatarChoices button:disabled{opacity:.6;cursor:wait}
 @media(max-width:700px){.seatName .playerAvatar{width:24px;height:24px;font-size:18px}}
+
+/* Poker room: a padded rail, clear seat plates and a dedicated betting console. */
+.tablePage{max-width:1500px}
+.tablePage .gameLayout{grid-template-columns:minmax(0,1fr) 270px;gap:18px}
+.tablePage .playArea{height:580px;border:1px solid #ffffff08;border-radius:20px;background:radial-gradient(ellipse at 50% 45%,#63477926,transparent 68%),repeating-linear-gradient(90deg,#ffffff01 0 1px,transparent 1px 5px),#100e16}
+.tablePage .felt{left:9%;right:9%;top:18%;bottom:18%;border:15px solid #24202a;border-radius:48%;background:radial-gradient(ellipse at 50% 30%,#54415f,#36263f 80%);box-shadow:0 0 0 1px #8f7868,0 0 0 5px #100d14,0 22px 30px #0009,inset 0 0 35px #100b1d99;gap:12px}
+.tablePage .felt:before{inset:15px;border:1px solid #dac59f30;border-radius:47%}
+.streetBadge{font:9px var(--font-mono),monospace;letter-spacing:2px;color:#e0cedf;z-index:1}
+.tablePage .tableBrand{font-size:11px;letter-spacing:5px;color:#d0b87580}
+.tablePage .seat{width:155px}
+.tablePage .seat0{top:86%}.tablePage .seat3{top:19%}
+.tablePage .seatBody{border-radius:9px;border-color:#64556d;padding:10px;background:linear-gradient(#312937,#1b1720);box-shadow:0 6px 0 #0d0b10,0 12px 20px #0007}
+.tablePage .seatName strong{font-size:11px}
+.tablePage .seatName .playerAvatar{width:36px;height:36px;font-size:26px}
+.tablePage .stack{font-size:17px;margin-top:6px}
+.tablePage .seatAction{font-size:10px;color:#c2b2cd}
+.tablePage .seat[data-me=true] .seatBody{border-color:#a68c61}
+.tablePage .seat[data-acting=true] .seatBody{border-color:var(--p-gold);box-shadow:0 0 0 2px #d5b67844,0 0 25px #c9a55c22}
+.tablePage .seat[data-urgent=true] .timerTrack>div{background:#f19974}
+.tablePage .seat[data-winner=true] .seatBody{border-color:#a7d6a4;background:linear-gradient(#314c3a,#19271e)}
+.tablePage .seat[data-folded=true] .holeCards{opacity:.35}
+.tablePage .card{position:relative;border:1px solid #fff8;background:linear-gradient(135deg,#fffdf6,#e3ddd4);box-shadow:0 2px 0 #b4ac9c,0 5px 9px #0006}
+.tablePage .card i{position:absolute;right:3px;bottom:3px;font:bold 9px Georgia;transform:rotate(180deg);font-style:normal}
+.tablePage .cardBack{background:repeating-linear-gradient(45deg,#63466f 0 2px,#392741 2px 5px);border:3px solid #ded3b9;box-shadow:inset 0 0 0 1px #9b7b56,0 3px 7px #0005}
+.tablePage .holeCards{gap:4px;bottom:calc(100% - 3px)}
+.tablePage .smallCard{width:37px;height:53px}
+.tablePage .smallCard>span{margin-top:0}
+.tablePage .smallCard i{font-size:7px}
+.tablePage[data-four-color=true] .card[data-suit="0"]{color:#16704a}
+.tablePage[data-four-color=true] .card[data-suit="1"]{color:#235fbe}
+.tablePage .pot{position:relative}
+.potChips{position:absolute;left:-34px;bottom:6px;display:flex;align-items:end;gap:0}
+.potChips i{width:17px;height:17px;margin-left:-7px;border:3px dashed #e9d2aa;border-radius:50%;background:#73528d;box-shadow:0 3px 0 #3a2946,0 5px 0 #b5a080}
+.potChips i:nth-child(2){transform:translateY(-5px);background:#946843}
+.tablePage .betChip{border-color:#bfa26b55;background:#19141ff2;padding:6px 10px}
+.tablePage .emptySeat{border-style:solid;border-color:#c7a87930;background:#18131dbb;border-radius:40px;color:#cebad5}
+.tablePage .actionBar{background:linear-gradient(120deg,#28202f,#17131d);border-radius:14px;padding:20px;gap:16px}
+.tablePage .actionBar[data-your-turn=true]{border-color:#c9a55c88}
+.tablePage .yourCards{flex-direction:row;justify-content:center;gap:18px;padding-bottom:16px}
+.tablePage .yourCards>div{flex-shrink:0}
+.tablePage .yourCards small{max-width:220px;line-height:1.5}
+.tablePage .turnLabel{display:flex;justify-content:space-between;align-items:center}
+.tablePage .turnLabel strong{margin:0;font:13px var(--font-mono),monospace}
+.turnLabel[data-urgent=true] strong{color:#ffae89}
+.tablePage .actionButtons button,.tablePage .raiseRow>button{min-height:52px;font-size:14px!important}
+.tablePage .callButton{background:linear-gradient(#4c3b60,#342740)}
+.tablePage .primary{box-shadow:inset 0 1px 0 #fff3,0 3px 0 #0003}
+.tablePage .raiseControls{width:340px}
+.betSlider{display:block;width:100%;height:24px;margin:10px 0 3px;accent-color:var(--p-gold);cursor:pointer}
+.tablePage .quickBets{margin-top:0}
+.tablePage .quickBets button{min-height:36px;padding:6px 3px}
+.quickBets button[aria-pressed=true]{color:var(--p-gold);background:#c9a55c12;border-color:var(--p-gold)}
+.betHint{display:block;color:var(--text-secondary,#b7acbd);font-size:10px;margin-top:8px}
+.tablePage .timeBank{padding-top:12px}
+.tablePage .rail{max-height:none;min-height:580px}
+.tablePage .history{max-height:280px}
+@media(max-width:1150px){.tablePage .gameLayout{grid-template-columns:minmax(0,1fr) 240px}.tablePage .seat{width:128px}.tablePage .seatName .playerAvatar{width:27px;height:27px;font-size:20px}.tablePage .raiseControls{width:100%}}
+@media(max-width:850px){.tablePage .gameLayout{grid-template-columns:1fr}.tablePage .rail{min-height:0}.tablePage .seat{width:150px}.tablePage .raiseControls{width:55%}}
+@media(max-width:560px){
+.tablePage .playArea{height:570px;border-radius:14px;margin:0}
+.tablePage .felt{left:8%;right:8%;top:17%;bottom:17%;border-width:9px;gap:12px}
+.tablePage .seat{width:105px}.tablePage .seat0{top:87%}.tablePage .seat3{top:14%}
+.tablePage .seatBody{padding:8px 5px}.tablePage .seatName{gap:4px}
+.tablePage .seatName strong{font-size:9px}.tablePage .seatName .playerAvatar{width:22px;height:22px;font-size:16px}
+.tablePage .stack{font-size:13px}.tablePage .seatAction{font-size:8px}
+.tablePage .smallCard{width:28px;height:42px}.tablePage .smallCard i{display:none}
+.tablePage .tableBrand{font-size:8px;letter-spacing:3px}.streetBadge{font-size:8px;letter-spacing:1px}
+.tablePage .tableStatus{max-width:80%;font-size:9px}
+.tablePage .actionBar{padding:14px;gap:14px}.tablePage .raiseControls{width:100%}
+.tablePage .yourCards{gap:12px;flex-wrap:wrap}.tablePage .yourCards small{max-width:none;width:100%}
+.tablePage .yourCards .card{width:42px;height:60px}.tablePage .yourCards .card strong{font-size:19px}.tablePage .yourCards .card>span{font-size:23px}
+.tablePage .quickBets button{min-height:44px}
+.tablePage[data-variant=stud] .playArea{height:700px}
+.tablePage[data-variant=stud] .seat3{top:18%}
+.tablePage[data-variant=stud] .seat0{top:91%}
+.tablePage[data-variant=stud] .smallCard,.tablePage[data-variant=omaha] .smallCard{width:23px;height:40px}
+.tablePage .tableTools{gap:4px}.tablePage .tableTools .textButton{font-size:10px!important;padding:3px;min-height:32px}
+}
+/* Seven-card hands need a second row; keep wagers clear of exposed cards. */
+.tablePage .yourCards>div{max-width:100%;flex-wrap:wrap;justify-content:center}
+.tablePage[data-variant=stud] .playArea{height:680px}
+.tablePage[data-variant=stud] .seat3{top:23%}
+.tablePage[data-variant=stud] .seat0 .betChip{bottom:calc(100% + 112px)}
+.tablePage[data-variant=stud] .seat1 .betChip{left:calc(100% + 24px);bottom:20px}
+.tablePage[data-variant=stud] .seat5 .betChip{left:-24px;bottom:20px}
+@media(max-width:560px){
+.tablePage .seat3{top:16%}
+.tablePage[data-variant=stud] .playArea{height:700px}
+.tablePage[data-variant=stud] .seat3{top:19%}
+.tablePage[data-variant=stud] .seat0 .betChip{bottom:calc(100% + 90px)}
+.tablePage[data-variant=stud] .seat1 .betChip{left:calc(100% + 20px)}
+.tablePage[data-variant=stud] .seat5 .betChip{left:-20px}
+}
