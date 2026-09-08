@@ -7,6 +7,7 @@ import { isKillSwitchActive } from '@/lib/kill-switch'
 import { act, activeHand, automaticAction, createTableState, legalActions, PokerError, publicState, seatPlayer, startHand, tableChips, useTimeBank } from './engine'
 import { type PokerMode, type PokerVariant, type PokerState, type PublicTable, type LobbyTable, type PokerAction, ZATS_PER_ZEC, TIME_BANK_MAX_MS } from './types'
 
+import { REAL_RAKE_POLICY } from './rake'
 import { resolveAvatar } from './avatars'
 import { accessStatus, requirePokerAccess } from './access'
 import { beginHistory, decisionHistory, finishHistory } from './history'
@@ -25,6 +26,8 @@ const fingerprint = (value: unknown) => createHash('sha256').update(JSON.stringi
 export function parsePokerState(serialized: string): PokerState {
   const s = JSON.parse(serialized) as PokerState
   // Existing Hold'em tables can finish their hand without rewriting stored JSON.
+  s.rakePolicy ??= 'none'; s.rakeZats ??= 0
+  if (!['none', REAL_RAKE_POLICY].includes(s.rakePolicy)) throw new PokerError('Unknown table rake terms.', 500)
   s.variant ??= 'holdem'; s.timeBankStartsAt ??= null; s.bringInSeat ??= null
   s.limitUnit ??= s.bigBlind; s.limitFullBet ??= 0; s.limitBets ??= 0
   for (const p of s.seats) if (p) { p.timeBankMs ??= TIME_BANK_MAX_MS; p.handsDealt ??= 0 }
@@ -66,6 +69,15 @@ async function cashOut(tx: Tx, row: StoredTable, s: PokerState, i: number) {
   s.seats[i] = null
 }
 async function settle(tx: Tx, row: StoredTable, s: PokerState, now: number) {
+  if (s.rakeZats > 0) {
+    if (row.mode !== 'real') throw new PokerError('Practice tables cannot generate rake.', 500)
+    // Durable revenue receipt and escrow debit commit with every payout. The unique
+    // hand key fails closed on any accidental second settlement, including restart.
+    await tx.pokerEvent.create({ data: { tableId: row.id, requestId: `rake:${row.id}:${s.handNumber}`,
+      kind: 'rake', amountZats: BigInt(s.rakeZats), version: row.version + 1,
+      details: JSON.stringify({ handNumber: s.handNumber, policy: s.rakePolicy, mode: row.mode }) } })
+    row.escrowZats -= BigInt(s.rakeZats)
+  }
   await finishHistory(tx, row, s, now)
   for (const result of s.settlement) {
     await tx.session.update({ where: { id: result.playerId }, data: {
@@ -74,7 +86,7 @@ async function settle(tx: Tx, row: StoredTable, s: PokerState, now: number) {
     await tx.$executeRaw`UPDATE "Session" SET "totalWagered" = ROUND("totalWagered", 8), "totalWon" = ROUND("totalWon", 8) WHERE "id" = ${result.playerId}`
   }
   await tx.pokerEvent.create({ data: { tableId: row.id, requestId: randomUUID(), kind: 'hand-settled', version: row.version + 1,
-    details: JSON.stringify({ handNumber: s.handNumber, awards: s.awards, settlement: s.settlement }) } })
+    details: JSON.stringify({ handNumber: s.handNumber, rakeZats: s.rakeZats, rakePolicy: s.rakePolicy, awards: s.awards, settlement: s.settlement }) } })
 }
 async function save(tx: Tx, row: StoredTable, s: PokerState) {
   const total = tableChips(s)
@@ -132,7 +144,7 @@ export class PokerService {
     return this.db.$transaction(async tx => {
       const duplicate = await receipt(tx, requestId, sessionId, input)
       if (duplicate) return duplicate
-      const s = createTableState(input.bigBlind, input.variant)
+      const s = createTableState(input.bigBlind, input.variant, input.mode === 'real' ? REAL_RAKE_POLICY : 'none')
       const row = await tx.pokerTable.create({ data: { name: input.name, mode: input.mode, state: JSON.stringify(s) } })
       await join(tx, row, s, sessionId, 0, input.buyIn, input.playerName)
       await save(tx, row, s)
@@ -246,7 +258,7 @@ export class PokerService {
   async lobby(sessionId: string): Promise<LobbyTable[]> {
     const rows = await this.db.pokerTable.findMany({ where: { closed: false }, orderBy: { updatedAt: 'desc' }, take: 100 })
     return rows.map(row => { const s = parse(row); return { id: row.id, name: row.name, mode: row.mode as PokerMode, variant: s.variant,
-      smallBlind: s.smallBlind, bigBlind: s.bigBlind, players: s.seats.filter(Boolean).length, phase: s.phase,
+      rakePolicy: s.rakePolicy, smallBlind: s.smallBlind, bigBlind: s.bigBlind, players: s.seats.filter(Boolean).length, phase: s.phase,
       myTable: s.seats.some(p => p?.playerId === sessionId) } })
   }
   async dueTables() { return this.db.pokerTable.findMany({ where: { closed: false, nextTickAt: { lte: new Date() } }, select: { id: true }, take: 100 }) }

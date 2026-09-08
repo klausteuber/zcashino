@@ -1,5 +1,6 @@
 'use client'
 import Link from 'next/link'
+import { REAL_RAKE_POLICY, rakeLabel, rakeDisclosure } from '@/lib/poker/rake'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useState } from 'react'
 import { useGameSession } from '@/hooks/useGameSession'
@@ -73,7 +74,7 @@ export default function PokerLobby({ nonce }: { nonce?: string }) {
     <section className={styles.hero}>
       <div><p className={styles.eyebrow}>HOLD’EM · OMAHA · SEVEN-CARD STUD</p><h1>Six seats.<br /><em>Every move matters.</em></h1>
         <p className={styles.intro}>Bring your friends. Pick your game. Share a six-player table with a balance in ZEC.</p>
-        <div className={styles.facts}><span>2–6 players</span><span>30s + time bank</span><span>No rake</span></div>
+        <div className={styles.facts}><span>2–6 players</span><span>30s + time bank</span><span>2.9% capped rake · New ZEC tables</span></div>
       </div>
       <div className={styles.heroArt} aria-hidden="true"><div className={styles.artRing}><span>6</span><small>MAX</small></div><div className={styles.artCard}>A<span>♠</span></div><div className={styles.artCardSecond}>K<span>♦</span></div><div className={styles.artCaption}>A SEAT AT THE TABLE</div></div>
     </section>
@@ -88,7 +89,7 @@ export default function PokerLobby({ nonce }: { nonce?: string }) {
         <label className={styles.gameFilter}>Game<select value={filter} onChange={e => setFilter(e.target.value as typeof filter)}><option value="all">All games</option>{POKER_VARIANTS.map(v => <option key={v} value={v}>{VARIANT_NAMES[v]}</option>)}</select></label>
         <div className={styles.tableList}>
           {!loaded ? <p className={styles.empty}>Connecting to the poker room…</p> : visible.length === 0 ? <div className={styles.empty}><span className={styles.emptySuit}>♠</span><h3>The first seat is yours.</h3><p>Create a table and share its link with your friends.</p></div> : visible.map(table => <Link key={table.id} href={`/poker/table/${table.id}`} className={styles.lobbyRow}>
-            <div><strong>{table.name}</strong><small className={styles.variantLabel}>{VARIANT_NAMES[table.variant]}</small><small>{stakesLabel(table.variant, table.bigBlind)} · {table.mode === 'real' ? 'ZEC' : 'play ZEC'}</small>{table.mode === 'real' && <UsdEstimate zats={table.variant === 'stud' ? table.bigBlind : table.bigBlind / 2} endZats={table.variant === 'stud' ? table.bigBlind * 2 : table.bigBlind} className={styles.usdEstimate} />}</div>
+            <div><strong>{table.name}</strong><small className={styles.variantLabel}>{VARIANT_NAMES[table.variant]} · {rakeLabel(table.rakePolicy)}</small><small>{stakesLabel(table.variant, table.bigBlind)} · {table.mode === 'real' ? 'ZEC' : 'play ZEC'}</small>{table.mode === 'real' && <UsdEstimate zats={table.variant === 'stud' ? table.bigBlind : table.bigBlind / 2} endZats={table.variant === 'stud' ? table.bigBlind * 2 : table.bigBlind} className={styles.usdEstimate} />}</div>
             <div className={styles.seatDots} aria-label={`${table.players} of 6 seats occupied`}>{Array.from({ length: 6 }, (_, i) => <i key={i} data-filled={i < table.players} />)}</div>
             <span>{table.players}/6</span><span className={styles.rowCta}>{table.myTable ? 'Return' : table.players === 6 ? 'Watch' : 'Open'} →</span>
           </Link>)}
@@ -105,6 +106,7 @@ export default function PokerLobby({ nonce }: { nonce?: string }) {
             {[10_000, 100_000, 1_000_000].map(value => <option key={value} value={value}>{stakesLabel(variant, value)} · {mode === 'real' ? 'ZEC' : 'play ZEC'}</option>)}
           </select>{mode === 'real' && <UsdEstimate zats={variant === 'stud' ? blind : blind / 2} endZats={variant === 'stud' ? blind * 2 : blind} className={styles.usdEstimate} />}</label>
           <label>Buy-in ({mode === 'real' ? 'ZEC' : 'play ZEC'})<input required inputMode="decimal" value={buyIn} onChange={e => setBuyIn(e.target.value)} />{mode === 'real' && <UsdEstimate zats={parseZec(buyIn)} className={styles.usdEstimate} />}<small>{formatZec(blind * 20)}–{formatZec(blind * 100)} · 20–100 {variant === 'stud' ? 'small bets' : 'big blinds'}</small></label>
+          <p className={styles.fine}>{rakeDisclosure(mode === 'real' ? REAL_RAKE_POLICY : 'none', variant, blind)}</p>
           {mode === 'real' && <PriceReference className={styles.fine} />}
           <p className={styles.fine}>{variant === 'omaha' ? 'Four hole cards. Use exactly two with three board cards. Raises are capped by the pot.' : variant === 'stud' ? `Fixed limit, high hand wins. Ante ${formatZec(studAnte(blind))}, bring-in ${formatZec(studBringIn(blind))}. Four bets per street, including heads-up. An open pair on fourth street allows the bigger bet.` : 'Two hole cards. No-limit betting. New and returning players post a big blind after the opening hand.'}</p>
           {mode === 'real' && !enabled && loaded && <p className={styles.notice}>Real ZEC tables are awaiting activation.</p>}

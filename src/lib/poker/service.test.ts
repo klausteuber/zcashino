@@ -9,6 +9,7 @@ import { PrismaClient } from '@prisma/client'
 import { PrismaLibSql } from '@prisma/adapter-libsql'
 vi.hoisted(() => { process.env.KILL_SWITCH = 'false'; process.env.POKER_REAL_MONEY_ENABLED = 'true'; process.env.POKER_INTEGRITY_SECRET = 'poker-integrity-tests-only-secret-32-chars' })
 import { PokerService } from './service'
+import { unseal } from './integrity-crypto'
 import { reserveFunds } from '@/lib/services/ledger'
 import { checkWagerAllowed } from '@/lib/services/responsible-gambling'
 
@@ -156,7 +157,7 @@ describe('Real ZEC poker with SQLite transactions', () => {
 })
 
 describe('Variant balances and persistent time banks', () => {
-  it.each(['omaha', 'stud'] as const)('settles a six-player %s hand, restores all funds, and records dealt hands once', async variant => {
+  it.each(['holdem', 'omaha', 'stud'] as const)('settles a six-player %s hand, records rake, and returns remaining funds', async variant => {
     const players = await Promise.all(Array.from({ length: 6 }, () => player()))
     const id = await service.create(players[0].id, { ...input, variant }, randomUUID())
     for (let i = 1; i < 6; i++) await send(id, players[i].id, { kind: 'join', seat: i, name: `Player ${i}`, buyIn: input.buyIn })
@@ -177,8 +178,13 @@ describe('Variant balances and persistent time banks', () => {
     expect((await service.snapshot(id, players[0].id)).state.phase).toBe('complete')
     for (const p of players) await send(id, p.id, { kind: 'leave' })
     const totals = await db.session.aggregate({ _sum: { balance: true, pokerLockedZats: true, totalWagered: true, totalWon: true } })
-    expect(totals._sum.balance).toBeCloseTo(6, 8); expect(totals._sum.pokerLockedZats).toBe(0n)
-    expect(totals._sum.totalWagered).toBeCloseTo(totals._sum.totalWon!, 8)
+    const rake = (await db.pokerEvent.aggregate({ where: { kind: 'rake' }, _sum: { amountZats: true } }))._sum.amountZats!
+    expect(rake).toBe(variant === 'stud' ? 1044n : 1740n)
+    expect(totals._sum.balance! + Number(rake) / 100_000_000).toBeCloseTo(6, 8); expect(totals._sum.pokerLockedZats).toBe(0n)
+    expect(totals._sum.totalWagered! - totals._sum.totalWon!).toBeCloseTo(Number(rake) / 100_000_000, 8)
+    expect((await db.pokerTable.findUniqueOrThrow({ where: { id } })).escrowZats).toBe(0n)
+    const history = await db.pokerHand.findFirstOrThrow({ where: { tableId: id } })
+    expect(unseal<{ final: { rakeZats: number } }>(history.payload, history.id).final.rakeZats).toBe(Number(rake))
     expect(await db.session.count({ where: { pokerHandsDealt: 1 } })).toBe(6)
   })
   it('keeps unused time and refill progress across table changes and rejects duplicate extensions', async () => {
@@ -228,12 +234,88 @@ describe('Variant balances and persistent time banks', () => {
     const a = await player(), id = await service.create(a.id, input, randomUUID())
     const row = await db.pokerTable.findUniqueOrThrow({ where: { id } })
     const old = JSON.parse(row.state)
-    delete old.variant; delete old.timeBankStartsAt; delete old.limitUnit; delete old.limitFullBet; delete old.limitBets; delete old.bringInSeat
+    delete old.rakePolicy; delete old.rakeZats; delete old.variant; delete old.timeBankStartsAt; delete old.limitUnit; delete old.limitFullBet; delete old.limitBets; delete old.bringInSeat
     delete old.seats[0].timeBankMs; delete old.seats[0].handsDealt
     await db.pokerTable.update({ where: { id }, data: { state: JSON.stringify(old) } })
     const view = await service.snapshot(id, a.id)
+    expect(view.state.rakePolicy).toBe('none'); expect(view.state.rakeZats).toBe(0)
     expect(view.state.variant).toBe('holdem'); expect(view.state.seats[0]!.timeBankMs).toBe(30_000)
     expect(view.state.handNumber).toBe(old.handNumber); expect(view.state.seats[0]!.stack).toBe(old.seats[0].stack)
     expect((await db.pokerTable.findUniqueOrThrow({ where: { id } })).state).toBe(JSON.stringify(old))
+  })
+})
+
+
+describe('Rake settlement durability', () => {
+  it.each(['real', 'practice', 'legacy'] as const)('settles %s money once across retries and restart', async mode => {
+    const a = await player(mode === 'practice' ? 'demo_a' : 'a'), b = await player(mode === 'practice' ? 'demo_b' : 'b')
+    const id = await service.create(a.id, { ...input, mode: mode === 'practice' ? 'practice' : 'real' }, randomUUID())
+    if (mode === 'legacy') {
+      const row = await db.pokerTable.findUniqueOrThrow({ where: { id } }), state = JSON.parse(row.state)
+      delete state.rakePolicy; delete state.rakeZats
+      await db.pokerTable.update({ where: { id }, data: { state: JSON.stringify(state) } })
+    }
+    await send(id, b.id, { kind: 'join', seat: 1, buyIn: input.buyIn, name: 'b' })
+    for (const p of [a, b]) await send(id, p.id, { kind: 'ready', ready: true })
+    await service.tick(id, (await service.snapshot(id, a.id)).state.nextHandAt! + 1)
+    await send(id, a.id, { kind: 'act', action: { type: 'call' } })
+    await send(id, b.id, { kind: 'act', action: { type: 'check' } })
+    const before = await service.snapshot(id, b.id)
+    expect(before.state.phase).toBe('flop')
+    const command = { kind: 'act' as const, action: { type: 'fold' as const } }, request = randomUUID()
+    const restartedDb = new PrismaClient({ adapter: new PrismaLibSql({ url: databaseUrl }) })
+    try {
+      const restarted = new PokerService(restartedDb)
+      await restarted.command(id, b.id, command, before.version, request)
+      await restarted.command(id, b.id, command, before.version, request)
+      const after = await restarted.snapshot(id, a.id)
+      const rake = mode === 'real' ? 580 : 0
+      expect(after.state.rakeZats).toBe(rake)
+      expect((await db.pokerTable.findUniqueOrThrow({ where: { id } })).escrowZats).toBe(BigInt(2_000_000 - rake))
+      expect(await db.pokerEvent.count({ where: { kind: 'rake' } })).toBe(rake ? 1 : 0)
+      expect(await db.pokerEvent.count({ where: { kind: 'hand-settled' } })).toBe(1)
+      for (const p of [a, b]) await send(id, p.id, { kind: 'leave' })
+      expect((await db.session.aggregate({ _sum: { balance: true } }))._sum.balance).toBeCloseTo(2 - rake / 100_000_000, 8)
+      expect((await db.pokerTable.findUniqueOrThrow({ where: { id } })).escrowZats).toBe(0n)
+    } finally { await restartedDb.$disconnect() }
+  })
+  it('collects rake once when a restarted worker checks down a timed-out postflop hand', async () => {
+    const a = await player(), b = await player()
+    const id = await service.create(a.id, input, randomUUID())
+    await send(id, b.id, { kind: 'join', seat: 1, buyIn: input.buyIn, name: 'b' })
+    for (const p of [a, b]) await send(id, p.id, { kind: 'ready', ready: true })
+    await service.tick(id, (await service.snapshot(id, a.id)).state.nextHandAt! + 1)
+    await send(id, a.id, { kind: 'act', action: { type: 'call' } })
+    await send(id, b.id, { kind: 'act', action: { type: 'check' } })
+    const restarted = new PokerService(db)
+    let ticks = 0
+    while (ticks++ < 10) {
+      const view = await restarted.snapshot(id, a.id)
+      if (view.state.phase === 'complete') break
+      await restarted.tick(id, view.state.deadline! + 1)
+      await restarted.tick(id, view.state.deadline! + 1)
+    }
+    const after = await restarted.snapshot(id, a.id)
+    expect(after.state.phase).toBe('complete'); expect(after.state.rakeZats).toBe(580)
+    expect(await db.pokerEvent.count({ where: { kind: 'rake' } })).toBe(1)
+    expect((await db.pokerTable.findUniqueOrThrow({ where: { id } })).escrowZats).toBe(1_999_420n)
+  })
+  it('rolls back payouts, history and rake together when the table accounting check fails', async () => {
+    const a = await player(), b = await player()
+    const id = await service.create(a.id, input, randomUUID())
+    await send(id, b.id, { kind: 'join', seat: 1, buyIn: input.buyIn, name: 'b' })
+    for (const p of [a, b]) await send(id, p.id, { kind: 'ready', ready: true })
+    await service.tick(id, (await service.snapshot(id, a.id)).state.nextHandAt! + 1)
+    await send(id, a.id, { kind: 'act', action: { type: 'call' } })
+    await send(id, b.id, { kind: 'act', action: { type: 'check' } })
+    await db.pokerTable.update({ where: { id }, data: { escrowZats: { increment: 1n } } })
+    await expect(send(id, b.id, { kind: 'act', action: { type: 'fold' } })).rejects.toThrow('accounting')
+    expect(await db.pokerEvent.count({ where: { kind: 'rake' } })).toBe(0)
+    expect((await service.snapshot(id, a.id)).state.phase).toBe('flop')
+    expect((await db.pokerHand.findFirstOrThrow({ where: { tableId: id } })).completedAt).toBeNull()
+    expect((await db.session.aggregate({ _sum: { totalWon: true } }))._sum.totalWon).toBe(0)
+    await db.pokerTable.update({ where: { id }, data: { escrowZats: { decrement: 1n } } })
+    await send(id, b.id, { kind: 'act', action: { type: 'fold' } })
+    expect(await db.pokerEvent.count({ where: { kind: 'rake' } })).toBe(1)
   })
 })

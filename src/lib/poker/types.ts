@@ -31,6 +31,8 @@ export interface PokerSeat {
 }
 export interface Award { seat: number; amount: number; label: string; refund: boolean }
 export interface PokerState {
+  rakePolicy: import('./rake').RakePolicy
+  rakeZats: number
   variant: PokerVariant
   seats: (PokerSeat | null)[]
   phase: Phase
@@ -85,6 +87,7 @@ export interface PublicTable {
   realMoneyEnabled: boolean
 }
 export interface LobbyTable {
+  rakePolicy: import('./rake').RakePolicy
   variant: PokerVariant
   id: string
   name: string

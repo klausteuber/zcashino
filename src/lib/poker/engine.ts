@@ -1,15 +1,16 @@
+import { calculateRake, type RakePolicy } from './rake'
 import { evaluateHand, evaluateOmaha } from './evaluator'
 import { studOpener, studRaiseTargets, recordStudRaise } from './stud'
 import { consumeTimeBank, creditDealtHand } from './time-bank'
-import { MAX_SEATS, TURN_MS, BETWEEN_HANDS_MS, TIME_BANK_MAX_MS, studAnte, studBringIn, POKER_VARIANTS, type PokerVariant, type PokerAction, type PokerState, type PokerSeat, type LegalActions } from './types'
+import { formatZec, MAX_SEATS, TURN_MS, BETWEEN_HANDS_MS, TIME_BANK_MAX_MS, studAnte, studBringIn, POKER_VARIANTS, type PokerVariant, type PokerAction, type PokerState, type PokerSeat, type LegalActions } from './types'
 
 export class PokerError extends Error {
   constructor(message: string, public status = 400) { super(message) }
 }
-export function createTableState(bigBlind: number, variant: PokerVariant = 'holdem'): PokerState {
+export function createTableState(bigBlind: number, variant: PokerVariant = 'holdem', rakePolicy: RakePolicy = 'none'): PokerState {
   if (!Number.isSafeInteger(bigBlind) || bigBlind < 2 || bigBlind % 2) throw new PokerError('Invalid blinds')
   if (!POKER_VARIANTS.includes(variant)) throw new PokerError('Unknown poker variant')
-  return { variant, timeBankStartsAt: null, bringInSeat: null, limitUnit: bigBlind, limitFullBet: 0, limitBets: 0, seats: Array(MAX_SEATS).fill(null), phase: 'waiting', handNumber: 0, dealer: -1,
+  return { rakePolicy, rakeZats: 0, variant, timeBankStartsAt: null, bringInSeat: null, limitUnit: bigBlind, limitFullBet: 0, limitBets: 0, seats: Array(MAX_SEATS).fill(null), phase: 'waiting', handNumber: 0, dealer: -1,
     smallBlind: bigBlind / 2, bigBlind, deck: [], board: [], currentBet: 0, lastFullRaise: bigBlind,
     pending: [], actor: null, deadline: null, nextHandAt: null, settlement: [], awards: [], log: [] }
 }
@@ -37,7 +38,7 @@ export function startHand(s: PokerState, deck: number[], now: number): void {
   if (players.length < 2) throw new PokerError('At least two ready players are needed')
   if (deck.length !== 52 || new Set(deck).size !== 52 || deck.some(c => !Number.isInteger(c) || c < 0 || c > 51)) throw new PokerError('Invalid deck')
   s.phase = s.variant === 'stud' ? 'third' : 'preflop'; s.handNumber++; s.dealer = next(players, s.dealer)
-  s.deck = [...deck]; s.board = []; s.awards = []; s.settlement = []; s.nextHandAt = null
+  s.rakeZats = 0; s.deck = [...deck]; s.board = []; s.awards = []; s.settlement = []; s.nextHandAt = null
   s.currentBet = s.bigBlind; s.lastFullRaise = s.bigBlind
   s.bringInSeat = null; s.limitUnit = s.bigBlind; s.limitFullBet = 0; s.limitBets = 0; s.timeBankStartsAt = null
   for (const i of occupied(s)) {
@@ -167,14 +168,26 @@ function finish(s: PokerState, now: number): void {
   const levels = [...new Set(s.seats.flatMap(p => p && p.contribution > 0 ? [p.contribution] : []))].sort((a, b) => a - b)
   let previous = 0
   const scores = new Map(remaining.map(i => [i, remaining.length > 1 ? (s.variant === 'omaha' ? evaluateOmaha(s.seats[i]!.cards, s.board) : evaluateHand([...s.seats[i]!.cards, ...s.board])) : { score: 0, label: 'Uncontested' }]))
-  for (const level of levels) {
+  const pots = levels.map(level => {
     const contributors = occupied(s).filter(i => s.seats[i]!.contribution >= level)
     const amount = (level - previous) * contributors.length
     previous = level
+    return { contributors, amount, level }
+  })
+  const contested = pots.filter(p => p.contributors.length > 1).reduce((sum, p) => sum + p.amount, 0)
+  s.rakeZats = calculateRake(s, contested)
+  let cumulativePot = 0, allocatedRake = 0
+  for (const pot of pots) {
+    const { level, contributors } = pot
+    let amount = pot.amount
     if (contributors.length === 1) {
       const seat = contributors[0]; s.seats[seat]!.stack += amount
       s.awards.push({ seat, amount, label: 'Uncalled bet returned', refund: true }); continue
     }
+    cumulativePot += amount
+    const cumulativeRake = Number(BigInt(s.rakeZats) * BigInt(cumulativePot) / BigInt(contested))
+    amount -= cumulativeRake - allocatedRake
+    allocatedRake = cumulativeRake
     const eligible = remaining.filter(i => s.seats[i]!.contribution >= level)
     if (!eligible.length) throw new PokerError('Pot has no eligible player', 500)
     const best = Math.max(...eligible.map(i => scores.get(i)!.score))
@@ -196,6 +209,7 @@ function finish(s: PokerState, now: number): void {
   s.timeBankStartsAt = null; s.bringInSeat = null
   s.phase = 'complete'; s.actor = null; s.deadline = null; s.pending = []; s.deck = []
   s.nextHandAt = now + BETWEEN_HANDS_MS
+  note(s, `Hand #${s.handNumber} rake: ${formatZec(s.rakeZats)}`)
   note(s, s.awards.filter(a => !a.refund).map(a => `${s.seats[a.seat]!.name} wins · ${a.label}`).join(' / '))
 }
 /** Explicit allowlist: neither deck, session identifiers nor folded opponents' cards leave the server. */

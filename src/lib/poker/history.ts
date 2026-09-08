@@ -30,7 +30,7 @@ async function identities(tx: Tx, s: PokerState) {
   return map
 }
 function privateSnapshot(s: PokerState, map: Map<string, string>) {
-  return { phase: s.phase, board: s.board, dealer: s.dealer,
+  return { rakePolicy: s.rakePolicy, rakeZats: s.rakeZats, phase: s.phase, board: s.board, dealer: s.dealer,
     players: s.seats.flatMap((p, seat) => p?.inHand ? [{ identityId: map.get(p.playerId), seat, cards: p.cards, folded: p.folded, stack: p.stack, contribution: p.contribution }] : []), awards: s.awards }
 }
 export async function beginHistory(tx: Tx, row: StoredTable, s: PokerState, now: number, partial = false) {

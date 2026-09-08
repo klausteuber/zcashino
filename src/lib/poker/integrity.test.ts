@@ -185,7 +185,7 @@ describe('Poker access, private histories and integrity persistence', () => {
     const record = unseal<{ partial: boolean; initial: unknown; final: unknown }>(hand.payload, hand.id)
     expect(record.partial).toBe(false); expect(record.final).toBeDefined()
     expect(JSON.stringify(record)).not.toContain('deck'); expect(JSON.stringify(record)).not.toContain(a.walletAddress)
-    expect(hand.players.reduce((sum, p) => sum + p.wagered - p.returned, 0)).toBe(0)
+    expect(hand.players.reduce((sum, p) => sum + p.wagered - p.returned, 0)).toBe(variant === 'stud' ? 348 : 580)
   })
   it('labels automatic decisions and time-bank activation separately', async () => {
     const { a, id } = await table()

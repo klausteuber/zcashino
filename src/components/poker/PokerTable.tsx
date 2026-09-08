@@ -1,5 +1,6 @@
 'use client'
 import Link from 'next/link'
+import { rakeLabel, rakeDisclosure } from '@/lib/poker/rake'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useGameSession } from '@/hooks/useGameSession'
 import { formatZec, parseZec, stakesLabel, studAnte, studBringIn, VARIANT_NAMES, TIME_BANK_REFILL_HANDS, type PublicTable } from '@/lib/poker/types'
@@ -118,7 +119,7 @@ export default function PokerTable({ tableId, nonce }: { tableId: string; nonce?
   const actionDisabled = busy || !connected || !table?.legal || seconds === 0
   return <div className={`${styles.page} ${styles.tablePage}`} data-variant={variant} data-four-color={fourColor}>
     <div className={styles.topline}><Link href="/poker" className={styles.back}>← Poker lobby</Link><PokerWallet game={game} /></div>
-    <div className={styles.tableHeading}><div><p className={styles.eyebrow}>SIX-MAX · {VARIANT_NAMES[variant]}</p><h1>{table?.name ?? 'Opening table…'}</h1><p>{state ? `${stakesLabel(variant, state.bigBlind)} · ${units} · No rake · Hand #${state.handNumber}` : 'Connecting to the room'}</p></div>
+    <div className={styles.tableHeading}><div><p className={styles.eyebrow}>SIX-MAX · {VARIANT_NAMES[variant]}</p><h1>{table?.name ?? 'Opening table…'}</h1><p>{state ? `${stakesLabel(variant, state.bigBlind)} · ${units} · ${rakeLabel(state.rakePolicy)} · Hand #${state.handNumber}` : 'Connecting to the room'}</p></div>
       <div className={styles.tableTools}><button className={styles.textButton} aria-pressed={fourColor} onClick={() => setFourColor(!fourColor)}>4-color deck {fourColor ? 'on' : 'off'}</button><span className={styles.connection} data-connected={connected}>{connected ? 'Connected' : 'Reconnecting…'}</span><button className={styles.secondary} onClick={copyLink}>{copied ? 'Link copied' : 'Invite friends ↗'}</button></div>
     </div>
     {(error || game.error) && <div role="alert" className={styles.error}>{error || game.error}<button onClick={() => { setError(''); game.setError(null) }} aria-label="Dismiss error">×</button></div>}
@@ -151,7 +152,7 @@ export default function PokerTable({ tableId, nonce }: { tableId: string; nonce?
           </div>
         })}
       </section>
-    {state?.phase === 'complete' && state.awards.some(a => !a.refund) && <div className={styles.result} role="status">{state.awards.filter(a => !a.refund).map((award, i) => <span key={i}><strong>{state.seats[award.seat]?.name ?? `Seat ${award.seat + 1}`}</strong> wins {formatZec(award.amount)} {units} · {award.label}</span>)}</div>}
+    {state?.phase === 'complete' && state.awards.some(a => !a.refund) && <div className={styles.result} role="status"><span>Hand rake: {formatZec(state.rakeZats)} {units}</span>{state.awards.filter(a => !a.refund).map((award, i) => <span key={i}><strong>{state.seats[award.seat]?.name ?? `Seat ${award.seat + 1}`}</strong> wins {formatZec(award.amount)} {units} · {award.label}</span>)}</div>}
     {me && <section className={styles.actionBar} data-your-turn={!!table?.legal} aria-label="Poker actions">
       {me.cards.length > 0 && <div className={styles.yourCards}><span className={styles.eyebrow}>YOUR CARDS</span><div>{me.cards.map((card, i) => <Card key={i} card={card} exposed={me.exposed[i]} />)}</div>{isStud && <small>Outlined cards are face up for everyone.</small>}{variant === 'omaha' && <small>Use exactly two of these cards and three from the board.</small>}</div>}
       <div className={styles.turnLabel} data-urgent={!!table?.legal && seconds <= 10}><span className={styles.eyebrow}>{bankActive ? 'TIME BANK ACTIVATED' : table?.legal ? 'YOUR MOVE' : 'AT THE TABLE'}</span><strong>{table?.legal ? `${seconds} seconds` : me.leaving ? 'Leaving after hand' : state?.phase === 'waiting' ? 'Ready when you are' : 'Waiting for your turn'}</strong></div>
@@ -179,13 +180,15 @@ export default function PokerTable({ tableId, nonce }: { tableId: string; nonce?
         <div className={styles.history}><h3>Hand activity</h3><ol>{state?.log.slice().reverse().map((entry, i) => <li key={`${state.handNumber}-${i}`}>{entry}</li>)}</ol></div>
       </aside>
     </div>
-    <p className={styles.disclosure}>Server-dealt poker · No rake · 30-second turns plus a manually activated time bank · On timeout, required bring-ins are posted; otherwise you check or fold, then sit out next hand. The operator holds table funds; this version does not offer a public shuffle proof.</p>
+    {state && <p className={styles.disclosure}>{rakeDisclosure(state.rakePolicy, variant, state.bigBlind)}</p>}
+    <p className={styles.disclosure}>Server-dealt poker · 30-second turns plus a manually activated time bank · On timeout, required bring-ins are posted; otherwise you check or fold, then sit out next hand. The operator holds table funds; this version does not offer a public shuffle proof.</p>
     {seat !== null && table && <div className={styles.modalBackdrop} onClick={() => !busy && setSeat(null)}><section ref={dialogRef} className={styles.joinDialog} role="dialog" aria-modal="true" aria-busy={busy} aria-labelledby="join-heading" onClick={e => e.stopPropagation()}>
       <div className={styles.panelHeading}><h2 id="join-heading">Take seat {seat + 1}</h2><button className={styles.textButton} aria-label="Close seat dialog" disabled={busy} onClick={() => setSeat(null)}>×</button></div>
       <form className={styles.form} onSubmit={e => { e.preventDefault(); const amount = parseZec(buyIn); if (amount === null) { setError('Enter a valid buy-in.'); return } void send({ kind: 'join', seat, buyIn: amount, name }) }}>
         {error && <p role="alert" className={styles.error}>{error}</p>}
         <label>Your nickname<input autoFocus required minLength={2} maxLength={24} value={name} readOnly placeholder="Set up your poker identity first" autoComplete="nickname" /></label>
         <label>Buy-in ({units})<input required inputMode="decimal" value={buyIn} onChange={e => setBuyIn(e.target.value)} />{table.mode === 'real' && <UsdEstimate zats={parseZec(buyIn)} className={styles.usdEstimate} />}<small>{formatZec(table.buyInMin)}–{formatZec(table.buyInMax)} {units}</small></label>
+        <p className={styles.fine}>{rakeDisclosure(table.state.rakePolicy, variant, table.state.bigBlind)}</p>
         {(!access?.setupComplete || !access?.entryVerified) && <p className={styles.notice}>Close this dialog and complete your poker identity and security check in the table sidebar first.</p>}
         {table.mode === 'real' && <PriceReference className={styles.fine} />}
         <p className={styles.fine}>Available: {formatZec(table.balanceZats)} {game.session?.isDemo ? 'play ZEC' : 'ZEC'}. Your buy-in stays at this table until you leave. {isStud ? 'Each hand posts an ante. The lowest exposed card posts the bring-in or completes the bet.' : 'Joining after the first hand posts one big blind.'}</p>

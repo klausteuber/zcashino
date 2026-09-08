@@ -1,4 +1,5 @@
 'use client'
+import PokerRevenue from '@/components/poker/PokerRevenue'
 import { useCallback, useEffect, useState } from 'react'
 interface Signal { id: string; kind: string; identityId: string; otherId: string | null; createdAt: string }
 interface Hand { id: string; variant: string; mode: string; handNumber: number; completedAt: string }
@@ -27,6 +28,7 @@ export default function PokerIntegrityPage() {
     finally { setBusy(false) }
   }
   return <div className="space-y-6 text-bone-white">
+    <PokerRevenue />
     <h1 className="text-2xl font-display">Poker integrity</h1>
     <p className="text-sm text-venetian-gold/80">Indicators for human review. They do not establish cheating and never automatically ban a player or change a balance. Monitoring uses real-money hands; private histories expire after 30 days. Only completed hands are accessible here.</p>
     <form className="flex gap-3 flex-wrap" onSubmit={e => { e.preventDefault(); setIdentity(filter.trim()) }}><label>Filter by poker ID<input className="block bg-midnight-black border border-masque-gold/30 rounded p-2 mt-1" value={filter} onChange={e => setFilter(e.target.value)} /></label><button className="border border-masque-gold/40 rounded px-4" disabled={busy}>Filter</button><button type="button" disabled={busy} className="border border-masque-gold/40 rounded px-4" onClick={() => void load()}>Refresh</button></form>
