@@ -55,8 +55,9 @@ services:
         max-file: "5"
 
   zebra:
-    # Zebra 6.0.0 is the first stable node with NU6.3/Ironwood mainnet support.
-    image: zfnd/zebra@sha256:78a10b7f24b83a86e6223d97e857094a353454e3268f84a87bd987e7140a33bb
+    # Zebra 7.0.0 supports NU7 mainnet. Preserve a v28 rollback snapshot before
+    # first start: the automatic v29 migration cannot be opened by Zebra 6.x.
+    image: zfnd/zebra@sha256:a70d2be8ffef3a4b6e37355724e36a0e6c1838e46baa28bfb216739f00cf2d34
     environment:
       - ZEBRA_NETWORK__NETWORK=Mainnet
       - ZEBRA_RPC__LISTEN_ADDR=0.0.0.0:8232
