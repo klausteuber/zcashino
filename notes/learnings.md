@@ -725,3 +725,17 @@ In-memory limits and remote font fetches are acceptable in dev, but must be call
 **Validation:** `bash -n scripts/check-node.sh`; `python3 scripts/test-check-node.py` exercises the actual script with fake Docker, clock and Telegram, including flapping, cooldown expiry, immediate escalation, state compatibility, skips and overrides. No test messages are sent.
 
 **Key files:** `scripts/check-node.sh`, `scripts/test-check-node.py`, `.env.monitoring.example`, `.gitignore`.
+
+### Zebra 7 migration rehearsal (2026-10-23)
+
+Zebra 7 moves v28 state to v29. With a 263 GiB node database and 81 GiB free,
+an offline rollback snapshot can share immutable SST files while independently
+copying all mutable files, consistent with RocksDB checkpoint semantics.
+Rehearse migration on another disposable copy, preserve the original snapshot,
+and keep wallet/app backups independent and encrypted for off-server storage.
+Same-disk snapshots do not protect against disk loss, and retained obsolete
+SSTs increase future disk use. The existing hourly disk monitor remains enabled.
+
+The deployed Zallet beta.1 uses Zaino over RPC; direct database readers instead
+need a matching Zebra database format and separate compatibility review.
+See `notes/zebra-7-production-upgrade-2026-10-23.md` for the release evidence.

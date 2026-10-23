@@ -1307,3 +1307,21 @@ post-restart catch-up window as startup, not degradation.
 **Validation:** `bash -n scripts/check-node.sh`; `python3 scripts/test-check-node.py` exercises the actual script with fake Docker, clock and Telegram, including flapping, cooldown expiry, immediate escalation, state compatibility, skips and overrides. No test messages are sent.
 
 **Key files:** `scripts/check-node.sh`, `scripts/test-check-node.py`, `.env.monitoring.example`, `.gitignore`.
+
+### Zebra 7 backup and restart checks (2026-10-23)
+
+**Symptom:** The first node-backup attempts aborted before migration, and wallet
+RPC availability after restart did not immediately mean full wallet readiness.
+
+**Root cause:** The app required forced termination after SIGTERM; production
+Python lacks `hashlib.file_digest`; Zallet beta.1 rechecks recent blocks on
+startup. Compose `start` can also start dependency/init/migration containers.
+
+**Fix:** Copy app recovery/WAL files while stopped and integrity-check a SQLite
+`.backup`; use portable streaming SHA-256; verify the whole backup before
+migration. Resume existing containers explicitly and wait for matching node,
+wallet, and fully-synced heights. Never hard-link mutable RocksDB files or roll
+Zebra 6 back onto a v29 database.
+
+**Key files:** `docker-compose.mainnet.yml`,
+`notes/zebra-7-production-upgrade-2026-10-23.md`.
