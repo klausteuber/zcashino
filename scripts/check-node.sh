@@ -7,10 +7,10 @@
 #
 # Alert hygiene:
 #   - Repeats of the same alert class (NODE DOWN / NODE ERROR / NODE SYNCING /
-#     NODE STALE) are suppressed for NODE_ALERT_COOLDOWN_SECONDS (default 1800)
-#     so an ongoing incident pages every 30 minutes, not every cron run.
-#   - A single "NODE OK" recovery message is sent when a check passes after a
-#     previously alerted incident.
+#     NODE STALE) are suppressed for NODE_ALERT_COOLDOWN_SECONDS (default 21600).
+#   - Sync warnings require 3 consecutive checks; outages/errors alert immediately.
+#   - A single "NODE OK" recovery message requires 2 consecutive healthy checks
+#     after a previously alerted incident. Brief sync dips produce no messages.
 #   - Startup windows (container uptime < NODE_STARTUP_GRACE_SECONDS) never
 #     produce sync/RPC alerts — a freshly (re)started wallet legitimately
 #     reports empty scan state before its scanner has loaded.
@@ -40,8 +40,11 @@ NODE_MONITOR_PAUSE_FILE="${NODE_MONITOR_PAUSE_FILE:-${PROJECT_DIR}/.node-monitor
 NODE_STARTUP_GRACE_SECONDS="${NODE_STARTUP_GRACE_SECONDS:-1800}"
 SUPPRESS_NODE_ALERTS_DURING_KILL_SWITCH="${SUPPRESS_NODE_ALERTS_DURING_KILL_SWITCH:-true}"
 NODE_ALERT_STATE_FILE="${NODE_ALERT_STATE_FILE:-${PROJECT_DIR}/.node-monitor-alerts}"
-NODE_ALERT_COOLDOWN_SECONDS="${NODE_ALERT_COOLDOWN_SECONDS:-1800}"
+NODE_ALERT_COOLDOWN_SECONDS="${NODE_ALERT_COOLDOWN_SECONDS:-21600}"
 NODE_SYNC_LAG_TOLERANCE="${NODE_SYNC_LAG_TOLERANCE:-2}"
+NODE_SYNC_ALERT_CHECKS="${NODE_SYNC_ALERT_CHECKS:-3}"
+NODE_RECOVERY_CHECKS="${NODE_RECOVERY_CHECKS:-2}"
+NODE_CHECK_STATE_FILE="${NODE_ALERT_STATE_FILE}.checks"
 
 # Production uses a dedicated env file + project name.
 if [[ "$COMPOSE_FILE" == "docker-compose.mainnet.yml" ]]; then
@@ -67,6 +70,24 @@ MAX_BLOCK_AGE="${MAX_BLOCK_AGE:-600}"
 
 ALERTED=0
 
+# Persist observations across cron runs. A gap longer than 15 minutes breaks
+# the streak, so an old sample cannot confirm an incident after monitoring stops.
+observe_status() {
+  local status="$1" now previous="" count=0 observed_at=0
+  now=$(date +%s)
+  if [[ -f "$NODE_CHECK_STATE_FILE" ]]; then
+    IFS='|' read -r previous count observed_at < "$NODE_CHECK_STATE_FILE" || true
+  fi
+  OBSERVATION_COUNT=1
+  if [[ "$previous" == "$status" && "$count" =~ ^[0-9]+$ && "$observed_at" =~ ^[0-9]+$ ]]; then
+    if (( now >= observed_at && now - observed_at <= 900 )); then
+      OBSERVATION_COUNT=$((count + 1))
+    fi
+  fi
+  printf '%s|%s|%s\n' "$status" "$OBSERVATION_COUNT" "$now" > "${NODE_CHECK_STATE_FILE}.tmp"
+  mv "${NODE_CHECK_STATE_FILE}.tmp" "$NODE_CHECK_STATE_FILE"
+}
+
 # Send an alert unless the same class fired within the cooldown window.
 # Class = message text before the first ':', so changing block heights or
 # diagnostics in the body do not defeat the dedup.
@@ -76,6 +97,11 @@ alert() {
   local now last=""
   now=$(date +%s)
   ALERTED=1
+  observe_status "$class"
+  if [[ "$class" == "NODE SYNCING" && "$OBSERVATION_COUNT" -lt "$NODE_SYNC_ALERT_CHECKS" ]]; then
+    echo "[$(date -u)] Sync warning pending (${OBSERVATION_COUNT}/${NODE_SYNC_ALERT_CHECKS} checks): ${message}"
+    return 0
+  fi
   if [[ "$NODE_ALERT_COOLDOWN_SECONDS" -gt 0 && -f "$NODE_ALERT_STATE_FILE" ]]; then
     last=$(awk -F'|' -v c="$class" '$1 == c { ts = $2 } END { print ts }' "$NODE_ALERT_STATE_FILE" 2>/dev/null || true)
     if [[ -n "$last" && $((now - last)) -lt "$NODE_ALERT_COOLDOWN_SECONDS" ]]; then
@@ -93,12 +119,23 @@ alert() {
   "${SCRIPT_DIR}/send-alert.sh" "$message" || true
 }
 
-# After a fully healthy check, send one recovery message if a prior run alerted.
+# Confirm recovery before clearing cooldowns, so one healthy sample cannot
+# re-arm notifications during a flapping incident.
 mark_healthy() {
-  if [[ "$ALERTED" -eq 0 && -f "$NODE_ALERT_STATE_FILE" ]]; then
-    rm -f "$NODE_ALERT_STATE_FILE"
-    "${SCRIPT_DIR}/send-alert.sh" "NODE OK: $1" || true
+  if [[ "$ALERTED" -ne 0 ]]; then
+    return 0
   fi
+  if [[ ! -f "$NODE_ALERT_STATE_FILE" ]]; then
+    rm -f "$NODE_CHECK_STATE_FILE"
+    return 0
+  fi
+  observe_status "NODE OK"
+  if [[ "$OBSERVATION_COUNT" -lt "$NODE_RECOVERY_CHECKS" ]]; then
+    echo "[$(date -u)] Node recovery pending (${OBSERVATION_COUNT}/${NODE_RECOVERY_CHECKS} checks)"
+    return 0
+  fi
+  rm -f "$NODE_ALERT_STATE_FILE" "$NODE_CHECK_STATE_FILE"
+  "${SCRIPT_DIR}/send-alert.sh" "NODE OK: $1" || true
 }
 
 container_uptime_seconds() {
@@ -128,11 +165,13 @@ container_uptime_seconds() {
 cd "$PROJECT_DIR"
 
 if [[ -f "$NODE_MONITOR_PAUSE_FILE" ]]; then
+  rm -f "$NODE_CHECK_STATE_FILE"
   echo "[$(date -u)] Node check skipped: pause file present at ${NODE_MONITOR_PAUSE_FILE}"
   exit 0
 fi
 
 if [[ "$SUPPRESS_NODE_ALERTS_DURING_KILL_SWITCH" == "true" && "${KILL_SWITCH:-}" == "true" ]]; then
+  rm -f "$NODE_CHECK_STATE_FILE"
   echo "[$(date -u)] Node check skipped: KILL_SWITCH=true"
   exit 0
 fi
@@ -191,6 +230,7 @@ if [[ "$WALLET_BACKEND" == "zallet" ]]; then
   if [[ "$RPC_STATUS" -ne 0 || -z "$WALLET_STATUS" ]]; then
     CLEAN_ERROR=$(printf '%s %s' "$WALLET_STATUS" "$WALLET_ERROR" | tr '\n' ' ' | cut -c1-180)
     if [[ "$UPTIME_SECONDS" -gt 0 && "$UPTIME_SECONDS" -lt "$NODE_STARTUP_GRACE_SECONDS" ]]; then
+      rm -f "$NODE_CHECK_STATE_FILE"
       echo "[$(date -u)] Node check skipped: Zallet still starting (${UPTIME_SECONDS}s/${NODE_STARTUP_GRACE_SECONDS}s): ${CLEAN_ERROR}"
       exit 0
     fi
@@ -209,6 +249,7 @@ if [[ "$WALLET_BACKEND" == "zallet" ]]; then
   # real trouble: wallet DB empty/rebuilding, or the indexer cut off from Zebra.
   if [[ "$NODE_HEIGHT" -eq 0 || "$WALLET_HEIGHT" -eq 0 || "$FULLY_SYNCED_HEIGHT" -eq 0 ]]; then
     if [[ "$UPTIME_SECONDS" -gt 0 && "$UPTIME_SECONDS" -lt "$NODE_STARTUP_GRACE_SECONDS" ]]; then
+      rm -f "$NODE_CHECK_STATE_FILE"
       echo "[$(date -u)] Node check skipped: Zallet scan state not ready while starting (${UPTIME_SECONDS}s/${NODE_STARTUP_GRACE_SECONDS}s): Zebra ${NODE_HEIGHT}, wallet ${WALLET_HEIGHT}, fully scanned ${FULLY_SYNCED_HEIGHT}"
       exit 0
     fi
@@ -226,6 +267,7 @@ if [[ "$WALLET_BACKEND" == "zallet" ]]; then
     # A recently (re)started wallet catching up to the tip is expected — the
     # weekly backup stop/start and every deploy produce this window.
     if [[ "$UPTIME_SECONDS" -gt 0 && "$UPTIME_SECONDS" -lt "$NODE_STARTUP_GRACE_SECONDS" ]]; then
+      rm -f "$NODE_CHECK_STATE_FILE"
       echo "[$(date -u)] Node check skipped: Zallet catching up after restart (${UPTIME_SECONDS}s/${NODE_STARTUP_GRACE_SECONDS}s): Zebra ${NODE_HEIGHT}, wallet ${WALLET_HEIGHT}, fully scanned ${FULLY_SYNCED_HEIGHT}"
       exit 0
     fi
@@ -275,6 +317,7 @@ if [[ "$RPC_STATUS" -ne 0 || -z "$BLOCKCHAIN_INFO" ]]; then
   UPTIME_SECONDS=$(container_uptime_seconds "$CONTAINER_ID")
   if is_startup_rpc_error "$BLOCKCHAIN_INFO" && [[ "$UPTIME_SECONDS" -lt "$NODE_STARTUP_GRACE_SECONDS" ]]; then
     CLEAN_ERROR=$(printf '%s' "$BLOCKCHAIN_INFO" | tr '\n' ' ' | cut -c1-180)
+    rm -f "$NODE_CHECK_STATE_FILE"
     echo "[$(date -u)] Node check skipped: zcashd still starting (${UPTIME_SECONDS}s/${NODE_STARTUP_GRACE_SECONDS}s): ${CLEAN_ERROR}"
     exit 0
   fi

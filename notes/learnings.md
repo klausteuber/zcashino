@@ -712,3 +712,16 @@ In-memory limits and remote font fetches are acceptable in dev, but must be call
 - Recovery and deposit route dispatch must await asynchronous handlers inside try/catch; otherwise rejected handlers escape the JSON error response. Recovery transaction timeouts now return a retryable 503.
 - New real SQLite integration cases reproduced the original five-second P2028 failures before the fix and pass afterward: new and pending deposits at the exact daily limit, duplicate checks, and recovery overlapping deposit processing. Require funded-path database integration coverage for deposit releases, not only mocks or unfunded canaries.
 - Key files: src/app/api/wallet/route.ts, deposit.integration.test.ts, src/app/api/session/recovery/route.ts and its tests.
+
+
+### Quieter Telegram node alerts (2026-10-22)
+
+**Symptom:** The user reported excessive Telegram node-status messages.
+
+**Root cause:** A single sync-delay sample could send NODE SYNCING, followed by NODE OK on the next healthy sample. Recovery immediately cleared the 30-minute cooldown, allowing repeated messages during intermittent sync delays. Production inspection showed the node currently fully synced; historical Telegram message bodies were not available in the monitor log.
+
+**Fix:** Require three consecutive sync-warning observations and two consecutive healthy checks for recovery; extend same-class reminders to six hours. NODE DOWN, NODE ERROR, and NODE STALE still alert immediately. Maintenance/startup skips and gaps over 15 minutes reset observation streaks. Existing incident state remains compatible. At five-minute cadence, sync confirmation takes roughly ten minutes after the first bad sample; recovery takes another five minutes after the first healthy sample.
+
+**Validation:** `bash -n scripts/check-node.sh`; `python3 scripts/test-check-node.py` exercises the actual script with fake Docker, clock and Telegram, including flapping, cooldown expiry, immediate escalation, state compatibility, skips and overrides. No test messages are sent.
+
+**Key files:** `scripts/check-node.sh`, `scripts/test-check-node.py`, `.env.monitoring.example`, `.gitignore`.
